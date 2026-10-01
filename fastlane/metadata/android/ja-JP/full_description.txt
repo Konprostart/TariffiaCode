@@ -1,4 +1,4 @@
-AndCodeは、AIコーディングエージェントのためのネイティブAndroid GUIアプリです。OpenCode、Claude Code、Google Antigravityとタッチ操作中心の画面で対話できます。オンデバイス利用ではターミナルもSSHもPCも不要です。
+TariffiaCodeは、AIコーディングエージェントのためのネイティブAndroid GUIアプリです。OpenCode、Claude Code、Google Antigravityとタッチ操作中心の画面で対話できます。オンデバイス利用ではターミナルもSSHもPCも不要です。
 
 エージェントはPRootで構築したLinux環境の中で端末上で動作します。PC、Mac、Linux上のOpenCodeサーバーに接続することもできます。
 
@@ -20,4 +20,4 @@ AndCodeは、AIコーディングエージェントのためのネイティブAn
 
 対応アーキテクチャ：arm64-v8a、x86_64
 
-AndCodeは独立したオープンソースプロジェクトです。基盤となるAIサービス、サブスクリプション、モデルへのアクセスは提供せず、OpenCode、Anthropic、Googleとは提携していません。認証と推論は、公式CLIまたはユーザーが設定したプロバイダーが行います。
+TariffiaCodeは独立したオープンソースプロジェクトです。基盤となるAIサービス、サブスクリプション、モデルへのアクセスは提供せず、OpenCode、Anthropic、Googleとは提携していません。認証と推論は、公式CLIまたはユーザーが設定したプロバイダーが行います。
