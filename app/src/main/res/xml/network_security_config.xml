@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network Security Configuration for AndCode.
+
+  Cleartext (HTTP) is required because the app connects to local runtimes
+  on arbitrary LAN IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x), Tailscale
+  CGNAT (100.64.0.0/10), and localhost. Android's network_security_config
+  cannot express IP ranges as domain rules, so cleartext must remain
+  permitted in base-config.
+
+  App-layer enforcement: OpenCodeUrl.isTrustedCleartextHost() is the
+  authoritative gate that restricts cleartext connections to RFC1918,
+  link-local, loopback, Tailscale CGNAT, and .local mDNS hosts only.
+-->
+<network-security-config>
+
+    <!-- Base config: cleartext permitted (required for LAN IP connections).
+         Only system CAs are trusted in release builds. -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Explicit cleartext allowance for well-known local hostnames.
+         Documents intent even though base-config already permits cleartext. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">local</domain>
+    </domain-config>
+
+    <!-- Debug builds: additionally trust user-installed CAs (e.g. Charles,
+         mitmproxy) for network debugging. Ignored in release builds. -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+
+</network-security-config>

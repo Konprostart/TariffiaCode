@@ -1,0 +1,194 @@
+package com.yugahashimoto.andcode.runtime.local
+
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
+
+class LocalProviderCredentialStoreTest {
+    @get:Rule
+    val temp = TemporaryFolder()
+
+    @Test
+    fun `encode and decode round trip`() {
+        val encoded = LocalProviderCredentialStore.encodeMap(mapOf("openai" to "sk-test"))
+        val decoded = LocalProviderCredentialStore.decodeMap(encoded)
+        assertEquals(mapOf("openai" to "sk-test"), decoded)
+    }
+
+    @Test
+    fun `sync writes auth json for runtime rootfs`() {
+        val rootfs = temp.newFolder("rootfs")
+        val memory = memoryStore(mapOf("openai" to "sk-123"), setOf("openai"))
+
+        val authFile = memory.store.syncToRuntime(rootfs)
+
+        assertTrue(authFile.exists())
+        val payload = Json.parseToJsonElement(authFile.readText()).jsonObject
+        assertEquals("api", payload["openai"]!!.jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("sk-123", payload["openai"]!!.jsonObject["key"]!!.jsonPrimitive.content)
+        assertEquals(File(rootfs, "root/.local/share/opencode/auth.json").absolutePath, authFile.absolutePath)
+    }
+
+    @Test
+    fun `sync preserves unmanaged OAuth and API entries`() {
+        val rootfs = temp.newFolder("preserve-rootfs")
+        val authFile =
+            File(rootfs, "root/.local/share/opencode/auth.json").apply {
+                parentFile.mkdirs()
+                writeText(
+                    """
+                    {
+                      "anthropic":{"type":"oauth","access":"oauth-token"},
+                      "custom":{"type":"api","key":"custom-key"},
+                      "openai":{"type":"api","key":"old-managed-key"}
+                    }
+                    """.trimIndent(),
+                )
+            }
+        val memory = memoryStore(mapOf("openai" to "new-managed-key"), setOf("openai"))
+
+        memory.store.syncToRuntime(rootfs)
+
+        val payload = Json.parseToJsonElement(authFile.readText()).jsonObject
+        assertEquals("oauth-token", payload["anthropic"]!!.jsonObject["access"]!!.jsonPrimitive.content)
+        assertEquals("custom-key", payload["custom"]!!.jsonObject["key"]!!.jsonPrimitive.content)
+        assertEquals("new-managed-key", payload["openai"]!!.jsonObject["key"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `cleared managed credential is removed without deleting unmanaged entries`() {
+        val rootfs = temp.newFolder("clear-rootfs")
+        val authFile =
+            File(rootfs, "root/.local/share/opencode/auth.json").apply {
+                parentFile.mkdirs()
+                writeText(
+                    """
+                    {
+                      "openai":{"type":"api","key":"managed-key"},
+                      "anthropic":{"type":"oauth","access":"oauth-token"}
+                    }
+                    """.trimIndent(),
+                )
+            }
+        val memory = memoryStore(mapOf("openai" to "managed-key"), setOf("openai"))
+
+        memory.store.clearCredential("openai")
+        memory.store.syncToRuntime(rootfs)
+
+        val payload = Json.parseToJsonElement(authFile.readText()).jsonObject
+        assertFalse(payload.containsKey("openai"))
+        assertEquals("oauth-token", payload["anthropic"]!!.jsonObject["access"]!!.jsonPrimitive.content)
+        assertTrue("openai" in memory.managedIds)
+    }
+
+    @Test
+    fun `blank key removes encrypted credential but keeps provider managed`() {
+        val memory = memoryStore(mapOf("openai" to "sk-123"), setOf("openai"))
+
+        memory.store.setCredential("openai", "  ")
+
+        assertFalse(memory.store.hasCredential("openai"))
+        assertTrue(memory.store.credentials().isEmpty())
+        assertTrue("openai" in memory.managedIds)
+    }
+
+    @Test
+    fun `unmanage provider preserves encrypted key but stops runtime overwrite`() {
+        val rootfs = temp.newFolder("oauth-rootfs")
+        val authFile =
+            File(rootfs, "root/.local/share/opencode/auth.json").apply {
+                parentFile.mkdirs()
+                writeText("""{"openai":{"type":"oauth","access":"oauth-token"}}""")
+            }
+        val memory = memoryStore(mapOf("openai" to "api-key"), setOf("openai"))
+
+        memory.store.unmanageProvider("openai")
+        memory.store.syncToRuntime(rootfs)
+
+        val payload = Json.parseToJsonElement(authFile.readText()).jsonObject
+        assertEquals("oauth", payload["openai"]!!.jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("api-key", memory.store.credentials()["openai"])
+        assertFalse("openai" in memory.managedIds)
+    }
+
+    @Test
+    fun `initialized empty managed set does not fall back to legacy keys`() {
+        val credentials = mutableMapOf("openai" to "api-key")
+        val managedIds = mutableSetOf<String>()
+        var initialized = false
+        val store =
+            LocalProviderCredentialStore(
+                load = { credentials.toMap() },
+                save = {
+                    credentials.clear()
+                    credentials.putAll(it)
+                },
+                loadManagedProviderIds = {
+                    if (initialized) managedIds.toSet() else credentials.keys
+                },
+                saveManagedProviderIds = {
+                    initialized = true
+                    managedIds.clear()
+                    managedIds.addAll(it)
+                },
+            )
+
+        store.unmanageProvider("openai")
+
+        assertTrue(initialized)
+        assertTrue(store.managedProviderIds().isEmpty())
+        assertEquals("api-key", store.credentials()["openai"])
+    }
+
+    @Test
+    fun `malformed existing auth file is preserved and sync fails`() {
+        val rootfs = temp.newFolder("malformed-rootfs")
+        val authFile =
+            File(rootfs, "root/.local/share/opencode/auth.json").apply {
+                parentFile.mkdirs()
+                writeText("not-json")
+            }
+        val memory = memoryStore(mapOf("openai" to "sk-123"), setOf("openai"))
+
+        assertThrows(IllegalStateException::class.java) {
+            memory.store.syncToRuntime(rootfs)
+        }
+
+        assertEquals("not-json", authFile.readText())
+    }
+
+    private fun memoryStore(
+        initialCredentials: Map<String, String> = emptyMap(),
+        initialManagedIds: Set<String> = emptySet(),
+    ): MemoryCredentialStore {
+        val credentials = initialCredentials.toMutableMap()
+        val managedIds = initialManagedIds.toMutableSet()
+        val store =
+            LocalProviderCredentialStore(
+                load = { credentials.toMap() },
+                save = {
+                    credentials.clear()
+                    credentials.putAll(it)
+                },
+                loadManagedProviderIds = { managedIds.toSet() },
+                saveManagedProviderIds = {
+                    managedIds.clear()
+                    managedIds.addAll(it)
+                },
+            )
+        return MemoryCredentialStore(store, managedIds)
+    }
+
+    private data class MemoryCredentialStore(
+        val store: LocalProviderCredentialStore,
+        val managedIds: MutableSet<String>,
+    )
+}

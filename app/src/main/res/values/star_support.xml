@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="github_star_prompt_title">Support AndCode?</string>
+    <string name="github_star_prompt_body">AndCode is open source. If you find it useful, a GitHub Star is a simple way to support continued development.</string>
+    <string name="github_star_second_prompt_title">Was AndCode useful?</string>
+    <string name="github_star_second_prompt_body">If your first task went well, please consider supporting AndCode with a GitHub Star.</string>
+    <string name="github_star_count">%1$d GitHub Stars</string>
+    <string name="github_star_action">Star on GitHub</string>
+    <string name="github_star_later">Maybe later</string>
+    <string name="github_star_not_now">Not now</string>
+    <string name="github_star_verified">Thank you for starring AndCode!</string>
+    <string name="github_star_thanks_snackbar">Thanks for the GitHub Star! It helps AndCode keep improving.</string>
+    <string name="github_support_button">Support</string>
+    <string name="github_support_title">Support AndCode</string>
+    <string name="github_support_body">AndCode is an open-source project. Star the repository, browse the source, or report an issue.</string>
+    <string name="github_repo_action">GitHub repository</string>
+    <string name="github_issue_action">Report an issue</string>
+    <string name="github_license_action">License</string>
+    <string name="github_version_label">Version</string>
+</resources>

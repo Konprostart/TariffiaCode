@@ -1,0 +1,19 @@
+[weblate]
+url = https://hosted.weblate.org/api/
+
+[project]
+name = AndCode
+slug = and-code
+
+[component]
+name = Android Strings
+slug = android-strings
+file_format = aresource
+source_language = en
+filemask = app/src/main/res/values-*/strings.xml
+template = app/src/main/res/values/strings.xml
+repo = https://github.com/yuga-hashimoto/and-code.git
+branch = main
+push = 
+merge_style = merge
+vcs = git
