@@ -13,6 +13,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AndCode"
+rootProject.name = "TariffiaCode"
 include(":app")
 include(":benchmark")

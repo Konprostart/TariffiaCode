@@ -44,10 +44,10 @@
 
 # AndCode REST payloads are matched by @SerialName, and persisted JSON must keep stable field names
 # across app updates, so these must not be renamed.
--keep class com.yugahashimoto.andcode.core.api.** { *; }
--keep class com.yugahashimoto.andcode.data.connection.ConnectionProfile { *; }
--keep class com.yugahashimoto.andcode.data.settings.Draft { *; }
--keep class com.yugahashimoto.andcode.runtime.local.LocalRuntimeMetadata { *; }
+-keep class com.konprostart.tariffiacode.core.api.** { *; }
+-keep class com.konprostart.tariffiacode.data.connection.ConnectionProfile { *; }
+-keep class com.konprostart.tariffiacode.data.settings.Draft { *; }
+-keep class com.konprostart.tariffiacode.runtime.local.LocalRuntimeMetadata { *; }
 
 # Vosk wake word spotting, and the JNA bridge it reaches the native library through.
 #

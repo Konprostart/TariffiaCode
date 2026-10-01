@@ -29,7 +29,7 @@ trusting the diff alone. You never modify files; you only read and report.
 ## Repository map (verify details against the code when reviewing)
 
 - Android app, single Gradle module `app/`, Kotlin + Jetpack Compose, package root
-  `com.yugahashimoto.andcode`. JDK 17, AGP 8.x, compileSdk 35.
+  `com.konprostart.tariffiacode`. JDK 17, AGP 8.x, compileSdk 35.
 - `feature/` packages own screens and ViewModels: `chat`, `settings`, `workspace`, `onboarding`,
   `schedule`, `assistant` (voice), `wakeword` (Vosk), `widget`, `activity`.
 - `runtime/` owns agent backends: `OpenCodeBackend` interface; `runtime/local/` runs a PRoot-based

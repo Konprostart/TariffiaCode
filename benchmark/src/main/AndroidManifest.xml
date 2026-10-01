@@ -2,10 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <queries>
-        <package android:name="com.yugahashimoto.andcode" />
+        <package android:name="com.konprostart.tariffiacode" />
     </queries>
 
     <instrumentation
         android:name="androidx.test.runner.AndroidJUnitRunner"
-        android:targetPackage="com.yugahashimoto.andcode" />
+        android:targetPackage="com.konprostart.tariffiacode" />
 </manifest>

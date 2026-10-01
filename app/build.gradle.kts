@@ -94,7 +94,7 @@ val hasReleaseSigning =
         }
 
 android {
-    namespace = "com.yugahashimoto.andcode"
+    namespace = "com.konprostart.tariffiacode"
     compileSdk = 35
 
     // F-Droid's scanner rejects the encrypted "Dependency metadata" signing block AGP adds.
@@ -104,7 +104,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.yugahashimoto.andcode"
+        applicationId = "com.konprostart.tariffiacode"
         minSdk = 26
         targetSdk = 35
         versionCode = 64

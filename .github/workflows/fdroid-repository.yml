@@ -114,7 +114,7 @@ jobs:
           PY
 
       - name: Add repository metadata
-        run: cp fdroid-repository-metadata.yml fdroid/metadata/com.yugahashimoto.andcode.yml
+        run: cp fdroid-repository-metadata.yml fdroid/metadata/com.konprostart.tariffiacode.yml
 
       - name: Generate F-Droid repository index
         working-directory: fdroid

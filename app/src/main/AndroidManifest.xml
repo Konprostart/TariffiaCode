@@ -136,7 +136,7 @@
             android:name=".core.notification.PermissionActionReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.yugahashimoto.andcode.PERMISSION_RESPONSE" />
+                <action android:name="com.konprostart.tariffiacode.PERMISSION_RESPONSE" />
             </intent-filter>
         </receiver>
 
@@ -144,7 +144,7 @@
             android:name=".feature.schedule.ScheduleAlarmReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.yugahashimoto.andcode.RUN_SCHEDULE" />
+                <action android:name="com.konprostart.tariffiacode.RUN_SCHEDULE" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -186,10 +186,10 @@
             android:exported="false"
             tools:node="merge">
             <meta-data
-                android:name="com.yugahashimoto.andcode.startup.RuntimeAutoStartInitializer"
+                android:name="com.konprostart.tariffiacode.startup.RuntimeAutoStartInitializer"
                 tools:node="remove" />
             <meta-data
-                android:name="com.yugahashimoto.andcode.startup.CatalogReconcileInitializer"
+                android:name="com.konprostart.tariffiacode.startup.CatalogReconcileInitializer"
                 tools:node="remove" />
         </provider>
 
