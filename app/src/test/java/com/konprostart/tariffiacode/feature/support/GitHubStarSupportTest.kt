@@ -29,9 +29,9 @@ class GitHubStarSupportTest {
 
     @Test
     fun `project links point to the AndCode repository`() {
-        assertEquals("https://github.com/yuga-hashimoto/and-code", ProjectLinks.GITHUB_REPOSITORY)
-        assertEquals("https://github.com/yuga-hashimoto/and-code/issues", ProjectLinks.GITHUB_ISSUES)
-        assertEquals("https://github.com/yuga-hashimoto/and-code/releases", ProjectLinks.GITHUB_RELEASES)
+        assertEquals("https://github.com/Konprostart/TariffiaCode", ProjectLinks.GITHUB_REPOSITORY)
+        assertEquals("https://github.com/Konprostart/TariffiaCode/issues", ProjectLinks.GITHUB_ISSUES)
+        assertEquals("https://github.com/Konprostart/TariffiaCode/releases", ProjectLinks.GITHUB_RELEASES)
     }
 
     @Test
@@ -73,7 +73,7 @@ class GitHubStarSupportTest {
             assertEquals(846, snapshot.stargazersCount)
             assertNull(snapshot.starred)
             val request = server.takeRequest()
-            assertEquals("/repos/yuga-hashimoto/and-code", request.path)
+            assertEquals("/repos/Konprostart/TariffiaCode", request.path)
             assertNull(request.getHeader("Authorization"))
         }
 
@@ -90,7 +90,7 @@ class GitHubStarSupportTest {
             assertEquals(true, snapshot.starred)
             server.takeRequest()
             val starRequest = server.takeRequest()
-            assertEquals("/user/starred/yuga-hashimoto/and-code", starRequest.path)
+            assertEquals("/user/starred/Konprostart/TariffiaCode", starRequest.path)
             assertEquals("Bearer token-123", starRequest.getHeader("Authorization"))
         }
 

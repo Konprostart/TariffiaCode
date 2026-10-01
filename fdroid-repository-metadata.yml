@@ -1,10 +1,10 @@
 Categories:
   - Connectivity
 License: MIT
-WebSite: https://github.com/yuga-hashimoto/and-code
-SourceCode: https://github.com/yuga-hashimoto/and-code
-IssueTracker: https://github.com/yuga-hashimoto/and-code/issues
-Changelog: https://github.com/yuga-hashimoto/and-code/releases
+WebSite: https://github.com/Konprostart/TariffiaCode
+SourceCode: https://github.com/Konprostart/TariffiaCode
+IssueTracker: https://github.com/Konprostart/TariffiaCode/issues
+Changelog: https://github.com/Konprostart/TariffiaCode/releases
 Summary: Run coding agents on Android
 Description: |
   AndCode is an open-source Android client for coding agents.
