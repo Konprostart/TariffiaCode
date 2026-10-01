@@ -92,7 +92,7 @@
     <string name="workspace_folder_picker_select">使用此文件夹</string>
     <string name="workspace_folder_picker_unavailable">请先设置设备端运行环境——目前还没有可浏览的环境。</string>
     <string name="workspace_device_storage_row">允许访问设备文件</string>
-    <string name="workspace_device_storage_hint">AndCode 目前只能看到自己的文件夹。授予所有文件访问权限后即可直接打开手机上的文件。</string>
+    <string name="workspace_device_storage_hint">TariffiaCode 目前只能看到自己的文件夹。授予所有文件访问权限后即可直接打开手机上的文件。</string>
 
     <string name="recent_sessions">最近的会话</string>
     <string name="view_all">查看全部</string>
@@ -578,7 +578,7 @@
     <string name="legal_app_version_row">应用版本</string>
     <string name="legal_build_version_row">构建版本</string>
     <string name="legal_doc_load_error">无法在此设备上加载该文档。</string>
-    <string name="legal_non_affiliation_note">AndCode 是一个独立的开源项目,与 OpenCode、Anthropic 或 Google 均无关联,也未获得其中任何一方的认可或官方支持。</string>
+    <string name="legal_non_affiliation_note">TariffiaCode 是一个独立的开源项目,与 OpenCode、Anthropic 或 Google 均无关联,也未获得其中任何一方的认可或官方支持。</string>
     <string name="legal_license_texts_section">许可证全文</string>
     <string name="legal_license_gpl2">GPL-2.0</string>
     <string name="legal_license_gpl3">GPL-3.0</string>
@@ -695,7 +695,7 @@
     <string name="cd_expand_dropdown">Expand dropdown</string>
     <string name="cd_expand_collapse">Expand or collapse</string>
     <string name="cd_search">Search</string>
-    <string name="cd_app_logo">AndCode</string>
+    <string name="cd_app_logo">TariffiaCode</string>
     <string name="cd_permission">Permission</string>
     <string name="cd_runtime_type">Runtime type</string>
     <string name="cd_new_chat">New chat</string>
@@ -714,7 +714,7 @@
     <string name="cd_download_image">下载图片</string>
     <string name="image_loading">正在加载图片...</string>
     <string name="image_load_failed">无法加载图片</string>
-    <string name="image_saved">图片已保存到 Pictures/AndCode</string>
+    <string name="image_saved">图片已保存到 Pictures/TariffiaCode</string>
     <string name="image_save_failed">无法保存图片</string>
     <string name="cd_reasoning">Reasoning</string>
     <string name="cd_tool">Tool</string>
@@ -1027,14 +1027,14 @@
     <string name="antigravity_auth_verifying">正在验证…</string>
     <string name="antigravity_signed_in">已登录 Antigravity</string>
     <string name="claude_pre_auth_dialog_title">开始官方 Claude Code CLI 登录</string>
-    <string name="claude_pre_auth_dialog_body">AndCode 会在本设备的 Linux 环境中启动官方 Claude Code CLI。\n\n身份验证以及与 Anthropic(或您配置的提供方)的通信完全由官方 Claude Code CLI 处理。\n\nAndCode 只会把登录网址和您输入的验证码转交给本地 CLI 进程,不会将生成的 OAuth 令牌复制到 Android 设置中,不会发送到 AndCode 的服务器,也不会将其挪作他用。\n\n您需要拥有自己可用的账号或提供方配置。适用 Anthropic 当前的服务条款及套餐条件。</string>
+    <string name="claude_pre_auth_dialog_body">TariffiaCode 会在本设备的 Linux 环境中启动官方 Claude Code CLI。\n\n身份验证以及与 Anthropic(或您配置的提供方)的通信完全由官方 Claude Code CLI 处理。\n\nTariffiaCode 只会把登录网址和您输入的验证码转交给本地 CLI 进程,不会将生成的 OAuth 令牌复制到 Android 设置中,不会发送到 TariffiaCode 的服务器,也不会将其挪作他用。\n\n您需要拥有自己可用的账号或提供方配置。适用 Anthropic 当前的服务条款及套餐条件。</string>
     <string name="antigravity_pre_auth_dialog_title">开始官方 Antigravity CLI 登录</string>
-    <string name="antigravity_pre_auth_dialog_body">AndCode 会在本设备的 Linux 环境中启动官方且未经修改的 Google Antigravity CLI。\n\n身份验证、模型访问以及与 Google 的通信完全由官方 Antigravity CLI 处理。\n\nAndCode 不会提取、存储或传输 Google 的 OAuth 令牌,也不会将其挪用给 OpenCode、Claude Code 等其他工具。\n\n您需要拥有自己可用的 Google 账号。适用 Google Antigravity 当前的服务条款、提供条件及使用限制。</string>
+    <string name="antigravity_pre_auth_dialog_body">TariffiaCode 会在本设备的 Linux 环境中启动官方且未经修改的 Google Antigravity CLI。\n\n身份验证、模型访问以及与 Google 的通信完全由官方 Antigravity CLI 处理。\n\nTariffiaCode 不会提取、存储或传输 Google 的 OAuth 令牌,也不会将其挪用给 OpenCode、Claude Code 等其他工具。\n\n您需要拥有自己可用的 Google 账号。适用 Google Antigravity 当前的服务条款、提供条件及使用限制。</string>
     <string name="pre_auth_dialog_continue">了解,继续</string>
     <string name="risk_warning_title">此设置会改变 CLI 能做的事</string>
     <string name="risk_warning_full_access_body">启用此设置后,官方 CLI 可以在未经确认的情况下更改文件或执行命令。\n\nPRoot 是兼容运行环境,并非完整的安全沙箱。请备份重要文件,并仅使用可信的仓库、提示词和 MCP 服务器。</string>
     <string name="risk_warning_all_files_title">允许访问设备上的所有文件?</string>
-    <string name="risk_warning_all_files_body">授予此权限后,您运行的代理可以读写此设备上文件夹选择器可访问的任意文件,而不仅限于 AndCode 自身的存储空间。\n\n只有在信任所使用的代理、提示词及 MCP 服务器时才应授予此权限。</string>
+    <string name="risk_warning_all_files_body">授予此权限后,您运行的代理可以读写此设备上文件夹选择器可访问的任意文件,而不仅限于 TariffiaCode 自身的存储空间。\n\n只有在信任所使用的代理、提示词及 MCP 服务器时才应授予此权限。</string>
     <string name="risk_warning_mcp_server_title">正在添加第三方 MCP 服务器</string>
     <string name="risk_warning_mcp_server_body">MCP 服务器可以读取提示词、文件和工具输出,部分服务器还能代表您执行操作。请仅添加可信的服务器。</string>
     <string name="risk_warning_schedule_title">定时与后台运行</string>
@@ -1169,7 +1169,7 @@
     <string name="guest_browser_reload">重新加载</string>
     <string name="setup_step_development_tools">开发工具</string>
     <string name="setup_development_tools_description">默认只安装运行所需组件，也可以一并安装完整开发工具链。</string>
-    <string name="setup_required_tools_description">Linux、所选智能体、Git 以及 AndCode 功能依赖的支持工具，将始终安装。</string>
+    <string name="setup_required_tools_description">Linux、所选智能体、Git 以及 TariffiaCode 功能依赖的支持工具，将始终安装。</string>
     <string name="setup_install_full_development_tools">安装完整开发工具</string>
     <string name="setup_install_full_development_tools_description">将添加语言运行时、编译器、构建工具、编辑器和其他实用工具，需要下载更多数据。</string>
     <string name="setup_development_tools_settings_hint">可以跳过此步骤，稍后在“设置 → 本地运行时”中安装完整工具链。</string>

@@ -92,7 +92,7 @@
     <string name="workspace_folder_picker_select">Использовать эту папку</string>
     <string name="workspace_folder_picker_unavailable">Сначала настройте среду на устройстве — просматривать пока нечего.</string>
     <string name="workspace_device_storage_row">Разрешить доступ к файлам устройства</string>
-    <string name="workspace_device_storage_hint">AndCode видит только собственные папки. Разрешите доступ ко всем файлам, чтобы открывать файлы, которые уже есть на телефоне.</string>
+    <string name="workspace_device_storage_hint">TariffiaCode видит только собственные папки. Разрешите доступ ко всем файлам, чтобы открывать файлы, которые уже есть на телефоне.</string>
 
     <string name="recent_sessions">Недавние сессии</string>
     <string name="view_all">Показать все</string>
@@ -581,7 +581,7 @@
     <string name="legal_app_version_row">Версия приложения</string>
     <string name="legal_build_version_row">Версия сборки</string>
     <string name="legal_doc_load_error">Не удалось загрузить этот документ на этом устройстве.</string>
-    <string name="legal_non_affiliation_note">AndCode — независимый проект с открытым исходным кодом. Он не связан с OpenCode, Anthropic или Google, не одобрен и официально не поддерживается ни одной из этих компаний.</string>
+    <string name="legal_non_affiliation_note">TariffiaCode — независимый проект с открытым исходным кодом. Он не связан с OpenCode, Anthropic или Google, не одобрен и официально не поддерживается ни одной из этих компаний.</string>
     <string name="legal_license_texts_section">Тексты лицензий</string>
     <string name="legal_license_gpl2">GPL-2.0</string>
     <string name="legal_license_gpl3">GPL-3.0</string>
@@ -701,7 +701,7 @@
     <string name="cd_expand_dropdown">Expand dropdown</string>
     <string name="cd_expand_collapse">Expand or collapse</string>
     <string name="cd_search">Search</string>
-    <string name="cd_app_logo">AndCode</string>
+    <string name="cd_app_logo">TariffiaCode</string>
     <string name="cd_permission">Permission</string>
     <string name="cd_runtime_type">Runtime type</string>
     <string name="cd_new_chat">New chat</string>
@@ -720,7 +720,7 @@
     <string name="cd_download_image">Download image</string>
     <string name="image_loading">Loading image...</string>
     <string name="image_load_failed">Could not load image</string>
-    <string name="image_saved">Image saved to Pictures/AndCode</string>
+    <string name="image_saved">Image saved to Pictures/TariffiaCode</string>
     <string name="image_save_failed">Could not save image</string>
     <string name="cd_reasoning">Reasoning</string>
     <string name="cd_tool">Tool</string>
@@ -1033,14 +1033,14 @@
     <string name="antigravity_auth_verifying">Проверка…</string>
     <string name="antigravity_signed_in">Вход в Antigravity выполнен</string>
     <string name="claude_pre_auth_dialog_title">Начать официальный вход в Claude Code CLI</string>
-    <string name="claude_pre_auth_dialog_body">AndCode запускает официальный Claude Code CLI внутри Linux-окружения на этом устройстве.\n\nАутентификацию и обмен данными с Anthropic (или настроенным вами провайдером) полностью выполняет официальный Claude Code CLI.\n\nAndCode передаёт ссылку для входа и введённый вами код локальному процессу CLI. Он не копирует полученный OAuth-токен в настройки Android, не отправляет его на сервер AndCode и не использует его повторно в другом инструменте.\n\nВам понадобится собственная учётная запись или настройка провайдера. Действуют текущие условия обслуживания и тарифного плана Anthropic.</string>
+    <string name="claude_pre_auth_dialog_body">TariffiaCode запускает официальный Claude Code CLI внутри Linux-окружения на этом устройстве.\n\nАутентификацию и обмен данными с Anthropic (или настроенным вами провайдером) полностью выполняет официальный Claude Code CLI.\n\nTariffiaCode передаёт ссылку для входа и введённый вами код локальному процессу CLI. Он не копирует полученный OAuth-токен в настройки Android, не отправляет его на сервер TariffiaCode и не использует его повторно в другом инструменте.\n\nВам понадобится собственная учётная запись или настройка провайдера. Действуют текущие условия обслуживания и тарифного плана Anthropic.</string>
     <string name="antigravity_pre_auth_dialog_title">Начать официальный вход в Antigravity CLI</string>
-    <string name="antigravity_pre_auth_dialog_body">AndCode запускает официальный, неизменённый Google Antigravity CLI внутри Linux-окружения на этом устройстве.\n\nАутентификацию, доступ к моделям и обмен данными с Google полностью выполняет официальный Antigravity CLI.\n\nAndCode не извлекает, не хранит и не передаёт OAuth-токены Google и не использует их повторно в других инструментах, например OpenCode или Claude Code.\n\nВам понадобится собственная учётная запись Google. Действуют текущие условия обслуживания, условия предоставления и лимиты использования Google Antigravity.</string>
+    <string name="antigravity_pre_auth_dialog_body">TariffiaCode запускает официальный, неизменённый Google Antigravity CLI внутри Linux-окружения на этом устройстве.\n\nАутентификацию, доступ к моделям и обмен данными с Google полностью выполняет официальный Antigravity CLI.\n\nTariffiaCode не извлекает, не хранит и не передаёт OAuth-токены Google и не использует их повторно в других инструментах, например OpenCode или Claude Code.\n\nВам понадобится собственная учётная запись Google. Действуют текущие условия обслуживания, условия предоставления и лимиты использования Google Antigravity.</string>
     <string name="pre_auth_dialog_continue">Понятно, продолжить</string>
     <string name="risk_warning_title">Это изменяет возможности CLI</string>
     <string name="risk_warning_full_access_body">Включение этой настройки позволяет официальному CLI изменять файлы или выполнять команды без запроса подтверждения.\n\nPRoot — это среда совместимости, а не полноценная песочница безопасности. Сделайте резервную копию важных файлов и используйте только доверенные репозитории, промпты и MCP-серверы.</string>
     <string name="risk_warning_all_files_title">Разрешить доступ ко всем файлам устройства?</string>
-    <string name="risk_warning_all_files_body">Предоставление доступа позволяет запускаемым агентам читать и изменять любые файлы, доступные через выбор папки на этом устройстве, а не только собственное хранилище AndCode.\n\nПредоставляйте этот доступ, только если доверяете используемым агентам, промптам и MCP-серверам.</string>
+    <string name="risk_warning_all_files_body">Предоставление доступа позволяет запускаемым агентам читать и изменять любые файлы, доступные через выбор папки на этом устройстве, а не только собственное хранилище TariffiaCode.\n\nПредоставляйте этот доступ, только если доверяете используемым агентам, промптам и MCP-серверам.</string>
     <string name="risk_warning_mcp_server_title">Добавление стороннего MCP-сервера</string>
     <string name="risk_warning_mcp_server_body">MCP-серверы могут читать промпты, файлы и вывод инструментов, а некоторые способны выполнять действия от вашего имени. Добавляйте только доверенные серверы.</string>
     <string name="risk_warning_schedule_title">Запуск по расписанию и в фоновом режиме</string>
@@ -1175,7 +1175,7 @@
     <string name="guest_browser_reload">Обновить</string>
     <string name="setup_step_development_tools">Инструменты разработки</string>
     <string name="setup_development_tools_description">По умолчанию устанавливаются только необходимые компоненты. При желании можно добавить полный набор инструментов.</string>
-    <string name="setup_required_tools_description">Linux, выбранные агенты, Git и вспомогательные инструменты AndCode. Они устанавливаются всегда.</string>
+    <string name="setup_required_tools_description">Linux, выбранные агенты, Git и вспомогательные инструменты TariffiaCode. Они устанавливаются всегда.</string>
     <string name="setup_install_full_development_tools">Установить полный набор инструментов</string>
     <string name="setup_install_full_development_tools_description">Добавляет языковые среды, компиляторы, инструменты сборки, редакторы и утилиты. Будет загружено больше данных.</string>
     <string name="setup_development_tools_settings_hint">Можно пропустить этот шаг и установить полный набор позже в Настройки → Локальная среда.</string>

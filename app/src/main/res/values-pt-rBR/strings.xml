@@ -92,7 +92,7 @@
     <string name="workspace_folder_picker_select">Usar esta pasta</string>
     <string name="workspace_folder_picker_unavailable">Configure primeiro o ambiente no dispositivo — ainda não há nada para navegar.</string>
     <string name="workspace_device_storage_row">Permitir acesso aos arquivos do dispositivo</string>
-    <string name="workspace_device_storage_hint">O AndCode só enxerga as próprias pastas. Conceda acesso a todos os arquivos para abrir os que já estão no seu telefone.</string>
+    <string name="workspace_device_storage_hint">O TariffiaCode só enxerga as próprias pastas. Conceda acesso a todos os arquivos para abrir os que já estão no seu telefone.</string>
 
     <string name="recent_sessions">Sessões recentes</string>
     <string name="view_all">Ver tudo</string>
@@ -580,7 +580,7 @@
     <string name="legal_app_version_row">Versão do aplicativo</string>
     <string name="legal_build_version_row">Versão do build</string>
     <string name="legal_doc_load_error">Não foi possível carregar este documento neste dispositivo.</string>
-    <string name="legal_non_affiliation_note">O AndCode é um projeto de código aberto independente. Ele não é afiliado, endossado ou oficialmente apoiado por OpenCode, Anthropic ou Google.</string>
+    <string name="legal_non_affiliation_note">O TariffiaCode é um projeto de código aberto independente. Ele não é afiliado, endossado ou oficialmente apoiado por OpenCode, Anthropic ou Google.</string>
     <string name="legal_license_texts_section">Textos de licenças</string>
     <string name="legal_license_gpl2">GPL-2.0</string>
     <string name="legal_license_gpl3">GPL-3.0</string>
@@ -699,7 +699,7 @@
     <string name="cd_expand_dropdown">Expand dropdown</string>
     <string name="cd_expand_collapse">Expand or collapse</string>
     <string name="cd_search">Search</string>
-    <string name="cd_app_logo">AndCode</string>
+    <string name="cd_app_logo">TariffiaCode</string>
     <string name="cd_permission">Permission</string>
     <string name="cd_runtime_type">Runtime type</string>
     <string name="cd_new_chat">New chat</string>
@@ -718,7 +718,7 @@
     <string name="cd_download_image">Baixar imagem</string>
     <string name="image_loading">Carregando imagem...</string>
     <string name="image_load_failed">Nao foi possivel carregar a imagem</string>
-    <string name="image_saved">Imagem salva em Pictures/AndCode</string>
+    <string name="image_saved">Imagem salva em Pictures/TariffiaCode</string>
     <string name="image_save_failed">Nao foi possivel salvar a imagem</string>
     <string name="cd_reasoning">Reasoning</string>
     <string name="cd_tool">Tool</string>
@@ -1031,14 +1031,14 @@
     <string name="antigravity_auth_verifying">Verificando…</string>
     <string name="antigravity_signed_in">Conectado ao Antigravity</string>
     <string name="claude_pre_auth_dialog_title">Iniciar o login oficial da CLI do Claude Code</string>
-    <string name="claude_pre_auth_dialog_body">O AndCode inicia a CLI oficial do Claude Code dentro do ambiente Linux neste dispositivo.\n\nA autenticação e a comunicação com a Anthropic (ou o provedor que você configurou) são feitas inteiramente pela CLI oficial do Claude Code.\n\nO AndCode repassa a URL de login e o código digitado por você ao processo local da CLI. Ele não copia o token OAuth resultante para as configurações do Android, não o envia a um servidor do AndCode e não o reutiliza em nenhuma outra ferramenta.\n\nVocê precisa de sua própria conta ou configuração de provedor utilizável. Os termos de serviço e condições do plano atuais da Anthropic se aplicam.</string>
+    <string name="claude_pre_auth_dialog_body">O TariffiaCode inicia a CLI oficial do Claude Code dentro do ambiente Linux neste dispositivo.\n\nA autenticação e a comunicação com a Anthropic (ou o provedor que você configurou) são feitas inteiramente pela CLI oficial do Claude Code.\n\nO TariffiaCode repassa a URL de login e o código digitado por você ao processo local da CLI. Ele não copia o token OAuth resultante para as configurações do Android, não o envia a um servidor do TariffiaCode e não o reutiliza em nenhuma outra ferramenta.\n\nVocê precisa de sua própria conta ou configuração de provedor utilizável. Os termos de serviço e condições do plano atuais da Anthropic se aplicam.</string>
     <string name="antigravity_pre_auth_dialog_title">Iniciar o login oficial da CLI do Antigravity</string>
-    <string name="antigravity_pre_auth_dialog_body">O AndCode inicia a CLI oficial e não modificada do Google Antigravity dentro do ambiente Linux neste dispositivo.\n\nA autenticação, o acesso aos modelos e a comunicação com o Google são feitos inteiramente pela CLI oficial do Antigravity.\n\nO AndCode não extrai, armazena nem transmite tokens OAuth do Google, e não os reutiliza em outros agentes como o OpenCode ou o Claude Code.\n\nVocê precisa de sua própria conta Google utilizável. Os termos de serviço, condições de oferta e limites de uso atuais do Google Antigravity se aplicam.</string>
+    <string name="antigravity_pre_auth_dialog_body">O TariffiaCode inicia a CLI oficial e não modificada do Google Antigravity dentro do ambiente Linux neste dispositivo.\n\nA autenticação, o acesso aos modelos e a comunicação com o Google são feitos inteiramente pela CLI oficial do Antigravity.\n\nO TariffiaCode não extrai, armazena nem transmite tokens OAuth do Google, e não os reutiliza em outros agentes como o OpenCode ou o Claude Code.\n\nVocê precisa de sua própria conta Google utilizável. Os termos de serviço, condições de oferta e limites de uso atuais do Google Antigravity se aplicam.</string>
     <string name="pre_auth_dialog_continue">Entendi, continuar</string>
     <string name="risk_warning_title">Isso altera o que a CLI pode fazer</string>
     <string name="risk_warning_full_access_body">Ativar esta opção permite que a CLI oficial altere arquivos ou execute comandos sem pedir confirmação antes.\n\nO PRoot é um ambiente de compatibilidade, não um sandbox de segurança completo. Faça backup de qualquer coisa importante e use apenas repositórios, prompts e servidores MCP confiáveis.</string>
     <string name="risk_warning_all_files_title">Permitir acesso a todos os arquivos do dispositivo?</string>
-    <string name="risk_warning_all_files_body">Conceder isso permite que os agentes que você executa leiam e modifiquem qualquer arquivo alcançável pelo seletor de pastas neste dispositivo, não apenas o armazenamento próprio do AndCode.\n\nConceda isso apenas se confiar nos agentes, prompts e servidores MCP que usa com eles.</string>
+    <string name="risk_warning_all_files_body">Conceder isso permite que os agentes que você executa leiam e modifiquem qualquer arquivo alcançável pelo seletor de pastas neste dispositivo, não apenas o armazenamento próprio do TariffiaCode.\n\nConceda isso apenas se confiar nos agentes, prompts e servidores MCP que usa com eles.</string>
     <string name="risk_warning_mcp_server_title">Adicionando um servidor MCP de terceiros</string>
     <string name="risk_warning_mcp_server_body">Servidores MCP podem ler prompts, arquivos e saídas de ferramentas, e alguns podem realizar ações em seu nome. Adicione apenas servidores em que você confia.</string>
     <string name="risk_warning_schedule_title">Execuções agendadas e em segundo plano</string>
@@ -1173,7 +1173,7 @@
     <string name="guest_browser_reload">Recarregar</string>
     <string name="setup_step_development_tools">Ferramentas de desenvolvimento</string>
     <string name="setup_development_tools_description">Por padrão, instale apenas o necessário para executar, ou inclua a cadeia completa de desenvolvimento.</string>
-    <string name="setup_required_tools_description">Linux, os agentes selecionados, Git e as ferramentas de suporte usadas pelo AndCode. São sempre instalados.</string>
+    <string name="setup_required_tools_description">Linux, os agentes selecionados, Git e as ferramentas de suporte usadas pelo TariffiaCode. São sempre instalados.</string>
     <string name="setup_install_full_development_tools">Instalar todas as ferramentas de desenvolvimento</string>
     <string name="setup_install_full_development_tools_description">Adiciona runtimes, compiladores, ferramentas de build, editores e utilitários. Mais dados serão baixados.</string>
     <string name="setup_development_tools_settings_hint">Você pode ignorar esta etapa e instalar a cadeia completa depois em Configurações → Ambiente local.</string>

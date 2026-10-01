@@ -92,7 +92,7 @@
     <string name="workspace_folder_picker_select">Use this folder</string>
     <string name="workspace_folder_picker_unavailable">Set up the on-device runtime first — there is no environment to browse yet.</string>
     <string name="workspace_device_storage_row">Allow access to device files</string>
-    <string name="workspace_device_storage_hint">AndCode can only see its own folders. Allow all-files access to open the files already on your phone.</string>
+    <string name="workspace_device_storage_hint">TariffiaCode can only see its own folders. Allow all-files access to open the files already on your phone.</string>
 
     <string name="recent_sessions">Recent sessions</string>
     <string name="view_all">View all</string>
@@ -578,7 +578,7 @@
     <string name="legal_app_version_row">App version</string>
     <string name="legal_build_version_row">Build version</string>
     <string name="legal_doc_load_error">Could not load this document on this device.</string>
-    <string name="legal_non_affiliation_note">AndCode is an independent open-source project. It is not affiliated with, endorsed by, or officially supported by OpenCode, Anthropic, or Google.</string>
+    <string name="legal_non_affiliation_note">TariffiaCode is an independent open-source project. It is not affiliated with, endorsed by, or officially supported by OpenCode, Anthropic, or Google.</string>
     <string name="legal_license_texts_section">License texts</string>
     <string name="legal_license_gpl2">GPL-2.0</string>
     <string name="legal_license_gpl3">GPL-3.0</string>
@@ -698,7 +698,7 @@
     <string name="cd_expand_dropdown">Expand dropdown</string>
     <string name="cd_expand_collapse">Expand or collapse</string>
     <string name="cd_search">Search</string>
-    <string name="cd_app_logo">AndCode</string>
+    <string name="cd_app_logo">TariffiaCode</string>
     <string name="cd_permission">Permission</string>
     <string name="cd_runtime_type">Runtime type</string>
     <string name="cd_new_chat">New chat</string>
@@ -717,7 +717,7 @@
     <string name="cd_download_image">Download image</string>
     <string name="image_loading">Loading image…</string>
     <string name="image_load_failed">Could not load image</string>
-    <string name="image_saved">Image saved to Pictures/AndCode</string>
+    <string name="image_saved">Image saved to Pictures/TariffiaCode</string>
     <string name="image_save_failed">Could not save image</string>
     <string name="cd_reasoning">Reasoning</string>
     <string name="cd_tool">Tool</string>
@@ -1066,16 +1066,16 @@
 
     <!-- Pre-login explainer dialogs: shown once before each CLI's own sign-in flow starts. -->
     <string name="claude_pre_auth_dialog_title">Start official Claude Code CLI sign-in</string>
-    <string name="claude_pre_auth_dialog_body">AndCode starts the official Claude Code CLI inside the Linux environment on this device.\n\nAuthentication and communication with Anthropic (or your configured provider) are handled entirely by the official Claude Code CLI.\n\nAndCode passes the sign-in URL and the code you enter through to the local CLI process. It does not copy the resulting OAuth token into Android settings, send it to an AndCode server, or reuse it for any other tool.\n\nYou need your own usable account or provider configuration. Anthropic\'s current terms of service and plan conditions apply.</string>
+    <string name="claude_pre_auth_dialog_body">TariffiaCode starts the official Claude Code CLI inside the Linux environment on this device.\n\nAuthentication and communication with Anthropic (or your configured provider) are handled entirely by the official Claude Code CLI.\n\nTariffiaCode passes the sign-in URL and the code you enter through to the local CLI process. It does not copy the resulting OAuth token into Android settings, send it to an TariffiaCode server, or reuse it for any other tool.\n\nYou need your own usable account or provider configuration. Anthropic\'s current terms of service and plan conditions apply.</string>
     <string name="antigravity_pre_auth_dialog_title">Start official Antigravity CLI sign-in</string>
-    <string name="antigravity_pre_auth_dialog_body">AndCode starts the official, unmodified Google Antigravity CLI inside the Linux environment on this device.\n\nAuthentication, model access, and communication with Google are handled entirely by the official Antigravity CLI.\n\nAndCode does not extract, store, or transmit Google OAuth tokens, and does not reuse them for other agents such as OpenCode or Claude Code.\n\nYou need your own usable Google account. Google Antigravity\'s current terms of service, offering terms, and usage limits apply.</string>
+    <string name="antigravity_pre_auth_dialog_body">TariffiaCode starts the official, unmodified Google Antigravity CLI inside the Linux environment on this device.\n\nAuthentication, model access, and communication with Google are handled entirely by the official Antigravity CLI.\n\nTariffiaCode does not extract, store, or transmit Google OAuth tokens, and does not reuse them for other agents such as OpenCode or Claude Code.\n\nYou need your own usable Google account. Google Antigravity\'s current terms of service, offering terms, and usage limits apply.</string>
     <string name="pre_auth_dialog_continue">Understood, continue</string>
 
     <!-- Dangerous permission / risk warnings (section 2.9). -->
     <string name="risk_warning_title">This changes what the CLI can do</string>
     <string name="risk_warning_full_access_body">Turning this on lets the official CLI change files or run commands without asking you first.\n\nPRoot is a compatibility runtime, not a full security sandbox. Back up anything important, and only use trusted repositories, prompts, and MCP servers.</string>
     <string name="risk_warning_all_files_title">Allow access to all device files?</string>
-    <string name="risk_warning_all_files_body">Granting this lets agents you run read and modify any file the folder picker can reach on this device, not just AndCode\'s own storage.\n\nOnly grant this if you trust the agents, prompts, and MCP servers you use with them.</string>
+    <string name="risk_warning_all_files_body">Granting this lets agents you run read and modify any file the folder picker can reach on this device, not just TariffiaCode\'s own storage.\n\nOnly grant this if you trust the agents, prompts, and MCP servers you use with them.</string>
     <string name="risk_warning_mcp_server_title">Adding a third-party MCP server</string>
     <string name="risk_warning_mcp_server_body">MCP servers can read prompts, files, and tool output, and some can take actions on your behalf. Only add servers you trust.</string>
     <string name="risk_warning_schedule_title">Scheduled and background runs</string>
@@ -1192,7 +1192,7 @@
     <string name="guest_browser_reload">Reload</string>
     <string name="setup_step_development_tools">Development tools</string>
     <string name="setup_development_tools_description">Install only the runtime by default, or include the complete development toolchain.</string>
-    <string name="setup_required_tools_description">Linux, the selected agents, Git, and the support tools used by AndCode. These are always installed.</string>
+    <string name="setup_required_tools_description">Linux, the selected agents, Git, and the support tools used by TariffiaCode. These are always installed.</string>
     <string name="setup_install_full_development_tools">Install complete development tools</string>
     <string name="setup_install_full_development_tools_description">Adds language runtimes, compilers, build tools, editors, and other utilities. This downloads more data.</string>
     <string name="setup_development_tools_settings_hint">You can skip this and install the complete toolchain later from Settings → Local runtime.</string>

@@ -212,7 +212,7 @@ suspend fun saveChatImageToPictures(
             ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, safeImageFilename(source))
                 put(MediaStore.Images.Media.MIME_TYPE, effectiveImageMime(source))
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/AndCode")
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/TariffiaCode")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
         val resolver = context.contentResolver

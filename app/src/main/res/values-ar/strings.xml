@@ -92,7 +92,7 @@
     <string name="workspace_folder_picker_select">استخدام هذا المجلد</string>
     <string name="workspace_folder_picker_unavailable">قم بإعداد بيئة التشغيل على الجهاز أولاً — لا توجد بيئة لاستعراضها بعد.</string>
     <string name="workspace_device_storage_row">السماح بالوصول إلى ملفات الجهاز</string>
-    <string name="workspace_device_storage_hint">لا يرى AndCode سوى مجلداته الخاصة. امنحه الوصول إلى كل الملفات لفتح الملفات الموجودة على هاتفك مباشرة.</string>
+    <string name="workspace_device_storage_hint">لا يرى TariffiaCode سوى مجلداته الخاصة. امنحه الوصول إلى كل الملفات لفتح الملفات الموجودة على هاتفك مباشرة.</string>
 
     <string name="recent_sessions">الجلسات الأخيرة</string>
     <string name="view_all">عرض الكل</string>
@@ -583,7 +583,7 @@
     <string name="legal_app_version_row">إصدار التطبيق</string>
     <string name="legal_build_version_row">إصدار البناء</string>
     <string name="legal_doc_load_error">تعذر تحميل هذا المستند على هذا الجهاز.</string>
-    <string name="legal_non_affiliation_note">AndCode مشروع مفتوح المصدر مستقل. وهو غير منتسب إلى OpenCode أو Anthropic أو Google، ولا مدعوم أو معتمد رسمياً من أي منها.</string>
+    <string name="legal_non_affiliation_note">TariffiaCode مشروع مفتوح المصدر مستقل. وهو غير منتسب إلى OpenCode أو Anthropic أو Google، ولا مدعوم أو معتمد رسمياً من أي منها.</string>
     <string name="legal_license_texts_section">نصوص التراخيص</string>
     <string name="legal_license_gpl2">GPL-2.0</string>
     <string name="legal_license_gpl3">GPL-3.0</string>
@@ -705,7 +705,7 @@
     <string name="cd_expand_dropdown">Expand dropdown</string>
     <string name="cd_expand_collapse">Expand or collapse</string>
     <string name="cd_search">Search</string>
-    <string name="cd_app_logo">AndCode</string>
+    <string name="cd_app_logo">TariffiaCode</string>
     <string name="cd_permission">Permission</string>
     <string name="cd_runtime_type">Runtime type</string>
     <string name="cd_new_chat">New chat</string>
@@ -724,7 +724,7 @@
     <string name="cd_download_image">Download image</string>
     <string name="image_loading">Loading image...</string>
     <string name="image_load_failed">Could not load image</string>
-    <string name="image_saved">Image saved to Pictures/AndCode</string>
+    <string name="image_saved">Image saved to Pictures/TariffiaCode</string>
     <string name="image_save_failed">Could not save image</string>
     <string name="cd_reasoning">Reasoning</string>
     <string name="cd_tool">Tool</string>
@@ -1037,14 +1037,14 @@
     <string name="antigravity_auth_verifying">جارٍ التحقق…</string>
     <string name="antigravity_signed_in">تم تسجيل الدخول إلى Antigravity</string>
     <string name="claude_pre_auth_dialog_title">بدء تسجيل الدخول الرسمي لواجهة Claude Code</string>
-    <string name="claude_pre_auth_dialog_body">يشغّل AndCode واجهة Claude Code الرسمية داخل بيئة Linux على هذا الجهاز.\n\nتتم عملية المصادقة والتواصل مع Anthropic (أو المزوّد الذي أعددته) بالكامل عبر واجهة Claude Code الرسمية.\n\nيُمرر AndCode رابط تسجيل الدخول والرمز الذي تُدخله إلى عملية CLI المحلية فقط، ولا ينسخ رمز OAuth الناتج إلى إعدادات Android، ولا يرسله إلى خادم AndCode، ولا يعيد استخدامه في أي أداة أخرى.\n\nتحتاج إلى حساب أو إعداد مزوّد خاص بك. تسري شروط خدمة Anthropic الحالية وشروط الخطة.</string>
+    <string name="claude_pre_auth_dialog_body">يشغّل TariffiaCode واجهة Claude Code الرسمية داخل بيئة Linux على هذا الجهاز.\n\nتتم عملية المصادقة والتواصل مع Anthropic (أو المزوّد الذي أعددته) بالكامل عبر واجهة Claude Code الرسمية.\n\nيُمرر TariffiaCode رابط تسجيل الدخول والرمز الذي تُدخله إلى عملية CLI المحلية فقط، ولا ينسخ رمز OAuth الناتج إلى إعدادات Android، ولا يرسله إلى خادم TariffiaCode، ولا يعيد استخدامه في أي أداة أخرى.\n\nتحتاج إلى حساب أو إعداد مزوّد خاص بك. تسري شروط خدمة Anthropic الحالية وشروط الخطة.</string>
     <string name="antigravity_pre_auth_dialog_title">بدء تسجيل الدخول الرسمي لواجهة Antigravity</string>
-    <string name="antigravity_pre_auth_dialog_body">يشغّل AndCode واجهة Google Antigravity الرسمية غير المعدّلة داخل بيئة Linux على هذا الجهاز.\n\nتتم المصادقة والوصول إلى النماذج والتواصل مع Google بالكامل عبر الواجهة الرسمية.\n\nلا يستخرج AndCode رموز OAuth الخاصة بـ Google أو يخزّنها أو يرسلها، ولا يعيد استخدامها مع أدوات أخرى مثل OpenCode أو Claude Code.\n\nتحتاج إلى حساب Google خاص بك. تسري شروط Google Antigravity الحالية وحدود الاستخدام.</string>
+    <string name="antigravity_pre_auth_dialog_body">يشغّل TariffiaCode واجهة Google Antigravity الرسمية غير المعدّلة داخل بيئة Linux على هذا الجهاز.\n\nتتم المصادقة والوصول إلى النماذج والتواصل مع Google بالكامل عبر الواجهة الرسمية.\n\nلا يستخرج TariffiaCode رموز OAuth الخاصة بـ Google أو يخزّنها أو يرسلها، ولا يعيد استخدامها مع أدوات أخرى مثل OpenCode أو Claude Code.\n\nتحتاج إلى حساب Google خاص بك. تسري شروط Google Antigravity الحالية وحدود الاستخدام.</string>
     <string name="pre_auth_dialog_continue">فهمت، متابعة</string>
     <string name="risk_warning_title">هذا يغيّر ما يمكن لواجهة CLI فعله</string>
     <string name="risk_warning_full_access_body">يسمح تفعيل هذا الخيار لواجهة CLI الرسمية بتغيير الملفات أو تنفيذ الأوامر دون سؤالك أولاً.\n\nPRoot بيئة توافق وليست عزلاً أمنياً كاملاً. احتفظ بنسخة احتياطية من الملفات المهمة، واستخدم فقط مستودعات وموجهات وخوادم MCP موثوقة.</string>
     <string name="risk_warning_all_files_title">السماح بالوصول إلى جميع ملفات الجهاز؟</string>
-    <string name="risk_warning_all_files_body">يتيح منح هذا الإذن للوكلاء التي تشغّلها قراءة وتعديل أي ملف يمكن الوصول إليه على هذا الجهاز، وليس فقط تخزين AndCode الخاص.\n\nامنح هذا الإذن فقط إذا كنت تثق بالوكلاء والموجهات وخوادم MCP التي تستخدمها معها.</string>
+    <string name="risk_warning_all_files_body">يتيح منح هذا الإذن للوكلاء التي تشغّلها قراءة وتعديل أي ملف يمكن الوصول إليه على هذا الجهاز، وليس فقط تخزين TariffiaCode الخاص.\n\nامنح هذا الإذن فقط إذا كنت تثق بالوكلاء والموجهات وخوادم MCP التي تستخدمها معها.</string>
     <string name="risk_warning_mcp_server_title">إضافة خادم MCP تابع لجهة خارجية</string>
     <string name="risk_warning_mcp_server_body">يمكن لخوادم MCP قراءة الموجهات والملفات ومخرجات الأدوات، وبعضها يمكنه تنفيذ إجراءات نيابةً عنك. أضف فقط الخوادم التي تثق بها.</string>
     <string name="risk_warning_schedule_title">التشغيل المجدول والتشغيل في الخلفية</string>
@@ -1179,7 +1179,7 @@
     <string name="guest_browser_reload">إعادة تحميل</string>
     <string name="setup_step_development_tools">أدوات التطوير</string>
     <string name="setup_development_tools_description">يتم تثبيت مكونات التشغيل الضرورية فقط افتراضيًا، ويمكنك إضافة مجموعة أدوات التطوير الكاملة.</string>
-    <string name="setup_required_tools_description">سيتم دائمًا تثبيت Linux والوكلاء المحددين وGit وأدوات الدعم التي يستخدمها AndCode.</string>
+    <string name="setup_required_tools_description">سيتم دائمًا تثبيت Linux والوكلاء المحددين وGit وأدوات الدعم التي يستخدمها TariffiaCode.</string>
     <string name="setup_install_full_development_tools">تثبيت أدوات التطوير الكاملة</string>
     <string name="setup_install_full_development_tools_description">تضيف بيئات اللغات والمترجمات وأدوات البناء والمحررات والأدوات المساعدة، مع تنزيل بيانات إضافية.</string>
     <string name="setup_development_tools_settings_hint">يمكنك تخطي ذلك وتثبيت مجموعة الأدوات الكاملة لاحقًا من الإعدادات → بيئة التشغيل المحلية.</string>
