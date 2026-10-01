@@ -4,7 +4,7 @@ package com.konprostart.tariffiacode.core.lifecycle
  * Turns a stream of [AppForeground.foreground] emissions into "the app just entered the
  * foreground" events - a rising edge from `false` (or from no prior emission at all) to `true`.
  *
- * That includes the app's own cold start: [com.konprostart.tariffiacode.AndCodeApplication]'s
+ * That includes the app's own cold start: [com.konprostart.tariffiacode.TariffiaCodeApplication]'s
  * foreground observer is the sole driver of
  * [com.konprostart.tariffiacode.startup.RuntimeAutoStartTrigger.AppLaunch] now that
  * [com.konprostart.tariffiacode.startup.RuntimeAutoStartInitializer.create] no longer restores the

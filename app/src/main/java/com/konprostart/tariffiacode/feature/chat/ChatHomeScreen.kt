@@ -142,7 +142,7 @@ import com.konprostart.tariffiacode.runtime.local.SystemPromptPreset
 import com.konprostart.tariffiacode.ui.components.StatusChip
 import com.konprostart.tariffiacode.ui.components.VolumeMeter
 import com.konprostart.tariffiacode.ui.components.systemPromptPresetLabel
-import com.konprostart.tariffiacode.ui.theme.AndCodeTheme
+import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -2113,7 +2113,7 @@ private fun formatTokenCount(tokens: Long): String =
 @Preview(showBackground = true)
 @Composable
 private fun ChatHomeScreenEmptyPreview() {
-    AndCodeTheme {
+    TariffiaCodeTheme {
         ChatHomeScreen(
             state = ChatUiState(backendName = "OpenCode · 1.0.0", isConnected = true),
             providers = emptyList(),

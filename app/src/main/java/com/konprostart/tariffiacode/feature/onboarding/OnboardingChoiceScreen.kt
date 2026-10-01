@@ -38,7 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.konprostart.tariffiacode.R
-import com.konprostart.tariffiacode.ui.theme.AndCodeTheme
+import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
 
 private enum class OnboardingOption { ANDROID, REMOTE }
 
@@ -224,7 +224,7 @@ private fun OnboardingCard(
 @Preview(showBackground = true)
 @Composable
 private fun OnboardingChoiceScreenPreview() {
-    AndCodeTheme {
+    TariffiaCodeTheme {
         OnboardingChoiceScreen(onSelectAndroid = {}, onSelectRemote = {})
     }
 }

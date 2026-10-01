@@ -7,7 +7,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
-import com.konprostart.tariffiacode.AndCodeApplication
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.feature.browser.GuestBrowserScreen
 import com.konprostart.tariffiacode.feature.workspace.CodeViewerScreen
 import com.konprostart.tariffiacode.feature.workspace.CodeViewerViewModel
@@ -36,7 +36,7 @@ fun NavGraphBuilder.workspaceNavGraph(
     selectedWorkspace: () -> WorkspaceRef?,
     onSelectWorkspace: (WorkspaceRef?) -> Unit,
     selectedRuntime: () -> RuntimeTarget?,
-    app: AndCodeApplication,
+    app: TariffiaCodeApplication,
     onImportFolder: () -> Unit,
     onShowCloneDialog: () -> Unit,
     completeOnboardingAndGoToChat: () -> Unit,

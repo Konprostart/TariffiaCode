@@ -17,7 +17,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.konprostart.tariffiacode.AndCodeApplication
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.core.api.PromptRequest
 import com.konprostart.tariffiacode.core.locale.AppLanguage
@@ -124,7 +124,7 @@ class QuickInputActivity : ComponentActivity() {
         text: String,
         statusText: TextView,
     ) {
-        val app = application as AndCodeApplication
+        val app = application as TariffiaCodeApplication
         val runtime = app.runtimeRegistry.selected.value
 
         if (runtime == null) {

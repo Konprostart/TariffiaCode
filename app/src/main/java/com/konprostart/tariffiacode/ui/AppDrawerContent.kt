@@ -59,7 +59,7 @@ import com.konprostart.tariffiacode.runtime.LocalAgent
 import com.konprostart.tariffiacode.runtime.WorkspaceRef
 import com.konprostart.tariffiacode.ui.components.SessionStatus
 import com.konprostart.tariffiacode.ui.components.StatusDot
-import com.konprostart.tariffiacode.ui.theme.AndCodeTheme
+import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
 
 data class DrawerRecentSession(
     val id: String,
@@ -691,7 +691,7 @@ private fun DrawerDestinationRow(
 @Preview(showBackground = true)
 @Composable
 private fun AppDrawerContentPreview() {
-    AndCodeTheme {
+    TariffiaCodeTheme {
         AppDrawerContent(
             recentSessions =
                 listOf(

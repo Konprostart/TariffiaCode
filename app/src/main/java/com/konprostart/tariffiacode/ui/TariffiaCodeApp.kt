@@ -66,7 +66,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.konprostart.tariffiacode.AndCodeApplication
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.BuildConfig
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.core.UrlLauncher
@@ -120,7 +120,7 @@ import com.konprostart.tariffiacode.ui.navigation.scheduleDetailRoute
 import com.konprostart.tariffiacode.ui.navigation.scheduleEditRoute
 import com.konprostart.tariffiacode.ui.navigation.settingsNavGraph
 import com.konprostart.tariffiacode.ui.navigation.workspaceNavGraph
-import com.konprostart.tariffiacode.ui.theme.AndCodeTheme
+import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
 import com.konprostart.tariffiacode.ui.theme.AppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -169,7 +169,7 @@ private fun relativeTimeLabel(
 }
 
 @Composable
-fun AndCodeApp(
+fun TariffiaCodeApp(
     onOpenAssistantSettings: () -> Unit,
     assistantActive: Boolean = false,
     appTheme: AppTheme = AppTheme.DARK,
@@ -179,7 +179,7 @@ fun AndCodeApp(
 ) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    val app = context.applicationContext as AndCodeApplication
+    val app = context.applicationContext as TariffiaCodeApplication
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     var pendingSession by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -798,7 +798,7 @@ fun AndCodeApp(
 
     val drawerGesturesEnabled = currentRoute in DRAWER_ROOT_ROUTES
 
-    AndCodeTheme(
+    TariffiaCodeTheme(
         appTheme = AppTheme.fromKey(preferences.theme),
         uiFontSize = preferences.uiFontSize,
     ) {

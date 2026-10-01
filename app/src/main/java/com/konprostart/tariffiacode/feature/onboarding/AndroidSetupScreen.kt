@@ -77,7 +77,7 @@ import com.konprostart.tariffiacode.runtime.local.ClaudeInstallStatus
 import com.konprostart.tariffiacode.runtime.local.ClaudePermissionMode
 import com.konprostart.tariffiacode.runtime.local.CodexInstallStatus
 import com.konprostart.tariffiacode.runtime.local.CodexUiState
-import com.konprostart.tariffiacode.ui.theme.AndCodeTheme
+import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
 import kotlinx.coroutines.delay
 
 private const val TOTAL_STEPS = 5
@@ -1338,7 +1338,7 @@ private fun SetupBottomBar(
 @Preview(showBackground = true)
 @Composable
 private fun AndroidSetupScreenPreview() {
-    AndCodeTheme {
+    TariffiaCodeTheme {
         AndroidSetupScreen(
             runtimeStatus = LocalRuntimeStatus.Installing(0.68f, "Downloading runtime"),
             claude = ClaudeCodeUiState(),
@@ -1371,7 +1371,7 @@ private fun AndroidSetupScreenPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun AndroidSetupProviderStepPreview() {
-    AndCodeTheme {
+    TariffiaCodeTheme {
         AndroidSetupScreen(
             runtimeStatus = LocalRuntimeStatus.Ready("1.0.0", 4097),
             claude = ClaudeCodeUiState(installed = true, version = "2.1.212"),

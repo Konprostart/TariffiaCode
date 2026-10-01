@@ -3,7 +3,7 @@ package com.konprostart.tariffiacode.feature.assistant
 import android.content.Intent
 import android.speech.RecognitionService
 
-class AndCodeRecognitionService : RecognitionService() {
+class TariffiaCodeRecognitionService : RecognitionService() {
     override fun onStartListening(
         intent: Intent?,
         listener: Callback?,

@@ -1,7 +1,7 @@
 package com.konprostart.tariffiacode.feature.schedule
 
 import android.util.Log
-import com.konprostart.tariffiacode.AndCodeApplication
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.data.schedule.Schedule
 
@@ -18,7 +18,7 @@ private const val TAG = "ScheduleStart"
  *
  * @param failedAttempts how many attempts have already failed, the one being reported included.
  */
-fun AndCodeApplication.reportScheduleStartFailure(
+fun TariffiaCodeApplication.reportScheduleStartFailure(
     schedule: Schedule,
     reason: String,
     failedAttempts: Int,

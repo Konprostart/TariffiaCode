@@ -488,7 +488,7 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
          * carried the prefs file to a new install without its Keystore-bound key) leave the stored
          * keyset undecryptable with the current Keystore key: every read throws
          * [android.security.KeyStoreException] wrapped in [javax.crypto.AEADBadTagException]. Left
-         * uncaught here this crashed [com.konprostart.tariffiacode.AndCodeApplication.onCreate] itself,
+         * uncaught here this crashed [com.konprostart.tariffiacode.TariffiaCodeApplication.onCreate] itself,
          * bricking the app on every launch since nothing after this constructor ever ran. The
          * ciphertext cannot be recovered, so this drops it and starts over with a fresh keyset -
          * exactly what a first run does - rather than leave the user permanently locked out.

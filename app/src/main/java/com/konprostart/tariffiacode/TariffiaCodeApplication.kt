@@ -100,7 +100,7 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import java.io.File
 
-class AndCodeApplication : Application() {
+class TariffiaCodeApplication : Application() {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     lateinit var settings: SecureSettingsRepository
@@ -241,7 +241,7 @@ class AndCodeApplication : Application() {
         // CrashLog records the local crash file.
         CrashReporter.install()
         startKoin {
-            androidContext(this@AndCodeApplication)
+            androidContext(this@TariffiaCodeApplication)
             modules(appModule, viewModelModule)
         }
         appForeground = ProcessLifecycleAppForeground.install()
@@ -342,14 +342,14 @@ class AndCodeApplication : Application() {
         applicationScope.launch {
             codexRuntime.needsForeground.collectLatest { needed ->
                 if (needed) {
-                    CodexKeepAliveService.start(this@AndCodeApplication)
+                    CodexKeepAliveService.start(this@TariffiaCodeApplication)
                 } else {
                     // A short grace before stopping: a sign-in cancelled the moment it began would
                     // otherwise stop the service before its onCreate reached startForeground, which
                     // the platform treats as a broken foreground-service start. collectLatest drops
                     // this stop if Codex needs the foreground again within the grace period.
                     delay(CODEX_KEEPALIVE_STOP_GRACE_MS)
-                    CodexKeepAliveService.stop(this@AndCodeApplication)
+                    CodexKeepAliveService.stop(this@TariffiaCodeApplication)
                 }
             }
         }
@@ -619,7 +619,7 @@ class AndCodeApplication : Application() {
         applicationScope.launch {
             appForeground.foreground.collect { inForeground ->
                 if (!detector.onForegroundChanged(inForeground)) return@collect
-                RuntimeAutoStartInitializer.syncOnboardingCompleted(this@AndCodeApplication)
+                RuntimeAutoStartInitializer.syncOnboardingCompleted(this@TariffiaCodeApplication)
                 val shouldRestore =
                     shouldRestoreOnForegroundReturn(
                         status = localRuntimeManager.status(),
@@ -627,7 +627,7 @@ class AndCodeApplication : Application() {
                         userStoppedRuntime = settings.localRuntimeStoppedByUser,
                     )
                 if (shouldRestore) {
-                    RuntimeAutoStartInitializer.restoreIfConfigured(this@AndCodeApplication, RuntimeAutoStartTrigger.AppLaunch)
+                    RuntimeAutoStartInitializer.restoreIfConfigured(this@TariffiaCodeApplication, RuntimeAutoStartTrigger.AppLaunch)
                 }
             }
         }

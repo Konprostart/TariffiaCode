@@ -1,7 +1,7 @@
 package com.konprostart.tariffiacode.di
 
 import android.os.Build
-import com.konprostart.tariffiacode.AndCodeApplication
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.core.api.GitHubApiClient
 import com.konprostart.tariffiacode.core.notification.RuntimeNotificationHelper
 import com.konprostart.tariffiacode.data.connection.SecureSettingsRepository
@@ -176,8 +176,8 @@ val appModule =
                         ),
                         // The application's own instance, not a second CodexTarget: Codex runs one
                         // long-lived app-server whose approvals and threads a second runtime would
-                        // not see. Resolved lazily, after AndCodeApplication.onCreate has built it.
-                        (androidContext().applicationContext as AndCodeApplication).codexTarget,
+                        // not see. Resolved lazily, after TariffiaCodeApplication.onCreate has built it.
+                        (androidContext().applicationContext as TariffiaCodeApplication).codexTarget,
                     ),
             )
         }

@@ -24,11 +24,11 @@ import androidx.compose.ui.unit.dp
 import com.konprostart.tariffiacode.core.ProjectLinks
 import com.konprostart.tariffiacode.core.locale.AppLanguage
 import com.konprostart.tariffiacode.core.notification.RuntimeNotificationHelper
-import com.konprostart.tariffiacode.feature.assistant.AndCodeVoiceInteractionService
+import com.konprostart.tariffiacode.feature.assistant.TariffiaCodeVoiceInteractionService
 import com.konprostart.tariffiacode.feature.assistant.AssistantStatus
 import com.konprostart.tariffiacode.feature.support.GitHubStarPromptDialog
 import com.konprostart.tariffiacode.feature.support.openProjectLink
-import com.konprostart.tariffiacode.ui.AndCodeApp
+import com.konprostart.tariffiacode.ui.TariffiaCodeApp
 import com.konprostart.tariffiacode.ui.ChatDeepLink
 import java.util.UUID
 
@@ -38,8 +38,8 @@ class MainActivity : ComponentActivity() {
     private var showInitialStarPrompt by mutableStateOf(false)
     private var assistantActive by mutableStateOf(false)
 
-    private val app: AndCodeApplication
-        get() = application as AndCodeApplication
+    private val app: TariffiaCodeApplication
+        get() = application as TariffiaCodeApplication
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLanguage.applyTo(newBase))
@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
             }
 
             Box {
-                AndCodeApp(
+                TariffiaCodeApp(
                     onOpenAssistantSettings = ::openAssistantSettings,
                     assistantActive = assistantActive,
                     chatDeepLink = chatDeepLink,
@@ -149,7 +149,7 @@ class MainActivity : ComponentActivity() {
 
     private fun openAssistantSettings() {
         if (assistantActive) {
-            AndCodeVoiceInteractionService.show(this, UUID.randomUUID().toString())
+            TariffiaCodeVoiceInteractionService.show(this, UUID.randomUUID().toString())
             return
         }
         val opened =

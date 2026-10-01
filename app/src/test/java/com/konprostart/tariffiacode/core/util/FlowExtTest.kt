@@ -19,7 +19,7 @@ private const val GRACE_MILLIS = 60_000L
 /**
  * Covers the "sessions" wake-lock lease grace period: a momentary SSE/HTTP blip must not release
  * the lease, but a real end of every session must still release it promptly. See
- * [com.konprostart.tariffiacode.AndCodeApplication]'s use of [debounceFalseEdge] on the `"sessions"`
+ * [com.konprostart.tariffiacode.TariffiaCodeApplication]'s use of [debounceFalseEdge] on the `"sessions"`
  * lease bridge.
  */
 @OptIn(ExperimentalCoroutinesApi::class)

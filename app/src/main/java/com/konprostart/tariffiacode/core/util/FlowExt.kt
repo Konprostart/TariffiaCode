@@ -11,7 +11,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * Passes every transition to `true` through immediately, but only passes a transition to `false`
  * through once it has held for [graceMillis] without flipping back to `true`.
  *
- * Written for [com.konprostart.tariffiacode.AndCodeApplication]'s `"sessions"` wake-lock lease, which
+ * Written for [com.konprostart.tariffiacode.TariffiaCodeApplication]'s `"sessions"` wake-lock lease, which
  * follows [com.konprostart.tariffiacode.data.repository.RuntimeActivityRepository]'s
  * `activeSessionIds`: that set is cleared the instant the runtime target leaves
  * [com.konprostart.tariffiacode.runtime.RuntimeState.Connected]/`Connecting`, including for a

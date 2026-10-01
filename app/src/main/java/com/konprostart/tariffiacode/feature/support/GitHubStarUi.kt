@@ -32,7 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.konprostart.tariffiacode.AndCodeApplication
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.core.ProjectLinks
 import com.konprostart.tariffiacode.core.UrlLauncher
@@ -94,7 +94,7 @@ fun GitHubSupportSheetHost(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val app = context.applicationContext as AndCodeApplication
+    val app = context.applicationContext as TariffiaCodeApplication
     val snapshot by app.githubStarCoordinator.snapshot.collectAsState()
 
     LaunchedEffect(Unit) {

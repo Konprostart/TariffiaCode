@@ -286,7 +286,7 @@ fun NavGraphBuilder.settingsNavGraph(
     }
 
     composable(ROUTE_SETTINGS_AGENT_OPENCODE) {
-        val app = context.applicationContext as com.konprostart.tariffiacode.AndCodeApplication
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
         val openCodeViewModel: OpenCodeAgentSettingsViewModel =
             androidx.lifecycle.viewmodel.compose.viewModel(
                 key = "settings-agent-opencode",
@@ -398,7 +398,7 @@ fun NavGraphBuilder.settingsNavGraph(
     }
 
     composable(ROUTE_SETTINGS_AGENT_CODEX) {
-        val app = context.applicationContext as com.konprostart.tariffiacode.AndCodeApplication
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
         val codex by app.codexController.state.collectAsState()
         val signInViewModel: CodexSignInViewModel =
             androidx.lifecycle.viewmodel.compose.viewModel(
