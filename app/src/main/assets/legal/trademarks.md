@@ -20,4 +20,4 @@ rights holder's logo. See [docs/AUTHENTICATION_AND_DATA_FLOW.md](docs/AUTHENTICA
 for how each integration actually works.
 
 If you are a rights holder and believe an asset in this repository misuses your mark, please open an
-issue at [yuga-hashimoto/and-code](https://github.com/yuga-hashimoto/and-code/issues).
+issue at [Konprostart/TariffiaCode](https://github.com/Konprostart/TariffiaCode/issues).

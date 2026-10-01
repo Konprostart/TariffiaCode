@@ -1,17 +1,17 @@
 # AndCode
 
 <p align="center">
-  <a href="https://github.com/yuga-hashimoto/and-code/actions/workflows/android.yml"><img src="https://github.com/yuga-hashimoto/and-code/actions/workflows/android.yml/badge.svg" alt="CI" /></a>
-  <a href="https://github.com/yuga-hashimoto/and-code/releases/latest"><img src="https://img.shields.io/github/v/release/yuga-hashimoto/and-code" alt="Release" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/yuga-hashimoto/and-code" alt="License: MIT" /></a>
-  <a href="https://github.com/yuga-hashimoto/and-code/releases/latest"><img src="https://img.shields.io/github/downloads/yuga-hashimoto/and-code/total" alt="Downloads" /></a>
+  <a href="https://github.com/Konprostart/TariffiaCode/actions/workflows/android.yml"><img src="https://github.com/Konprostart/TariffiaCode/actions/workflows/android.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/Konprostart/TariffiaCode/releases/latest"><img src="https://img.shields.io/github/v/release/Konprostart/TariffiaCode" alt="Release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Konprostart/TariffiaCode" alt="License: MIT" /></a>
+  <a href="https://github.com/Konprostart/TariffiaCode/releases/latest"><img src="https://img.shields.io/github/downloads/Konprostart/TariffiaCode/total" alt="Downloads" /></a>
 </p>
 
 **AIコーディングエージェントをAndroidのネイティブGUIでローカル実行 — ターミナル不要です。**
 
 AndCodeはAIコーディングエージェントをスマートフォンで使えるようにするネイティブAndroid GUIアプリです。[OpenCode](https://github.com/sst/opencode)、[Claude Code](https://github.com/anthropics/claude-code)、[Google Antigravity](https://github.com/google-antigravity/antigravity-cli)、[OpenAI Codex](https://github.com/openai/codex)とタッチ操作中心のインターフェースで対話できます — 端末エミュレータもSSHもPCも、オンデバイス実行には一切不要です。PRootによるオンデバイスランタイムか、PC/Mac/Linux上の既存OpenCodeサーバーへのリモート接続で動作します。
 
-[Releases](https://github.com/yuga-hashimoto/and-code/releases/latest) · [English README](README.md)
+[Releases](https://github.com/Konprostart/TariffiaCode/releases/latest) · [English README](README.md)
 
 > [!IMPORTANT]
 > AndCodeは、利用者自身のAndroid端末上で対応する第三者製コマンドラインツールをインストールまたは起動する、独立したローカルファーストGUIです。AndCode自体がClaude、Google Antigravity、OpenAI Codex、OpenCodeなどのAIサービス、サブスクリプション、モデル利用権またはアカウント利用権を提供するものではありません。認証、モデルアクセス、推論およびサービスとの通信は、各公式CLIまたは利用者が設定したプロバイダーによって処理されます。AndCodeはOpenCode、Anthropic、GoogleまたはOpenAIと提携、承認、後援または公式サポート関係にありません。詳細は[法的情報・第三者ソフトウェア](#法的情報第三者ソフトウェア)を参照してください。
@@ -135,7 +135,7 @@ OpenAIのCodex CLIは、OpenCodeやClaude Codeと同じAlpine/PRootサンドボ�
 
 ### オンデバイス実行（PC不要）
 
-1. [Releases](https://github.com/yuga-hashimoto/and-code/releases/latest)からAPKをインストール
+1. [Releases](https://github.com/Konprostart/TariffiaCode/releases/latest)からAPKをインストール
 2. アプリを開く → **作業先** → **このAndroid端末** → **この端末へセットアップ**
 3. ランタイムのダウンロード・インストールを待つ（約2分）
 4. コーディングエージェントを選択してチャット開始

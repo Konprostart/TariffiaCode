@@ -173,5 +173,5 @@ separate service governed by its own privacy policy and terms. See
 ## 11. Contact
 
 This project is maintained on GitHub at
-[yuga-hashimoto/and-code](https://github.com/yuga-hashimoto/and-code). Open an issue there with
+[Konprostart/TariffiaCode](https://github.com/Konprostart/TariffiaCode). Open an issue there with
 privacy questions or data-deletion requests related to this repository's code.

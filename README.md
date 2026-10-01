@@ -1,17 +1,17 @@
 # AndCode
 
 <p align="center">
-  <a href="https://github.com/yuga-hashimoto/and-code/actions/workflows/android.yml"><img src="https://github.com/yuga-hashimoto/and-code/actions/workflows/android.yml/badge.svg" alt="CI" /></a>
-  <a href="https://github.com/yuga-hashimoto/and-code/releases/latest"><img src="https://img.shields.io/github/v/release/yuga-hashimoto/and-code" alt="Release" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/yuga-hashimoto/and-code" alt="License: MIT" /></a>
-  <a href="https://github.com/yuga-hashimoto/and-code/releases/latest"><img src="https://img.shields.io/github/downloads/yuga-hashimoto/and-code/total" alt="Downloads" /></a>
+  <a href="https://github.com/Konprostart/TariffiaCode/actions/workflows/android.yml"><img src="https://github.com/Konprostart/TariffiaCode/actions/workflows/android.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/Konprostart/TariffiaCode/releases/latest"><img src="https://img.shields.io/github/v/release/Konprostart/TariffiaCode" alt="Release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Konprostart/TariffiaCode" alt="License: MIT" /></a>
+  <a href="https://github.com/Konprostart/TariffiaCode/releases/latest"><img src="https://img.shields.io/github/downloads/Konprostart/TariffiaCode/total" alt="Downloads" /></a>
 </p>
 
 **Run coding agents locally on Android through a native GUI — no terminal required.**
 
 AndCode is a native Android GUI app that brings AI coding agents to your phone. Chat with [OpenCode](https://github.com/sst/opencode), [Claude Code](https://github.com/anthropics/claude-code), [Google Antigravity](https://github.com/google-antigravity/antigravity-cli), and [OpenAI Codex](https://github.com/openai/codex) through a touch-first interface — no terminal, no SSH, no PC required for on-device use. It wraps agent runtimes via PRoot (on-device) or connects remotely to your existing OpenCode server on PC/Mac/Linux.
 
-[Releases](https://github.com/yuga-hashimoto/and-code/releases/latest) · [日本語のREADME](README.ja.md)
+[Releases](https://github.com/Konprostart/TariffiaCode/releases/latest) · [日本語のREADME](README.ja.md)
 
 > [!IMPORTANT]
 > AndCode is an independent, local-first graphical interface that installs or launches supported third-party command-line tools on the user's own Android device. AndCode itself does not provide or resell the underlying AI services, subscriptions, model access, or account entitlements. Authentication, model access, inference, and provider communication are handled by the applicable official CLI or user-configured provider. AndCode is not affiliated with, endorsed by, sponsored by, or officially supported by OpenCode, Anthropic, Google, or OpenAI. See [Legal & Third-Party Software](#legal--third-party-software) below.
@@ -135,7 +135,7 @@ In addition to on-device agents, AndCode can connect to OpenCode running on your
 
 ### Option A: On-Device (no PC needed)
 
-1. Install the APK from [Releases](https://github.com/yuga-hashimoto/and-code/releases/latest)
+1. Install the APK from [Releases](https://github.com/Konprostart/TariffiaCode/releases/latest)
 2. Open the app → tap **Workspaces** → **This Android device** → **Set up on this device**
 3. Wait for the runtime to download and install (~2 min on a good connection)
 4. Select your coding agent and start chatting

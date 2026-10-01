@@ -69,4 +69,4 @@ AndCodeに接続するAIサービス、MCPサーバー、GitHub、または任�
 
 ## 11. お問い合わせ
 
-このプロジェクトはGitHub上の[yuga-hashimoto/and-code](https://github.com/yuga-hashimoto/and-code)で保守されています。プライバシーに関する質問や、このリポジトリのコードに関するデータ削除のご依頼は、こちらでIssueを立ててください。
+このプロジェクトはGitHub上の[Konprostart/TariffiaCode](https://github.com/Konprostart/TariffiaCode)で保守されています。プライバシーに関する質問や、このリポジトリのコードに関するデータ削除のご依頼は、こちらでIssueを立ててください。

@@ -54,7 +54,7 @@ yet — this is flagged `REQUIRES_LICENSE_REVIEW`, not resolved.** Until it is f
 framework/toolchain instructions needed to reproduce the pinned binaries, or (b) rebuilding these
 three packages from source under this project's own pinned, fully self-contained build process, the
 following stands as a GPLv2 §3(b)-style written offer for these three packages specifically: **on
-request (open an issue at [yuga-hashimoto/and-code](https://github.com/yuga-hashimoto/and-code/issues)),
+request (open an issue at [Konprostart/TariffiaCode](https://github.com/Konprostart/TariffiaCode/issues)),
 for at least three years from the release you obtained, this project will provide, at no more than
 the cost of physically performing the distribution, a complete machine-readable copy of the
 corresponding source it is able to identify or reconstruct for the pinned `proot`, `libandroid-shmem`,
