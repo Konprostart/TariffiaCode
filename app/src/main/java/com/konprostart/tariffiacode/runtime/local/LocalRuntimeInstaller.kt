@@ -552,7 +552,7 @@ class LocalRuntimeInstaller(
         if (!rootfs.isDirectory) return
         runCatching {
             val script =
-                context.assets.open("scripts/and-code-claude-permission-hook.sh").bufferedReader().use { it.readText() }
+                context.assets.open("scripts/tariffiacode-claude-permission-hook.sh").bufferedReader().use { it.readText() }
             ClaudePermissionHooks.installInto(rootfs, script)
         }
     }
@@ -563,19 +563,13 @@ class LocalRuntimeInstaller(
      */
     private fun provisionBrowserMcp(rootfs: File) {
         mergeJsonConfig(File(rootfs, "root/.config/opencode/opencode.json")) { root ->
-            val mcp = root.optJSONObject("mcp") ?: JSONObject()
-            mcp.put(BROWSER_MCP_NAME, browserMcpEntry("opencode"))
-            root.put("mcp", mcp)
+            upsertMcpServer(root, "mcp", BROWSER_MCP_NAME, browserMcpEntry("opencode"), LEGACY_BROWSER_MCP_NAME)
         }
         mergeJsonConfig(File(rootfs, "root/.claude.json")) { root ->
-            val servers = root.optJSONObject("mcpServers") ?: JSONObject()
-            servers.put(BROWSER_MCP_NAME, browserMcpEntry("claude"))
-            root.put("mcpServers", servers)
+            upsertMcpServer(root, "mcpServers", BROWSER_MCP_NAME, browserMcpEntry("claude"), LEGACY_BROWSER_MCP_NAME)
         }
         mergeJsonConfig(File(rootfs, "root/.gemini/config/mcp_config.json")) { root ->
-            val servers = root.optJSONObject("mcpServers") ?: JSONObject()
-            servers.put(BROWSER_MCP_NAME, browserMcpEntry("antigravity"))
-            root.put("mcpServers", servers)
+            upsertMcpServer(root, "mcpServers", BROWSER_MCP_NAME, browserMcpEntry("antigravity"), LEGACY_BROWSER_MCP_NAME)
         }
     }
 
@@ -601,19 +595,13 @@ class LocalRuntimeInstaller(
      */
     private fun provisionScheduleMcp(rootfs: File) {
         mergeJsonConfig(File(rootfs, "root/.config/opencode/opencode.json")) { root ->
-            val mcp = root.optJSONObject("mcp") ?: JSONObject()
-            mcp.put(SCHEDULE_MCP_NAME, scheduleMcpEntry("opencode"))
-            root.put("mcp", mcp)
+            upsertMcpServer(root, "mcp", SCHEDULE_MCP_NAME, scheduleMcpEntry("opencode"), LEGACY_SCHEDULE_MCP_NAME)
         }
         mergeJsonConfig(File(rootfs, "root/.claude.json")) { root ->
-            val servers = root.optJSONObject("mcpServers") ?: JSONObject()
-            servers.put(SCHEDULE_MCP_NAME, scheduleMcpEntry("claude"))
-            root.put("mcpServers", servers)
+            upsertMcpServer(root, "mcpServers", SCHEDULE_MCP_NAME, scheduleMcpEntry("claude"), LEGACY_SCHEDULE_MCP_NAME)
         }
         mergeJsonConfig(File(rootfs, "root/.gemini/config/mcp_config.json")) { root ->
-            val servers = root.optJSONObject("mcpServers") ?: JSONObject()
-            servers.put(SCHEDULE_MCP_NAME, scheduleMcpEntry("antigravity"))
-            root.put("mcpServers", servers)
+            upsertMcpServer(root, "mcpServers", SCHEDULE_MCP_NAME, scheduleMcpEntry("antigravity"), LEGACY_SCHEDULE_MCP_NAME)
         }
     }
 
@@ -659,8 +647,8 @@ class LocalRuntimeInstaller(
             "android-screenshot.sh" to "android-screenshot",
             "android-instrument.sh" to "android-instrument",
             "android-app.sh" to "android-app",
-            "andcode-browser-mcp.py" to "andcode-browser-mcp.py",
-            "andcode-schedule-mcp.py" to "andcode-schedule-mcp.py",
+            "tariffiacode-browser-mcp.py" to "tariffiacode-browser-mcp.py",
+            "tariffiacode-schedule-mcp.py" to "tariffiacode-schedule-mcp.py",
         ).forEach {
                 (assetName, scriptName) ->
             val scriptFile = File(binDir, scriptName)
@@ -669,6 +657,9 @@ class LocalRuntimeInstaller(
             }
             scriptFile.setExecutable(true, false)
         }
+        // Remove pre-rename MCP binaries so an upgraded guest does not keep runnable legacy servers.
+        File(binDir, LEGACY_BROWSER_MCP_BIN_NAME).delete()
+        File(binDir, LEGACY_SCHEDULE_MCP_BIN_NAME).delete()
     }
 
     private fun copyCaCertificates(
@@ -684,12 +675,33 @@ class LocalRuntimeInstaller(
 
     internal companion object {
         private const val METADATA_FILE = "metadata.json"
-        private const val BROWSER_MCP_NAME = "and-code-browser"
-        private const val BROWSER_MCP_BIN = "/usr/local/bin/andcode-browser-mcp.py"
+        private const val BROWSER_MCP_NAME = "tariffiacode-browser"
+        private const val LEGACY_BROWSER_MCP_NAME = "and-code-browser"
+        private const val BROWSER_MCP_BIN = "/usr/local/bin/tariffiacode-browser-mcp.py"
+        private const val LEGACY_BROWSER_MCP_BIN_NAME = "andcode-browser-mcp.py"
         private const val BROWSER_MCP_TIMEOUT_MILLIS = 30000
-        private const val SCHEDULE_MCP_NAME = "and-code-schedule"
-        private const val SCHEDULE_MCP_BIN = "/usr/local/bin/andcode-schedule-mcp.py"
+        private const val SCHEDULE_MCP_NAME = "tariffiacode-schedule"
+        private const val LEGACY_SCHEDULE_MCP_NAME = "and-code-schedule"
+        private const val SCHEDULE_MCP_BIN = "/usr/local/bin/tariffiacode-schedule-mcp.py"
+        private const val LEGACY_SCHEDULE_MCP_BIN_NAME = "andcode-schedule-mcp.py"
         private const val SCHEDULE_MCP_TIMEOUT_MILLIS = 120000
+
+        /**
+         * Registers [newName] under [containerKey] in [root], dropping the pre-rename [legacyName]
+         * if present. Every other server in the container, and the rest of [root], is left as-is.
+         */
+        internal fun upsertMcpServer(
+            root: JSONObject,
+            containerKey: String,
+            newName: String,
+            entry: JSONObject,
+            legacyName: String,
+        ) {
+            val servers = root.optJSONObject(containerKey) ?: JSONObject()
+            servers.remove(legacyName)
+            servers.put(newName, entry)
+            root.put(containerKey, servers)
+        }
 
         /** Required by OpenCode and AndCode's built-in Git, MCP, and Android-device features. */
         val REQUIRED_RUNTIME_PACKAGES =

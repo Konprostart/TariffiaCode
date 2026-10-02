@@ -17,8 +17,15 @@ import java.io.File
  * Installs AndCode's Claude Code PermissionRequest hook into the guest settings and binary path.
  */
 object ClaudePermissionHooks {
-    const val HOOK_GUEST_PATH = "/usr/local/bin/and-code-claude-permission-hook.sh"
-    const val HOOK_MARKER = "and-code-claude-permission"
+    const val HOOK_GUEST_PATH = "/usr/local/bin/tariffiacode-claude-permission-hook.sh"
+    const val HOOK_MARKER = "tariffiacode-claude-permission"
+
+    /**
+     * Marker carried by hook entries installed before the AndCode -> TariffiaCode rename.
+     * [mergeSettingsJson] removes these alongside [HOOK_MARKER] so an upgraded guest does not keep
+     * a stale permission hook pointing at the removed legacy script and bridge paths.
+     */
+    private const val LEGACY_HOOK_MARKER = "and-code-claude-permission"
 
     /**
      * How long Claude Code lets the hook block a tool call, in seconds. A question may wait almost
@@ -28,7 +35,8 @@ object ClaudePermissionHooks {
      */
     const val HOOK_TIMEOUT_SEC = 3600
     private const val SETTINGS_RELATIVE = "root/.claude/settings.json"
-    private const val HOOK_RELATIVE = "usr/local/bin/and-code-claude-permission-hook.sh"
+    private const val HOOK_RELATIVE = "usr/local/bin/tariffiacode-claude-permission-hook.sh"
+    private const val LEGACY_HOOK_RELATIVE = "usr/local/bin/and-code-claude-permission-hook.sh"
 
     private val json =
         Json {
@@ -70,7 +78,9 @@ object ClaudePermissionHooks {
         val permissionGroups = hooks["PermissionRequest"]?.jsonArray?.toMutableList() ?: mutableListOf()
         permissionGroups.removeAll { group ->
             group.jsonObject["hooks"]?.jsonArray?.any { handler ->
-                handler.jsonObject["command"]?.jsonPrimitive?.contentOrNull?.contains(HOOK_MARKER) == true
+                val command = handler.jsonObject["command"]?.jsonPrimitive?.contentOrNull
+                command != null &&
+                    (command.contains(HOOK_MARKER) || command.contains(LEGACY_HOOK_MARKER))
             } == true
         }
         permissionGroups +=
@@ -121,6 +131,9 @@ object ClaudePermissionHooks {
             val scriptFile = File(rootfs, HOOK_RELATIVE).apply { parentFile?.mkdirs() }
             scriptFile.writeText(hookScript)
             scriptFile.setExecutable(true, false)
+            // Best-effort cleanup of the pre-rename hook script: its legacy marker, bridge path and
+            // env name no longer exist, so leaving it behind would only strand a broken hook.
+            File(rootfs, LEGACY_HOOK_RELATIVE).delete()
             val settingsFile = File(rootfs, SETTINGS_RELATIVE).apply { parentFile?.mkdirs() }
             val existing = settingsFile.takeIf { it.isFile }?.readText()
             settingsFile.writeText(mergeSettingsJson(existing))

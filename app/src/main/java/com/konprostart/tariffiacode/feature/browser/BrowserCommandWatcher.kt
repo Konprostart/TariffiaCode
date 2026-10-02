@@ -9,12 +9,12 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
-private const val COMMAND_FILE_RELATIVE_PATH = ".and-code/browser-command.json"
+private const val COMMAND_FILE_RELATIVE_PATH = ".tariffiacode/browser-command.json"
 private const val POLL_INTERVAL_MILLIS = 1000L
 
 /**
  * Watches the active workspace for a browser command written by the in-guest agent
- * (`.and-code/browser-command.json`, e.g. `{"action":"open","url":"http://127.0.0.1:8080/"}`)
+ * (`.tariffiacode/browser-command.json`, e.g. `{"action":"open","url":"http://127.0.0.1:8080/"}`)
  * and opens the guest browser at the requested URL so the user can watch and join in.
  */
 @Composable

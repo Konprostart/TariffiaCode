@@ -75,12 +75,12 @@ class AppScheduleStore(
 }
 
 /**
- * Request/response file bridge between the guest `and-code-schedule` MCP server and the app's
+ * Request/response file bridge between the guest `tariffiacode-schedule` MCP server and the app's
  * schedule store.
  *
  * The server and the guest cannot reach the app's private encrypted preferences, so the server
- * writes a request under `pending/<id>.json` inside [workspaceDir]/.and-code/schedule-bridge (the
- * guest sees the same tree at `/workspace/.and-code/schedule-bridge`) and [pollOnce]/[run] pick it
+ * writes a request under `pending/<id>.json` inside [workspaceDir]/.tariffiacode/schedule-bridge (the
+ * guest sees the same tree at `/workspace/.tariffiacode/schedule-bridge`) and [pollOnce]/[run] pick it
  * up, execute it through [ScheduleStore], and write `responses/<id>.json` for the server to read.
  */
 class ScheduleBridge(
@@ -364,7 +364,7 @@ class ScheduleBridge(
 
     companion object {
         /** Path under the workspace (guest-visible at /workspace) where the MCP server writes. */
-        const val BRIDGE_RELATIVE_PATH = ".and-code/schedule-bridge"
+        const val BRIDGE_RELATIVE_PATH = ".tariffiacode/schedule-bridge"
         const val POLL_INTERVAL_MILLIS = 800L
         const val STALE_AFTER_MILLIS = 15 * 60_000L
     }

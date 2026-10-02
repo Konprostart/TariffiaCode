@@ -65,7 +65,7 @@ object ClaudeCodeInstaller {
      * Failure here is not fatal: a package that cannot be reinstalled must not block an upgrade that
      * would otherwise work, so the verification below decides the outcome instead.
      */
-    private fun repairBrokenPackages(apk: String) = "$apk fix || echo 'and-code: apk fix could not clear every broken package' >&2"
+    private fun repairBrokenPackages(apk: String) = "$apk fix || echo 'TariffiaCode: apk fix could not clear every broken package' >&2"
 
     /**
      * Points [repositories] at [REPOSITORY], replacing whichever channel is configured there.
@@ -104,10 +104,10 @@ object ClaudeCodeInstaller {
         ${repairBrokenPackages(apk)}
         if ! $apk add --no-cache claude-code util-linux jq; then
           if [ -z "$S($apk info -e claude-code)" ] || [ -z "$S($apk info -e util-linux)" ]; then
-            echo 'and-code: apk failed and the requested packages are not installed' >&2
+            echo 'TariffiaCode: apk failed and the requested packages are not installed' >&2
             exit 1
           fi
-          echo 'and-code: apk reported errors from unrelated packages; requested packages are installed' >&2
+          echo 'TariffiaCode: apk reported errors from unrelated packages; requested packages are installed' >&2
         fi
         $claude --version
         """.trimIndent()
@@ -127,10 +127,10 @@ object ClaudeCodeInstaller {
         ${repairBrokenPackages(apk)}
         if ! $apk add --no-cache --upgrade claude-code; then
           if [ -n "$S($apk version -q -l '<' claude-code)" ]; then
-            echo 'and-code: apk failed and claude-code is still behind the repository' >&2
+            echo 'TariffiaCode: apk failed and claude-code is still behind the repository' >&2
             exit 1
           fi
-          echo 'and-code: apk reported errors from unrelated packages; claude-code is up to date' >&2
+          echo 'TariffiaCode: apk reported errors from unrelated packages; claude-code is up to date' >&2
         fi
         $claude --version
         """.trimIndent()
@@ -185,7 +185,7 @@ object ClaudeCodeInstaller {
      */
     private fun diagnosticsScript(simulation: String) =
         """
-        echo '--- and-code apk diagnostics ---'
+        echo '--- TariffiaCode apk diagnostics ---'
         echo '-- df -h / --'
         df -h / 2>&1 || true
         echo '-- packages flagged broken in apk database --'

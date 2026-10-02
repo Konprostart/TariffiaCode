@@ -242,8 +242,8 @@ suspend fun saveChatImageToUri(
 
 fun safeImageFilename(source: ChatImageSource): String {
     val fallbackExtension = effectiveImageMime(source).substringAfter('/', "jpg").substringBefore('+').ifBlank { "jpg" }
-    val raw = source.filename?.takeIf { it.isNotBlank() } ?: "andcode-image-${System.currentTimeMillis()}.$fallbackExtension"
-    return raw.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "andcode-image.$fallbackExtension" }
+    val raw = source.filename?.takeIf { it.isNotBlank() } ?: "tariffiacode-image-${System.currentTimeMillis()}.$fallbackExtension"
+    return raw.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "tariffiacode-image.$fallbackExtension" }
 }
 
 private fun effectiveImageMime(source: ChatImageSource): String {

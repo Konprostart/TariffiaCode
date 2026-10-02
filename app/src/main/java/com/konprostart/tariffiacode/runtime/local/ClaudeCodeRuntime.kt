@@ -381,7 +381,7 @@ class ClaudeCodeRuntime(
                     environment().clear()
                     environment().putAll(
                         ClaudeSandboxLauncher.environment(runtime, File(runtimeDirectory, "proot-tmp").apply { mkdirs() }, githubToken()) +
-                            mapOf("ANDCODE_ANDROID_SESSION_ID" to sessionId),
+                            mapOf("TARIFFIACODE_ANDROID_SESSION_ID" to sessionId),
                     )
                 }
                 .start()

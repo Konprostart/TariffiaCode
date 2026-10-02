@@ -572,7 +572,7 @@ class AndCodeApplication : Application() {
         scheduleManager = ScheduleManager(this, scheduleRepository)
         // Re-arm alarms for schedules that were saved in a previous process lifetime.
         scheduleManager.rescheduleAll()
-        // Let guest agents read and manage schedules through the and-code-schedule MCP server.
+        // Let guest agents read and manage schedules through the tariffiacode-schedule MCP server.
         // The poll loop is a cheap no-op (one directory stat) while no guest has touched the bridge.
         val scheduleBridge = ScheduleBridge(File(runtimeDirectory, "workspace"), AppScheduleStore(scheduleRepository, scheduleManager))
         applicationScope.launch { scheduleBridge.run() }

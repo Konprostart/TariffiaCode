@@ -331,7 +331,7 @@ class ClaudePermissionBridge(
     }
 
     companion object {
-        const val GUEST_BRIDGE_PATH = "/root/.andcode/claude-bridge"
+        const val GUEST_BRIDGE_PATH = "/root/.tariffiacode/claude-bridge"
         const val HOST_DIR_NAME = "claude-bridge"
     }
 }

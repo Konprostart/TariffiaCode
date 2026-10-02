@@ -82,7 +82,7 @@ class AntigravityInstaller(
          * claimed the new version while the guest still ran the old one, and an update had no
          * before-and-after to report. The marker is what the installer actually wrote.
          */
-        private const val VERSION_MARKER = "usr/local/share/and-code/antigravity-version"
+        private const val VERSION_MARKER = "usr/local/share/tariffiacode/antigravity-version"
 
         internal fun writeInstalledVersion(
             rootfs: File,

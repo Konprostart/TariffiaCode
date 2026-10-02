@@ -32,12 +32,12 @@ class AntigravityAttachmentTest {
             )
 
         assertEquals(
-            "@/workspace/.andcode-attachments/session_unsafe/3/0-photo_one.png\nDescribe this image",
+            "@/workspace/.tariffiacode-attachments/session_unsafe/3/0-photo_one.png\nDescribe this image",
             prompt,
         )
         assertArrayEquals(
             bytes,
-            folder.root.resolve("workspace/.andcode-attachments/session_unsafe/3/0-photo_one.png").readBytes(),
+            folder.root.resolve("workspace/.tariffiacode-attachments/session_unsafe/3/0-photo_one.png").readBytes(),
         )
 
         prepareAntigravityPrompt(
@@ -49,7 +49,7 @@ class AntigravityAttachmentTest {
         )
         assertArrayEquals(
             bytes,
-            folder.root.resolve("workspace/.andcode-attachments/session_unsafe/3/0-photo_one.png").readBytes(),
+            folder.root.resolve("workspace/.tariffiacode-attachments/session_unsafe/3/0-photo_one.png").readBytes(),
         )
     }
 

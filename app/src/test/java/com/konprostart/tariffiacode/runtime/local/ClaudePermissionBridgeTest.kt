@@ -9,6 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 import java.util.UUID
 
 class ClaudePermissionBridgeTest {
@@ -181,7 +182,7 @@ class ClaudePermissionBridgeTest {
         val fragment = ClaudePermissionHooks.settingsFragment()
         assertTrue(fragment.contains("PermissionRequest"))
         assertTrue(fragment.contains(ClaudePermissionHooks.HOOK_GUEST_PATH))
-        assertTrue(fragment.contains("and-code-claude-permission"))
+        assertTrue(fragment.contains("tariffiacode-claude-permission"))
     }
 
     @Test
@@ -198,5 +199,63 @@ class ClaudePermissionBridgeTest {
         assertTrue(merged.contains("echo hi"))
         assertTrue(merged.contains("PermissionRequest"))
         assertTrue(merged.contains(ClaudePermissionHooks.HOOK_GUEST_PATH))
+    }
+
+    @Test
+    fun `mergeSettings removes legacy and current permission hooks but keeps user hooks`() {
+        val existing =
+            """
+            {
+              "hooks": {
+                "PermissionRequest": [
+                  {
+                    "matcher": "*",
+                    "hooks": [
+                      { "type": "command", "command": "/usr/local/bin/and-code-claude-permission-hook.sh", "timeout": 3600 }
+                    ]
+                  },
+                  {
+                    "matcher": "*",
+                    "hooks": [
+                      { "type": "command", "command": "/usr/local/bin/tariffiacode-claude-permission-hook.sh", "timeout": 3600 }
+                    ]
+                  },
+                  {
+                    "matcher": "*",
+                    "hooks": [
+                      { "type": "command", "command": "bash /home/user/my-own-hook.sh" }
+                    ]
+                  }
+                ],
+                "Stop": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "echo bye" }] }]
+              }
+            }
+            """.trimIndent()
+
+        val merged = ClaudePermissionHooks.mergeSettingsJson(existing)
+
+        assertFalse("legacy marker must be removed", merged.contains("and-code-claude-permission"))
+        assertTrue("current hook must be present", merged.contains(ClaudePermissionHooks.HOOK_GUEST_PATH))
+        assertTrue("user hook must be preserved", merged.contains("my-own-hook.sh"))
+        assertTrue("unrelated event hook must be preserved", merged.contains("echo bye"))
+    }
+
+    @Test
+    fun `installInto deletes the legacy hook script and writes the current one`() {
+        val rootfs = folder.newFolder("rootfs")
+        val legacy = File(rootfs, "usr/local/bin/and-code-claude-permission-hook.sh")
+        legacy.parentFile!!.mkdirs()
+        legacy.writeText("#!/bin/sh\necho legacy")
+        assertTrue(legacy.isFile)
+
+        assertTrue(ClaudePermissionHooks.installInto(rootfs, "#!/bin/sh\necho current"))
+
+        assertFalse("legacy script must be deleted", legacy.isFile)
+        assertTrue(File(rootfs, "usr/local/bin/tariffiacode-claude-permission-hook.sh").isFile)
+        assertTrue(
+            File(rootfs, "root/.claude/settings.json")
+                .readText()
+                .contains(ClaudePermissionHooks.HOOK_MARKER),
+        )
     }
 }

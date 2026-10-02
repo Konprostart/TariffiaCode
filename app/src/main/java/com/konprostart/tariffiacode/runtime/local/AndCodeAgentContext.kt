@@ -6,7 +6,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.security.MessageDigest
 
-internal const val AND_CODE_AGENT_CONTEXT_ASSET = "and-code-agent-context.md"
+internal const val AND_CODE_AGENT_CONTEXT_ASSET = "tariffiacode-agent-context.md"
 
 private const val RUNTIME_CONTEXT_PATH = "root/.config/and-code/agent-context.md"
 
@@ -27,7 +27,7 @@ private const val MAX_WRITTEN_HASHES_BYTES = 64L * 1024
 
 private val AGENT_CONTEXT_PATHS =
     listOf(
-        "root/.config/opencode/and-code-context.md",
+        "root/.config/opencode/tariffiacode-context.md",
         "root/.claude/CLAUDE.md",
         "root/.gemini/GEMINI.md",
     )

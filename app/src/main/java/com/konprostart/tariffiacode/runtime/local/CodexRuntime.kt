@@ -492,8 +492,8 @@ class CodexRuntime(
                         put(
                             "clientInfo",
                             buildJsonObject {
-                                put("name", JsonPrimitive("and-code"))
-                                put("title", JsonPrimitive("AndCode"))
+                                put("name", JsonPrimitive("tariffiacode"))
+                                put("title", JsonPrimitive("TariffiaCode"))
                                 put("version", JsonPrimitive(version() ?: "0"))
                             },
                         )
