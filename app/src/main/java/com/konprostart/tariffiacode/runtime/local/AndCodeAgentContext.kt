@@ -8,14 +8,14 @@ import java.security.MessageDigest
 
 internal const val AND_CODE_AGENT_CONTEXT_ASSET = "tariffiacode-agent-context.md"
 
-private const val RUNTIME_CONTEXT_PATH = "root/.config/and-code/agent-context.md"
+private const val RUNTIME_CONTEXT_PATH = "root/.config/tariffiacode/agent-context.md"
 
 /**
  * Records the hash of what AndCode itself last wrote to each path in [AGENT_CONTEXT_PATHS], so a
  * later run can tell "still what we wrote" apart from "the user edited this since". One line per
  * entry, `<relativePath>\t<sha256>`.
  */
-private const val WRITTEN_HASHES_PATH = "root/.config/and-code/agent-context-written.tsv"
+private const val WRITTEN_HASHES_PATH = "root/.config/tariffiacode/agent-context-written.tsv"
 
 /**
  * Size past which the sidecar is ignored rather than read. A legitimate one holds a line per
