@@ -98,7 +98,7 @@
 - [x] 署名済みRelease APK/AAB手順（docs/RELEASE.md）
 - [ ] Critical / Importantゼロの独立レビュー
 - [ ] `main`へ統合
-- [ ] GitHub公開リポジトリ`and-code`作成・push
+- [ ] GitHub公開リポジトリ`TariffiaCode`作成・push
 
 ## 現在の完了判定
 

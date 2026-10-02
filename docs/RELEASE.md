@@ -10,18 +10,18 @@ GitHub Actions builds `app-release-unsigned.apk`. These are for smoke testing on
 
 ```bash
 keytool -genkey -v \
-  -keystore and-code-release.jks \
+  -keystore tariffiacode-release.jks \
   -keyalg RSA -keysize 2048 -validity 10000 \
-  -alias and-code
+  -alias tariffiacode
 ```
 
 2. Add to `~/.gradle/gradle.properties` (do not commit):
 
 ```properties
-ANDROID_CODE_STORE_FILE=/absolute/path/and-code-release.jks
-ANDROID_CODE_STORE_PASSWORD=...
-ANDROID_CODE_KEY_ALIAS=and-code
-ANDROID_CODE_KEY_PASSWORD=...
+AND_CODE_STORE_FILE=/absolute/path/tariffiacode-release.jks
+AND_CODE_STORE_PASSWORD=...
+AND_CODE_KEY_ALIAS=tariffiacode
+AND_CODE_KEY_PASSWORD=...
 ```
 
 3. Optional: wire `signingConfigs` in `app/build.gradle.kts` reading those properties, then:
@@ -71,7 +71,7 @@ For example, create the keystore locally with:
 ```bash
 keytool -genkeypair -v \
   -keystore fdroid-repo.keystore \
-  -alias and-code-fdroid \
+  -alias tariffiacode-fdroid \
   -keyalg RSA -keysize 4096 -validity 10000
 base64 fdroid-repo.keystore | tr -d '\n'
 ```
@@ -87,7 +87,7 @@ Enable GitHub Pages with `GitHub Actions` as the source. After a published
 release, users can add:
 
 ```text
-https://yuga-hashimoto.github.io/and-code/fdroid/repo/
+https://konprostart.github.io/TariffiaCode/fdroid/repo/
 ```
 
 The workflow retains the latest 100 non-draft, non-prerelease GitHub releases.
@@ -109,14 +109,8 @@ The `app` module has a `distribution` flavor dimension for this:
 Build it locally with:
 
 ```bash
-./gradlew -Pandcode.fdroidBuild=true :app:assembleFdroidRelease
+./gradlew :app:assembleFdroidRelease
 ```
-
-The `-Pandcode.fdroidBuild=true` property additionally skips applying the
-`com.google.gms.google-services` / `com.google.firebase.crashlytics` Gradle
-plugins outright (they process `google-services.json` project-wide regardless
-of flavor, so leaving them applied would still embed inert Google project
-identifiers in the fdroid build).
 
 Submitting to the official catalog means opening a merge request against
 [fdroiddata](https://gitlab.com/fdroid/fdroiddata). This has been done:
@@ -133,16 +127,16 @@ Categories:
   - AI Chat
 License: MIT
 AuthorName: Yu-ga
-SourceCode: https://github.com/yuga-hashimoto/and-code
-IssueTracker: https://github.com/yuga-hashimoto/and-code/issues
-Changelog: https://github.com/yuga-hashimoto/and-code/releases
+SourceCode: https://github.com/Konprostart/TariffiaCode
+IssueTracker: https://github.com/Konprostart/TariffiaCode/issues
+Changelog: https://github.com/Konprostart/TariffiaCode/releases
 
-AutoName: AndCode
+AutoName: TariffiaCode
 
 RepoType: git
-Repo: https://github.com/yuga-hashimoto/and-code
+Repo: https://github.com/Konprostart/TariffiaCode
 Binaries: 
-  https://github.com/yuga-hashimoto/and-code/releases/download/v%v/and-code-v%v-fdroid-release.apk
+  https://github.com/Konprostart/TariffiaCode/releases/download/v%v/and-code-v%v-fdroid-release.apk
 
 Builds:
   - versionName: 1.2.22
@@ -152,8 +146,6 @@ Builds:
     gradle:
       - fdroid
     prebuild: sed -i -e '/firebase/d' -e '/gms/d' {..,.}/build.gradle.kts
-    gradleprops:
-      - andcode.fdroidBuild=true
 
 AllowedAPKSigningKeys: f036e07002d8c2e6a5a64000f1211398d4831ff37cf280456a9a26d2f12617df
 
