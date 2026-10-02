@@ -122,7 +122,6 @@ import com.konprostart.tariffiacode.ui.navigation.settingsNavGraph
 import com.konprostart.tariffiacode.ui.navigation.workspaceNavGraph
 import com.konprostart.tariffiacode.ui.theme.AppTheme
 import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
-import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -136,6 +135,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 /** How often the open chat asks GitHub whether its pull requests have moved on. */
 private const val PULL_REQUEST_REFRESH_INTERVAL_MS = 30_000L

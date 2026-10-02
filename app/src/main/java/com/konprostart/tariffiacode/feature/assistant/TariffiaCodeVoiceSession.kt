@@ -59,7 +59,6 @@ import com.konprostart.tariffiacode.feature.wakeword.WakeWordService
 import com.konprostart.tariffiacode.runtime.OpenCodeBackend
 import com.konprostart.tariffiacode.runtime.PermissionResponse
 import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
-import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -69,6 +68,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 class TariffiaCodeVoiceSession(context: Context) :
     VoiceInteractionSession(context),
