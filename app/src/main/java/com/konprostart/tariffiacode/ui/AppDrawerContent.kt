@@ -348,7 +348,7 @@ private fun DrawerHeader() {
         horizontalArrangement = Arrangement.spacedBy(9.dp),
     ) {
         Image(
-            painter = painterResource(R.drawable.andcode_logo),
+            painter = painterResource(R.drawable.tariffiacode_logo),
             contentDescription = stringResource(R.string.cd_app_logo),
             modifier = Modifier.size(22.dp),
         )
