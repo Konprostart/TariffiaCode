@@ -161,7 +161,7 @@ class LocalRuntimeProcessLauncherTest {
         // Simulate an agent replacing the written-hashes sidecar path with a directory before
         // AndCode's install logic runs. The sidecar being unmanageable must degrade to "no
         // recorded hashes" rather than aborting the whole install.
-        val sidecar = File(rootfs, "root/.config/and-code/agent-context-written.tsv")
+        val sidecar = File(rootfs, "root/.config/tariffiacode/agent-context-written.tsv")
         sidecar.mkdirs()
 
         installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
@@ -183,7 +183,7 @@ class LocalRuntimeProcessLauncherTest {
         val originalContent = "do not touch"
         outsideTarget.writeText(originalContent)
 
-        val sidecar = File(rootfs, "root/.config/and-code/agent-context-written.tsv")
+        val sidecar = File(rootfs, "root/.config/tariffiacode/agent-context-written.tsv")
         sidecar.parentFile.mkdirs()
         java.nio.file.Files.createSymbolicLink(sidecar.toPath(), outsideTarget.toPath())
 
@@ -206,7 +206,7 @@ class LocalRuntimeProcessLauncherTest {
         // Simulate an agent replacing the staged source path with a directory. The blurb hash is
         // computed from the in-memory bytes, and targets are written from those bytes directly,
         // so installing the instruction files must not depend on the staging copy at all.
-        val source = File(rootfs, "root/.config/and-code/agent-context.md")
+        val source = File(rootfs, "root/.config/tariffiacode/agent-context.md")
         source.mkdirs()
 
         installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
@@ -228,7 +228,7 @@ class LocalRuntimeProcessLauncherTest {
         val originalContent = "do not touch"
         outsideTarget.writeText(originalContent)
 
-        val source = File(rootfs, "root/.config/and-code/agent-context.md")
+        val source = File(rootfs, "root/.config/tariffiacode/agent-context.md")
         source.parentFile.mkdirs()
         java.nio.file.Files.createSymbolicLink(source.toPath(), outsideTarget.toPath())
 
@@ -269,7 +269,7 @@ class LocalRuntimeProcessLauncherTest {
         assertTrue("the parent-as-file must be left untouched", claudeDir.isFile)
         assertEquals("not a directory", claudeDir.readText())
 
-        val sidecar = File(rootfs, "root/.config/and-code/agent-context-written.tsv")
+        val sidecar = File(rootfs, "root/.config/tariffiacode/agent-context-written.tsv")
         val recordedPaths = sidecar.readLines().map { it.substringBefore('\t') }
         assertTrue(
             "opencode's hash must be recorded as written",
@@ -293,7 +293,7 @@ class LocalRuntimeProcessLauncherTest {
         // Reading one of those whole would risk an OutOfMemoryError during runtime startup, which
         // no IOException handler would catch - so anything past the cap is ignored outright and
         // the install proceeds as if there were no recorded history at all.
-        val sidecar = File(rootfs, "root/.config/and-code/agent-context-written.tsv")
+        val sidecar = File(rootfs, "root/.config/tariffiacode/agent-context-written.tsv")
         sidecar.parentFile.mkdirs()
         sidecar.writeText("root/.claude/CLAUDE.md\t${"0".repeat(200_000)}\n")
 
@@ -314,7 +314,7 @@ class LocalRuntimeProcessLauncherTest {
 
         // Only paths AndCode actually manages are read back, so junk a guest wrote into the
         // sidecar can neither grow the map nor survive into the next persisted copy.
-        val sidecar = File(rootfs, "root/.config/and-code/agent-context-written.tsv")
+        val sidecar = File(rootfs, "root/.config/tariffiacode/agent-context-written.tsv")
         sidecar.parentFile.mkdirs()
         sidecar.writeText("root/somewhere/else.md\tdeadbeef\nnot-a-tsv-line\n")
 
