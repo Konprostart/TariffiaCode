@@ -386,7 +386,7 @@ class AntigravityRuntime(
         val removed = records.remove(sessionId) != null
         messages.remove(sessionId)
         val safeSession = sessionId.replace(Regex("[^A-Za-z0-9._-]"), "_")
-        File(runtimeDirectory, "workspace/.andcode-attachments/$safeSession").deleteRecursively()
+        File(runtimeDirectory, "workspace/.tariffiacode-attachments/$safeSession").deleteRecursively()
         persist()
         return removed
     }
@@ -574,7 +574,7 @@ internal fun prepareAntigravityPrompt(
     if (attachments.isEmpty()) return prompt
     val safeSession = sessionId.replace(Regex("[^A-Za-z0-9._-]"), "_")
     val attachmentDir =
-        File(runtimeDirectory, "workspace/.andcode-attachments/$safeSession/$turn").apply {
+        File(runtimeDirectory, "workspace/.tariffiacode-attachments/$safeSession/$turn").apply {
             check(mkdirs() || isDirectory) { "Cannot create Antigravity attachment directory" }
         }
     val references =
@@ -591,7 +591,7 @@ internal fun prepareAntigravityPrompt(
             val safeName = attachment.filename.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "attachment-$index" }
             val file = File(attachmentDir, "$index-$safeName")
             file.writeBytes(Base64.getDecoder().decode(encoded))
-            "@/workspace/.andcode-attachments/$safeSession/$turn/${file.name}"
+            "@/workspace/.tariffiacode-attachments/$safeSession/$turn/${file.name}"
         }
     return (references + prompt).joinToString("\n")
 }

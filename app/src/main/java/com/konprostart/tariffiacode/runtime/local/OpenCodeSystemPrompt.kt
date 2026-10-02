@@ -11,11 +11,11 @@ import java.nio.file.StandardOpenOption
  * Where the selected preset is written inside the guest filesystem.
  *
  * Listed in the `instructions` OpenCode is launched with (see
- * `AND_CODE_OPENCODE_CONFIG_CONTENT`), and deliberately separate from the AndCode environment
- * blurb at `and-code-context.md`: that one is a file the user may take over and edit, which
+ * `AND_CODE_OPENCODE_CONFIG_CONTENT`), and deliberately separate from the TariffiaCode environment
+ * blurb at `tariffiacode-context.md`: that one is a file the user may take over and edit, which
  * [installAndCodeAgentContext] then stops managing, while this one is rewritten on every switch.
  */
-internal const val OPENCODE_SYSTEM_PROMPT_PATH = "root/.config/opencode/and-code-system-prompt.md"
+internal const val OPENCODE_SYSTEM_PROMPT_PATH = "root/.config/opencode/tariffiacode-system-prompt.md"
 
 /**
  * Puts the selected system-prompt preset where OpenCode will read it.

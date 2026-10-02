@@ -4,15 +4,15 @@
 
 set -eu
 
-BRIDGE="${ANDCODE_CLAUDE_BRIDGE:-/root/.andcode/claude-bridge}"
+BRIDGE="${TARIFFIACODE_CLAUDE_BRIDGE:-/root/.tariffiacode/claude-bridge}"
 PENDING="$BRIDGE/pending"
 RESPONSES="$BRIDGE/responses"
 ALWAYS="$BRIDGE/always-rules.json"
-TIMEOUT_SEC="${ANDCODE_PERMISSION_TIMEOUT_SEC:-300}"
+TIMEOUT_SEC="${TARIFFIACODE_PERMISSION_TIMEOUT_SEC:-300}"
 # A question can legitimately wait much longer than a permission: the user may be away from the
 # device and the turn is blocked until they answer. Keep it under the hook timeout Claude Code
 # itself applies (see ClaudePermissionHooks), so this script still gets to deny gracefully.
-QUESTION_TIMEOUT_SEC="${ANDCODE_QUESTION_TIMEOUT_SEC:-3540}"
+QUESTION_TIMEOUT_SEC="${TARIFFIACODE_QUESTION_TIMEOUT_SEC:-3540}"
 SLEEP_SEC=0.25
 
 mkdir -p "$PENDING" "$RESPONSES"
@@ -60,7 +60,7 @@ if [ "$TOOL_NAME" = "AskUserQuestion" ]; then
 fi
 
 REQUEST_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || date +%s%N)
-ANDROID_SESSION="${ANDCODE_ANDROID_SESSION_ID:-$SESSION_ID}"
+ANDROID_SESSION="${TARIFFIACODE_ANDROID_SESSION_ID:-$SESSION_ID}"
 if [ -z "$ANDROID_SESSION" ]; then
   ANDROID_SESSION="unknown"
 fi

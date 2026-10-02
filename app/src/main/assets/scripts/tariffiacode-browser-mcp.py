@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-COMMAND_FILE = Path(".and-code") / "browser-command.json"
+COMMAND_FILE = Path(".tariffiacode") / "browser-command.json"
 
 
 def _find_devtools_socket() -> str | None:
@@ -253,7 +253,7 @@ def tool_type(args: dict) -> str:
 
 
 def tool_screenshot(args: dict) -> str:
-    save_path = args.get("save_path") or "/tmp/andcode-browser.png"
+    save_path = args.get("save_path") or "/tmp/tariffiacode-browser.png"
     page = _session().open_page_session()
     try:
         result = page.call("Page.captureScreenshot", format="png")
@@ -373,7 +373,7 @@ def main() -> None:
                     "result": {
                         "protocolVersion": msg.get("params", {}).get("protocolVersion", "2024-11-05"),
                         "capabilities": {"tools": {}},
-                        "serverInfo": {"name": "and-code-browser", "version": "1.0.0"},
+                        "serverInfo": {"name": "tariffiacode-browser", "version": "1.0.0"},
                     },
                 }
             )

@@ -6,7 +6,7 @@ Bridges the agent to the schedule settings of the AndCode Android app:
 - Agents run inside the app's embedded Linux guest, where the schedule store is
   unreachable: it lives in the app's private encrypted preferences.
 - This server routes every ``schedule_*`` call through a request/response file
-  bridge under the workspace (``/workspace/.and-code/schedule-bridge``). The app
+  bridge under the workspace (``/workspace/.tariffiacode/schedule-bridge``). The app
   polls the ``pending/`` directory, executes the operation against its real
   schedule repository and alarm manager, and drops the reply into ``responses/``.
 
@@ -24,7 +24,7 @@ import time
 import uuid
 from pathlib import Path
 
-BRIDGE_ROOT = Path("/workspace/.and-code/schedule-bridge")
+BRIDGE_ROOT = Path("/workspace/.tariffiacode/schedule-bridge")
 PENDING_DIR = BRIDGE_ROOT / "pending"
 RESPONSES_DIR = BRIDGE_ROOT / "responses"
 
@@ -235,7 +235,7 @@ def main() -> None:
                     "result": {
                         "protocolVersion": msg.get("params", {}).get("protocolVersion", "2024-11-05"),
                         "capabilities": {"tools": {}},
-                        "serverInfo": {"name": "and-code-schedule", "version": "1.0.0"},
+                        "serverInfo": {"name": "tariffiacode-schedule", "version": "1.0.0"},
                     },
                 }
             )

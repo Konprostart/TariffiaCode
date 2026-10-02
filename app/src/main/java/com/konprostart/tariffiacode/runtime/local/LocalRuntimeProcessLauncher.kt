@@ -362,5 +362,5 @@ internal fun localRuntimeEnvironment(
  * nothing.
  */
 private const val AND_CODE_OPENCODE_CONFIG_CONTENT =
-    "{\"instructions\":[\"/root/.config/opencode/and-code-context.md\"," +
-        "\"/root/.config/opencode/and-code-system-prompt.md\"]}"
+    "{\"instructions\":[\"/root/.config/opencode/tariffiacode-context.md\"," +
+        "\"/root/.config/opencode/tariffiacode-system-prompt.md\"]}"

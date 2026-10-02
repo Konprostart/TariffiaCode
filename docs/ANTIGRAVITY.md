@@ -6,7 +6,7 @@ The Android app provisions the official Google Antigravity CLI release in the sh
 
 `agy --version` boots the whole bundled language server before it prints anything — over a minute on
 device — so the app does not ask the binary which release it is. `AntigravityInstaller` writes
-`usr/local/share/and-code/antigravity-version` after the SHA-256-verified binary is swapped in, and
+`usr/local/share/tariffiacode/antigravity-version` after the SHA-256-verified binary is swapped in, and
 `AntigravityRuntime.version` reads that marker. Before the marker existed the app simply reported
 `AntigravityManifest.VERSION` for any present binary, which went stale as soon as a new release was
 pinned: the card claimed a version the guest was not running. A sandbox provisioned by one of those
@@ -48,6 +48,6 @@ much harder to parse.
 
 Hook records use schema version 1 JSONL and contain only conversation/transcript paths, event type, tool metadata, step and stop reason. Tokens, prompts and environment variables must not be written to the hook bridge. Session records retain the app UUID, Antigravity conversation id, workspace and last step so a killed process can be resumed.
 
-Image and PDF attachments are decoded into a turn-specific directory under `/workspace/.andcode-attachments` and passed to print mode through Antigravity's native `@path` context mentions. The original file parts are stored in the app transcript, matching the OpenCode and Claude Code targets, so attachments survive completion, reconnects and app restarts. Unsupported attachment types fail the send instead of appearing attached only in the Android UI.
+Image and PDF attachments are decoded into a turn-specific directory under `/workspace/.tariffiacode-attachments` and passed to print mode through Antigravity's native `@path` context mentions. The original file parts are stored in the app transcript, matching the OpenCode and Claude Code targets, so attachments survive completion, reconnects and app restarts. Unsupported attachment types fail the send instead of appearing attached only in the Android UI.
 
 Device acceptance still requires an x86_64 emulator and arm64 device: install and digest verification, `agy --version`, `models`, browser OAuth, a smoke prompt, file/tool use, permission/question flows, abort, session switching, network recovery and task-kill relaunch. An APK build or version command alone is not completion evidence.

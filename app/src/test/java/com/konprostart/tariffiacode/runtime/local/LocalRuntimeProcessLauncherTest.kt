@@ -41,8 +41,8 @@ class LocalRuntimeProcessLauncherTest {
         // launch; OpenCode re-reads the file's content per turn, which is what lets a preset switch
         // take effect without a restart - see applyOpenCodeSystemPrompt.
         assertEquals(
-            "{\"instructions\":[\"/root/.config/opencode/and-code-context.md\"," +
-                "\"/root/.config/opencode/and-code-system-prompt.md\"]}",
+            "{\"instructions\":[\"/root/.config/opencode/tariffiacode-context.md\"," +
+                "\"/root/.config/opencode/tariffiacode-system-prompt.md\"]}",
             environment["OPENCODE_CONFIG_CONTENT"],
         )
     }
@@ -54,7 +54,7 @@ class LocalRuntimeProcessLauncherTest {
         installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
-            "root/.config/opencode/and-code-context.md",
+            "root/.config/opencode/tariffiacode-context.md",
             "root/.claude/CLAUDE.md",
             "root/.gemini/GEMINI.md",
         ).forEach { relativePath ->
@@ -90,7 +90,7 @@ class LocalRuntimeProcessLauncherTest {
         installAndCodeAgentContext(rootfs, updatedFixture.toByteArray())
 
         listOf(
-            "root/.config/opencode/and-code-context.md",
+            "root/.config/opencode/tariffiacode-context.md",
             "root/.claude/CLAUDE.md",
             "root/.gemini/GEMINI.md",
         ).forEach { relativePath ->
@@ -167,7 +167,7 @@ class LocalRuntimeProcessLauncherTest {
         installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
-            "root/.config/opencode/and-code-context.md",
+            "root/.config/opencode/tariffiacode-context.md",
             "root/.claude/CLAUDE.md",
             "root/.gemini/GEMINI.md",
         ).forEach { relativePath ->
@@ -190,7 +190,7 @@ class LocalRuntimeProcessLauncherTest {
         installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
-            "root/.config/opencode/and-code-context.md",
+            "root/.config/opencode/tariffiacode-context.md",
             "root/.claude/CLAUDE.md",
             "root/.gemini/GEMINI.md",
         ).forEach { relativePath ->
@@ -212,7 +212,7 @@ class LocalRuntimeProcessLauncherTest {
         installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
-            "root/.config/opencode/and-code-context.md",
+            "root/.config/opencode/tariffiacode-context.md",
             "root/.claude/CLAUDE.md",
             "root/.gemini/GEMINI.md",
         ).forEach { relativePath ->
@@ -235,7 +235,7 @@ class LocalRuntimeProcessLauncherTest {
         installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
-            "root/.config/opencode/and-code-context.md",
+            "root/.config/opencode/tariffiacode-context.md",
             "root/.claude/CLAUDE.md",
             "root/.gemini/GEMINI.md",
         ).forEach { relativePath ->
@@ -261,7 +261,7 @@ class LocalRuntimeProcessLauncherTest {
         installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
-            "root/.config/opencode/and-code-context.md",
+            "root/.config/opencode/tariffiacode-context.md",
             "root/.gemini/GEMINI.md",
         ).forEach { relativePath ->
             assertEquals(AGENT_CONTEXT_FIXTURE, File(rootfs, relativePath).readText())
@@ -273,7 +273,7 @@ class LocalRuntimeProcessLauncherTest {
         val recordedPaths = sidecar.readLines().map { it.substringBefore('\t') }
         assertTrue(
             "opencode's hash must be recorded as written",
-            "root/.config/opencode/and-code-context.md" in recordedPaths,
+            "root/.config/opencode/tariffiacode-context.md" in recordedPaths,
         )
         assertTrue(
             "gemini's hash must be recorded as written",
@@ -300,7 +300,7 @@ class LocalRuntimeProcessLauncherTest {
         installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
-            "root/.config/opencode/and-code-context.md",
+            "root/.config/opencode/tariffiacode-context.md",
             "root/.claude/CLAUDE.md",
             "root/.gemini/GEMINI.md",
         ).forEach { relativePath ->
@@ -321,7 +321,7 @@ class LocalRuntimeProcessLauncherTest {
         installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
-            "root/.config/opencode/and-code-context.md",
+            "root/.config/opencode/tariffiacode-context.md",
             "root/.claude/CLAUDE.md",
             "root/.gemini/GEMINI.md",
         ).forEach { relativePath ->
@@ -330,7 +330,7 @@ class LocalRuntimeProcessLauncherTest {
         val recordedPaths = sidecar.readLines().map { it.substringBefore('\t') }.toSet()
         assertEquals(
             setOf(
-                "root/.config/opencode/and-code-context.md",
+                "root/.config/opencode/tariffiacode-context.md",
                 "root/.claude/CLAUDE.md",
                 "root/.gemini/GEMINI.md",
             ),

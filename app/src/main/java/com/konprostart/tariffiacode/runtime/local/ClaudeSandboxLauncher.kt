@@ -102,6 +102,6 @@ object ClaudeSandboxLauncher {
                 "BUN_OPTIONS" to "--preload ${ClaudeCodeInstaller.DNS_PRELOAD}",
                 "TERM" to "xterm-256color",
                 "CI" to "1",
-                "ANDCODE_CLAUDE_BRIDGE" to ClaudePermissionBridge.GUEST_BRIDGE_PATH,
+                "TARIFFIACODE_CLAUDE_BRIDGE" to ClaudePermissionBridge.GUEST_BRIDGE_PATH,
             )
 }
