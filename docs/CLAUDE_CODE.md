@@ -31,7 +31,7 @@ wget -qO /etc/apk/keys/claude-code.rsa.pub https://downloads.claude.ai/keys/clau
 
 Two details are load-bearing and were wrong in earlier revisions:
 
-- **`apk` is invoked by absolute path.** The sandbox's `/etc/profile.d/and-code.sh` narrows
+- **`apk` is invoked by absolute path.** The sandbox's `/etc/profile.d/android-code.sh` narrows
   `PATH` to `/usr/local/bin:/usr/bin:/bin`, which excludes `/sbin` where `apk` lives. The install
   script also runs under `sh -c` rather than `sh -lc` so that profile never applies.
 - **The package installs `claude` to `/usr/bin`, not `/usr/local/bin`** (where the OpenCode binary is
