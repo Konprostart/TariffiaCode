@@ -98,14 +98,14 @@ jobs:
           config.write_text(
               "\n".join(
                   [
-                      "repo_url: https://yuga-hashimoto.github.io/and-code/fdroid/repo",
-                      "repo_name: AndCode F-Droid Repository",
-                      "repo_description: Official AndCode APK repository for F-Droid clients.",
+                      "repo_url: https://konprostart.github.io/TariffiaCode/fdroid/repo",
+                      "repo_name: TariffiaCode F-Droid Repository",
+                      "repo_description: Official TariffiaCode APK repository for F-Droid clients.",
                       f"keystore: {quote(os.environ['RUNNER_TEMP'] + '/fdroid-repo.keystore')}",
                       f"keystorepass: {quote(os.environ['F_DROID_REPO_KEYSTORE_PASSWORD'])}",
                       f"keypass: {quote(os.environ['F_DROID_REPO_KEY_PASSWORD'])}",
                       f"repo_keyalias: {quote(os.environ['F_DROID_REPO_KEY_ALIAS'])}",
-                      "keydname: CN=AndCode F-Droid Repository",
+                      "keydname: CN=TariffiaCode F-Droid Repository",
                   ]
               )
               + "\n",
