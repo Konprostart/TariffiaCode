@@ -2,7 +2,7 @@ package com.konprostart.tariffiacode.startup
 
 import android.content.Context
 import androidx.startup.Initializer
-import com.konprostart.tariffiacode.AndCodeApplication
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 
 class CatalogReconcileInitializer : Initializer<Unit> {
     override fun create(context: Context) {
-        val app = context.applicationContext as AndCodeApplication
+        val app = context.applicationContext as TariffiaCodeApplication
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope.launch {
             app.catalogRepository.state.collectLatest { catalog ->

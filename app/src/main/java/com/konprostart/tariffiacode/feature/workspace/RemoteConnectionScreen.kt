@@ -73,7 +73,7 @@ import com.journeyapps.barcodescanner.ScanOptions
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.core.api.OpenCodeHealth
 import com.konprostart.tariffiacode.core.security.ConnectionQrPayload
-import com.konprostart.tariffiacode.ui.theme.AndCodeTheme
+import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -561,7 +561,7 @@ private fun RemoteConnectionBottomBar(
 @Preview(showBackground = true)
 @Composable
 private fun RemoteConnectionScreenPreview() {
-    AndCodeTheme {
+    TariffiaCodeTheme {
         RemoteConnectionScreen(
             onTestConnection = { Result.success(OpenCodeHealth(true, "1.0.0")) },
             onSaveConnection = {},

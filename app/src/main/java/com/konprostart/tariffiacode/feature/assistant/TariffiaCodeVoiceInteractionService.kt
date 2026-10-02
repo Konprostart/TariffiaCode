@@ -9,13 +9,13 @@ import android.service.voice.VoiceInteractionService
 import android.service.voice.VoiceInteractionSession
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.konprostart.tariffiacode.AndCodeApplication
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.feature.wakeword.VoskModelCatalog
 import com.konprostart.tariffiacode.feature.wakeword.VoskModelLanguage
 import com.konprostart.tariffiacode.feature.wakeword.WakeWordService
 import java.util.Locale
 
-class AndCodeVoiceInteractionService : VoiceInteractionService() {
+class TariffiaCodeVoiceInteractionService : VoiceInteractionService() {
     private var ready = false
     private var receiverRegistered = false
     private val showReceiver =
@@ -42,7 +42,7 @@ class AndCodeVoiceInteractionService : VoiceInteractionService() {
             )
             receiverRegistered = true
         }
-        val app = application as? AndCodeApplication
+        val app = application as? TariffiaCodeApplication
         val preferences = app?.preferences?.state?.value
         if (preferences?.wakeWordEnabled == true) {
             val language =
@@ -56,7 +56,7 @@ class AndCodeVoiceInteractionService : VoiceInteractionService() {
     override fun onShutdown() {
         ready = false
         WakeWordService.stop(this)
-        (application as? AndCodeApplication)?.preferences?.setWakeWordEnabled(false)
+        (application as? TariffiaCodeApplication)?.preferences?.setWakeWordEnabled(false)
         unregisterShowReceiver()
         super.onShutdown()
     }

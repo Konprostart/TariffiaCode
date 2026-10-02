@@ -18,11 +18,11 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.konprostart.tariffiacode.AndCodeApplication
 import com.konprostart.tariffiacode.MainActivity
 import com.konprostart.tariffiacode.R
-import com.konprostart.tariffiacode.feature.assistant.AndCodeVoiceInteractionService
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.feature.assistant.AssistantStatus
+import com.konprostart.tariffiacode.feature.assistant.TariffiaCodeVoiceInteractionService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -115,7 +115,7 @@ class WakeWordService : Service() {
             }
         }
 
-        val preferences = (application as? AndCodeApplication)?.preferences?.state?.value
+        val preferences = (application as? TariffiaCodeApplication)?.preferences?.state?.value
         if (
             ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
             !AssistantStatus.isActive(this) ||
@@ -393,7 +393,7 @@ class WakeWordService : Service() {
 
     private fun bargeInEnabled(): Boolean = app()?.preferences?.state?.value?.ttsBargeInEnabled ?: true
 
-    private fun app(): AndCodeApplication? = application as? AndCodeApplication
+    private fun app(): TariffiaCodeApplication? = application as? TariffiaCodeApplication
 
     private fun settings() = app()?.settings
 
@@ -417,7 +417,7 @@ class WakeWordService : Service() {
                     resumeAfterSession(requestId)
                 }
             }
-        AndCodeVoiceInteractionService.show(this, requestId)
+        TariffiaCodeVoiceInteractionService.show(this, requestId)
     }
 
     @Synchronized
@@ -493,7 +493,7 @@ class WakeWordService : Service() {
     }
 
     private fun persistEnabled(enabled: Boolean) {
-        (application as? AndCodeApplication)?.preferences?.setWakeWordEnabled(enabled)
+        (application as? TariffiaCodeApplication)?.preferences?.setWakeWordEnabled(enabled)
     }
 
     companion object {

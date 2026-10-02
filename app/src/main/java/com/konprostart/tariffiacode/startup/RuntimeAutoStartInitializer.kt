@@ -2,7 +2,7 @@ package com.konprostart.tariffiacode.startup
 
 import android.content.Context
 import androidx.startup.Initializer
-import com.konprostart.tariffiacode.AndCodeApplication
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.hasUsableRuntimeSetup
 import com.konprostart.tariffiacode.runtime.LocalAgent
 import com.konprostart.tariffiacode.runtime.LocalRuntimeStatus
@@ -27,13 +27,13 @@ import kotlinx.coroutines.launch
  * [RuntimeAutoStartTrigger.BootOrPackageReplaced] refusing that trigger in
  * [RuntimeAutoStartReceiver] pointless: this initializer restarted the runtime a moment later in the
  * very same process anyway. That responsibility now lives solely in
- * [com.konprostart.tariffiacode.AndCodeApplication]'s foreground observer, which only ever sees `true`
+ * [com.konprostart.tariffiacode.TariffiaCodeApplication]'s foreground observer, which only ever sees `true`
  * for an actual activity coming on screen - never for a broadcast-only process.
  *
  * [syncOnboardingCompleted] did *not* move with it, even though it went along for the ride in the
  * previous round: [create] runs synchronously on the main thread, after `LAUNCH_ACTIVITY` but
  * before the first Choreographer frame, so it is the only place that can guarantee the flag is
- * settled before `ui/AndCodeApp.kt`'s `remember { if (settings.onboardingCompleted) ... }` picks
+ * settled before `ui/TariffiaCodeApp.kt`'s `remember { if (settings.onboardingCompleted) ... }` picks
  * the start destination. The foreground observer's own call to it (needed for a later return, not
  * cold start) runs on `Dispatchers.IO` and would otherwise race that first composition.
  */
@@ -41,7 +41,7 @@ class RuntimeAutoStartInitializer : Initializer<RuntimeAutoStartInitializer.Resu
     class Result internal constructor(internal val warmupJob: Job?)
 
     override fun create(context: Context): Result {
-        val app = context.applicationContext as AndCodeApplication
+        val app = context.applicationContext as TariffiaCodeApplication
         // Must run synchronously, right here, before anything else - see the class doc for why.
         syncOnboardingCompleted(app)
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -89,7 +89,7 @@ class RuntimeAutoStartInitializer : Initializer<RuntimeAutoStartInitializer.Resu
          * connection, was already configured - onboarding should not be shown again just because the
          * flag itself did not survive.
          */
-        internal fun syncOnboardingCompleted(app: AndCodeApplication) {
+        internal fun syncOnboardingCompleted(app: TariffiaCodeApplication) {
             val localRuntimeStatus = app.localRuntimeManager.status()
             val hasRemoteConnection = app.settings.connections().isNotEmpty()
             val setupConfigured =
@@ -114,7 +114,7 @@ class RuntimeAutoStartInitializer : Initializer<RuntimeAutoStartInitializer.Resu
         /**
          * Reuses the same gate from both the boot/package-replaced receiver
          * ([RuntimeAutoStartReceiver]) and the app's own foreground observer
-         * ([com.konprostart.tariffiacode.AndCodeApplication.observeForegroundForRuntimeRestart]).
+         * ([com.konprostart.tariffiacode.TariffiaCodeApplication.observeForegroundForRuntimeRestart]).
          *
          * The two callers no longer carry equal weight. While
          * [com.konprostart.tariffiacode.data.connection.SecureSettingsRepository.localRuntimeIdleStopEnabled]
@@ -124,7 +124,7 @@ class RuntimeAutoStartInitializer : Initializer<RuntimeAutoStartInitializer.Resu
          * configuration where a runtime is expected to come back without anyone opening the app.
          */
         internal fun restoreIfConfigured(
-            app: AndCodeApplication,
+            app: TariffiaCodeApplication,
             trigger: RuntimeAutoStartTrigger,
         ): Boolean {
             syncOnboardingCompleted(app)

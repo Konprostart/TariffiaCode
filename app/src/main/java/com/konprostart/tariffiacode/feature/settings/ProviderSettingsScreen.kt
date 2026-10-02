@@ -47,7 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.core.api.OpenCodeProvider
 import com.konprostart.tariffiacode.core.api.ProviderAuthMethod
-import com.konprostart.tariffiacode.ui.theme.AndCodeTheme
+import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
 
 @Composable
 fun ProviderSettingsScreen(
@@ -357,7 +357,7 @@ private fun ProviderRow(
 @Preview(showBackground = true)
 @Composable
 private fun ProviderSettingsScreenPreview() {
-    AndCodeTheme {
+    TariffiaCodeTheme {
         ProviderSettingsScreen(
             state =
                 SettingsUiState(

@@ -185,7 +185,7 @@ android {
         // The androidx.startup Initializers are deliberately not auto-started: the manifest removes
         // their <meta-data> entries with tools:node="remove" so they cannot run inside
         // InitializationProvider (which fires before Application.onCreate, where the dependencies
-        // they need are built). AndCodeApplication initializes them itself instead. Without this,
+        // they need are built). TariffiaCodeApplication initializes them itself instead. Without this,
         // lintVitalRelease fails the check and no release APK can be produced.
         disable += "EnsureInitializerMetadata"
     }

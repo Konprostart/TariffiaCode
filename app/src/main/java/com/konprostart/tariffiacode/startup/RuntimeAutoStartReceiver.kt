@@ -3,7 +3,7 @@ package com.konprostart.tariffiacode.startup
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.konprostart.tariffiacode.AndCodeApplication
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 
 /** Restores the local runtime after Android terminates it during a reboot or APK replacement. */
 class RuntimeAutoStartReceiver : BroadcastReceiver() {
@@ -12,7 +12,7 @@ class RuntimeAutoStartReceiver : BroadcastReceiver() {
         intent: Intent,
     ) {
         if (!isRuntimeAutoStartBroadcast(intent.action)) return
-        val app = context.applicationContext as? AndCodeApplication ?: return
+        val app = context.applicationContext as? TariffiaCodeApplication ?: return
         RuntimeAutoStartInitializer.restoreIfConfigured(app, RuntimeAutoStartTrigger.BootOrPackageReplaced)
     }
 }

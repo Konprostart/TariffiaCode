@@ -157,7 +157,7 @@ fun buildTypography(
 }
 
 @Composable
-fun AndCodeTheme(
+fun TariffiaCodeTheme(
     appTheme: AppTheme = AppTheme.DARK,
     uiFontSize: Int = 16,
     content: @Composable () -> Unit,
@@ -194,4 +194,4 @@ fun AndCodeTheme(
 }
 
 @Composable
-fun AndCodeAssistantTheme(content: @Composable () -> Unit) = AndCodeTheme(content = content)
+fun TariffiaCodeAssistantTheme(content: @Composable () -> Unit) = TariffiaCodeTheme(content = content)

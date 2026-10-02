@@ -73,7 +73,7 @@ import com.konprostart.tariffiacode.feature.wakeword.WakeWordGrammar
 import com.konprostart.tariffiacode.runtime.RuntimeTarget
 import com.konprostart.tariffiacode.runtime.WorkspaceRef
 import com.konprostart.tariffiacode.ui.runtimeAgentIcon
-import com.konprostart.tariffiacode.ui.theme.AndCodeTheme
+import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -1080,7 +1080,7 @@ private fun VoiceDivider() {
 @Preview(showBackground = true)
 @Composable
 private fun VoiceSettingsScreenPreview() {
-    AndCodeTheme {
+    TariffiaCodeTheme {
         VoiceSettingsScreen(
             ttsEnabled = true,
             continuousConversation = false,

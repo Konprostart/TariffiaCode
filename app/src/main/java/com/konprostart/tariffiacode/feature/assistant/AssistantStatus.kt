@@ -20,7 +20,7 @@ object AssistantStatus {
                 context.contentResolver,
                 VOICE_INTERACTION_SERVICE_SETTING,
             )
-        val expected = ComponentName(context, AndCodeVoiceInteractionService::class.java)
+        val expected = ComponentName(context, TariffiaCodeVoiceInteractionService::class.java)
         return isConfiguredService(configuredService, expected)
     }
 

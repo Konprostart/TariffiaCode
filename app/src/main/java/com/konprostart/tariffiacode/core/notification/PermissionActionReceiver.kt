@@ -4,7 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.konprostart.tariffiacode.AndCodeApplication
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.runtime.PermissionResponse
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -26,7 +26,7 @@ class PermissionActionReceiver : BroadcastReceiver() {
         val remember = intent.getBooleanExtra(RuntimeNotificationHelper.EXTRA_PERMISSION_REMEMBER, false)
 
         val response = PermissionResponse.entries.firstOrNull { it.apiValue == responseValue } ?: return
-        val app = context.applicationContext as? AndCodeApplication ?: return
+        val app = context.applicationContext as? TariffiaCodeApplication ?: return
         val pending = goAsync()
         scope.launch {
             try {

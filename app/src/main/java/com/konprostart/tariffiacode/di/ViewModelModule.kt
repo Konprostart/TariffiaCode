@@ -1,6 +1,6 @@
 package com.konprostart.tariffiacode.di
 
-import com.konprostart.tariffiacode.AndCodeApplication
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.feature.activity.ActivityViewModel
 import com.konprostart.tariffiacode.feature.chat.ChatViewModel
 import com.konprostart.tariffiacode.feature.settings.SettingsViewModel
@@ -15,11 +15,11 @@ val viewModelModule =
     module {
 
         viewModel {
-            val app = androidContext().applicationContext as AndCodeApplication
+            val app = androidContext().applicationContext as TariffiaCodeApplication
             ChatViewModel(
                 draftRepo = get(),
                 pullRequestStatuses = get(),
-                // Kept in step with the hand-rolled factory in ui/AndCodeApp.kt: both construction
+                // Kept in step with the hand-rolled factory in ui/TariffiaCodeApp.kt: both construction
                 // paths have to park the connection probe and stall watchdog while the app is
                 // backgrounded, or whichever one the screen happens to use decides whether those
                 // 30-second loops keep polling out of sight.

@@ -13,9 +13,9 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.konprostart.tariffiacode.AndCodeApplication
 import com.konprostart.tariffiacode.MainActivity
 import com.konprostart.tariffiacode.R
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.core.api.OpenCodeEvent
 import com.konprostart.tariffiacode.core.api.PromptRequest
 import com.konprostart.tariffiacode.data.schedule.Schedule
@@ -53,7 +53,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 class ScheduleExecutionService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private lateinit var app: AndCodeApplication
+    private lateinit var app: TariffiaCodeApplication
     private var inForeground = false
 
     /** Active schedule IDs; different schedules use independent sessions concurrently. */
@@ -61,7 +61,7 @@ class ScheduleExecutionService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        app = application as AndCodeApplication
+        app = application as TariffiaCodeApplication
         createChannel()
         // Android 14+ can still reject the foreground promotion here even though the start itself
         // was accepted. Bailing out is the only safe answer: a service that cannot enter the

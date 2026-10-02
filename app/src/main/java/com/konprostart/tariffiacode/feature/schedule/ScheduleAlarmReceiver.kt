@@ -3,8 +3,8 @@ package com.konprostart.tariffiacode.feature.schedule
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.konprostart.tariffiacode.AndCodeApplication
 import com.konprostart.tariffiacode.R
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 
 /**
  * Wakes the app when a schedule's alarm fires, and re-arms all alarms after boot
@@ -15,7 +15,7 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        val app = context.applicationContext as AndCodeApplication
+        val app = context.applicationContext as TariffiaCodeApplication
         when (intent.action) {
             ACTION_RUN_SCHEDULE -> {
                 val scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID) ?: return

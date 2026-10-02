@@ -6,7 +6,7 @@ Claude Code (`CodexRuntime`, `CodexTarget`, `CodexInstaller`, `CodexSandboxLaunc
 
 ## Status: registered, installable from Settings, verified on an emulator (unauthenticated)
 
-`codexTarget` is registered in `RuntimeRegistry` (`AndCodeApplication.kt`, and `di/AppModule.kt` reusing
+`codexTarget` is registered in `RuntimeRegistry` (`TariffiaCodeApplication.kt`, and `di/AppModule.kt` reusing
 the same instance) so it appears in the runtime picker and the drawer's agent switcher. It is offered
 only once installed: `CodexController.refresh` always calls `CodexTarget.connect()`, which leaves the
 target `Unavailable` while Codex is missing, and the drawer hides `Unavailable` targets.
@@ -44,7 +44,7 @@ Codex has no such service of its own.
 
 Fix: `CodexKeepAliveService` (a `specialUse` foreground service, one low-importance notification) runs while
 `CodexRuntime.needsForeground` is true - a ChatGPT sign-in waiting on the browser, or a turn in flight - and
-`AndCodeApplication` starts and stops it from that flag. On the emulator it starts when the sign-in begins
+`TariffiaCodeApplication` starts and stops it from that flag. On the emulator it starts when the sign-in begins
 and stops on Cancel (with the callback port released). Re-run on the phone: the token exchange then succeeded (`codex login status`: "Logged in using ChatGPT"),
 which exposed the missing-`params` bug above.
 
@@ -56,7 +56,7 @@ picked only Claude Code or Antigravity):
 - `hasUsableRuntimeSetup` judged "is setup done" from OpenCode's status alone, so every restart of a
   Codex-only install went back to the welcome screen. It now also counts any installed local agent.
 - Nothing selected a default runtime: auto-start only ever selects the OpenCode-local target, so the chat
-  had no backend and a send did nothing. `AndCodeApplication` now fills an empty selection with Codex once
+  had no backend and a send did nothing. `TariffiaCodeApplication` now fills an empty selection with Codex once
   its target connects (`selectIfUnset`, so a user's own choice is never overridden).
 - The drawer read each target's `state.value` once instead of observing it, so a Codex target that
   connected after first composition stayed hidden; it now collects the states.

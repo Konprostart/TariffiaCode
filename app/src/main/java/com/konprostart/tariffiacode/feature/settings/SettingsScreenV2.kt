@@ -60,7 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.konprostart.tariffiacode.R
-import com.konprostart.tariffiacode.ui.theme.AndCodeTheme
+import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
 
 /** Compact settings landing screen backed only by real destinations and state. */
 @Composable
@@ -852,7 +852,7 @@ private fun StatusPill(
 @Preview(showBackground = true)
 @Composable
 private fun SettingsScreenV2Preview() {
-    AndCodeTheme {
+    TariffiaCodeTheme {
         SettingsScreenV2(
             assistantConfigured = true,
             notificationsEnabled = true,

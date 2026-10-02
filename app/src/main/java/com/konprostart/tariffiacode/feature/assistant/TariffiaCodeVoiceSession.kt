@@ -50,15 +50,15 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.konprostart.tariffiacode.AndCodeApplication
 import com.konprostart.tariffiacode.R
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.core.api.OpenCodeEvent
 import com.konprostart.tariffiacode.core.api.PermissionRequest
 import com.konprostart.tariffiacode.core.api.PromptRequest
 import com.konprostart.tariffiacode.feature.wakeword.WakeWordService
 import com.konprostart.tariffiacode.runtime.OpenCodeBackend
 import com.konprostart.tariffiacode.runtime.PermissionResponse
-import com.konprostart.tariffiacode.ui.theme.AndCodeTheme
+import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -70,7 +70,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-class AndCodeVoiceSession(context: Context) :
+class TariffiaCodeVoiceSession(context: Context) :
     VoiceInteractionSession(context),
     LifecycleOwner,
     SavedStateRegistryOwner,
@@ -81,7 +81,7 @@ class AndCodeVoiceSession(context: Context) :
     override val savedStateRegistry: SavedStateRegistry get() = savedStateController.savedStateRegistry
     override val viewModelStore: ViewModelStore = ViewModelStore()
 
-    private val app = context.applicationContext as AndCodeApplication
+    private val app = context.applicationContext as TariffiaCodeApplication
     private val settings = app.settings
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var speech: SpeechRecognizerManager
@@ -121,11 +121,11 @@ class AndCodeVoiceSession(context: Context) :
 
     override fun onCreateContentView(): View =
         ComposeView(context).apply {
-            setViewTreeLifecycleOwner(this@AndCodeVoiceSession)
-            setViewTreeSavedStateRegistryOwner(this@AndCodeVoiceSession)
-            setViewTreeViewModelStoreOwner(this@AndCodeVoiceSession)
+            setViewTreeLifecycleOwner(this@TariffiaCodeVoiceSession)
+            setViewTreeSavedStateRegistryOwner(this@TariffiaCodeVoiceSession)
+            setViewTreeViewModelStoreOwner(this@TariffiaCodeVoiceSession)
             setContent {
-                AndCodeTheme {
+                TariffiaCodeTheme {
                     VoiceAssistantSurface(
                         state = assistantState.value,
                         userText = userText.value,
@@ -148,7 +148,7 @@ class AndCodeVoiceSession(context: Context) :
         super.onShow(args, showFlags)
         sessionVisible = true
         sessionEnded = false
-        sessionToken = args?.getString(AndCodeVoiceInteractionService.EXTRA_REQUEST_ID) ?: UUID.randomUUID().toString()
+        sessionToken = args?.getString(TariffiaCodeVoiceInteractionService.EXTRA_REQUEST_ID) ?: UUID.randomUUID().toString()
         sessionToken?.let(WakeWordService::pauseForSession)
         sessionToken?.let(WakeWordService::confirmSession)
         bargedIn = false
