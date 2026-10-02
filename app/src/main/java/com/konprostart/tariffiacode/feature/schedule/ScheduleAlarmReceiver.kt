@@ -3,8 +3,8 @@ package com.konprostart.tariffiacode.feature.schedule
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.R
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 
 /**
  * Wakes the app when a schedule's alarm fires, and re-arms all alarms after boot

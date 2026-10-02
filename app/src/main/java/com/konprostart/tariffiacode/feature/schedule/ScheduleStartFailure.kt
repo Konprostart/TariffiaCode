@@ -1,8 +1,8 @@
 package com.konprostart.tariffiacode.feature.schedule
 
 import android.util.Log
-import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.R
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.data.schedule.Schedule
 
 private const val TAG = "ScheduleStart"

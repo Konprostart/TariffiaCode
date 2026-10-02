@@ -12,9 +12,9 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.MainActivity
 import com.konprostart.tariffiacode.R
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.core.lifecycle.AppForeground
 import com.konprostart.tariffiacode.core.runtime.RuntimeWorkTracker
 import com.konprostart.tariffiacode.runtime.LocalAgent

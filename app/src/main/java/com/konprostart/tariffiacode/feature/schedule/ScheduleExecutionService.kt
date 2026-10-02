@@ -13,9 +13,9 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.MainActivity
 import com.konprostart.tariffiacode.R
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.core.api.OpenCodeEvent
 import com.konprostart.tariffiacode.core.api.PromptRequest
 import com.konprostart.tariffiacode.data.schedule.Schedule

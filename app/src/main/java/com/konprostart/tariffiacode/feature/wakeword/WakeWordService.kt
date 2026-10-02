@@ -18,11 +18,13 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.MainActivity
 import com.konprostart.tariffiacode.R
-import com.konprostart.tariffiacode.feature.assistant.TariffiaCodeVoiceInteractionService
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.feature.assistant.AssistantStatus
+import com.konprostart.tariffiacode.feature.assistant.TariffiaCodeVoiceInteractionService
+import java.util.Locale
+import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,8 +33,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.util.Locale
-import java.util.UUID
 
 class WakeWordService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

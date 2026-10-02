@@ -24,12 +24,12 @@ import androidx.compose.ui.unit.dp
 import com.konprostart.tariffiacode.core.ProjectLinks
 import com.konprostart.tariffiacode.core.locale.AppLanguage
 import com.konprostart.tariffiacode.core.notification.RuntimeNotificationHelper
-import com.konprostart.tariffiacode.feature.assistant.TariffiaCodeVoiceInteractionService
 import com.konprostart.tariffiacode.feature.assistant.AssistantStatus
+import com.konprostart.tariffiacode.feature.assistant.TariffiaCodeVoiceInteractionService
 import com.konprostart.tariffiacode.feature.support.GitHubStarPromptDialog
 import com.konprostart.tariffiacode.feature.support.openProjectLink
-import com.konprostart.tariffiacode.ui.TariffiaCodeApp
 import com.konprostart.tariffiacode.ui.ChatDeepLink
+import com.konprostart.tariffiacode.ui.TariffiaCodeApp
 import java.util.UUID
 
 class MainActivity : ComponentActivity() {

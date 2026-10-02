@@ -17,8 +17,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.R
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.core.api.PromptRequest
 import com.konprostart.tariffiacode.core.locale.AppLanguage
 import kotlinx.coroutines.Dispatchers

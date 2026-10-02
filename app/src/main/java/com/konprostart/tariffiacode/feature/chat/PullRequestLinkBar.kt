@@ -41,8 +41,8 @@ import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.core.api.PullRequestRef
 import com.konprostart.tariffiacode.core.api.PullRequestState
 import com.konprostart.tariffiacode.core.api.PullRequestStatus
-import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
 import com.konprostart.tariffiacode.ui.theme.LocalThemeColors
+import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
 
 /** Pull requests shown before the rest are folded behind the expand chip. */
 private const val COLLAPSED_PULL_REQUEST_COUNT = 2
