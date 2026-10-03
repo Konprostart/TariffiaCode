@@ -152,6 +152,13 @@ class MainActivity : ComponentActivity() {
             TariffiaCodeVoiceInteractionService.show(this, UUID.randomUUID().toString())
             return
         }
+        // Ask to become the default digital assistant first. That is what makes the system's
+        // assistant/AI button open TariffiaCode instead of whichever app currently holds the role
+        // (commonly the ChatGPT app). The OS shows its own confirmation dialog, so nothing changes
+        // until the user accepts. Pre-Android 10 devices fall back to the settings screens below.
+        val roleRequest = AssistantStatus.assistantRoleRequestIntent(this)
+        if (roleRequest != null && runCatching { startActivity(roleRequest) }.isSuccess) return
+
         val opened =
             listOf(
                 Intent(Settings.ACTION_VOICE_INPUT_SETTINGS),
