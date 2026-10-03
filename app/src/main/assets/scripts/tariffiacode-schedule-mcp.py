@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""AndCode guest schedule MCP server (stdlib only).
+"""TariffiaCode guest schedule MCP server (stdlib only).
 
-Bridges the agent to the schedule settings of the AndCode Android app:
+Bridges the agent to the schedule settings of the TariffiaCode Android app:
 
 - Agents run inside the app's embedded Linux guest, where the schedule store is
   unreachable: it lives in the app's private encrypted preferences.
@@ -44,7 +44,7 @@ def _write_atomic(file: Path, payload: dict) -> None:
 
 
 def _call(op: str, args: dict) -> str:
-    """Writes a request for the AndCode app and waits for its reply."""
+    """Writes a request for the TariffiaCode app and waits for its reply."""
     PENDING_DIR.mkdir(parents=True, exist_ok=True)
     request_id = uuid.uuid4().hex
     _write_atomic(
@@ -68,7 +68,7 @@ def _call(op: str, args: dict) -> str:
                 return json.dumps(payload.get("data"), ensure_ascii=False, indent=2)
             raise BridgeError(payload.get("error") or "the app rejected the request")
         time.sleep(POLL_INTERVAL_S)
-    raise BridgeError(f"no reply from the AndCode app within {RESPONSE_TIMEOUT_S} s")
+    raise BridgeError(f"no reply from the TariffiaCode app within {RESPONSE_TIMEOUT_S} s")
 
 
 def tool_list(args: dict) -> str:

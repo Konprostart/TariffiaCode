@@ -1,5 +1,5 @@
 #!/bin/sh
-# AndCode PermissionRequest hook for Claude Code.
+# TariffiaCode PermissionRequest hook for Claude Code.
 # Reads hook JSON on stdin, asks the Android app via the file bridge, prints a decision.
 
 set -eu
@@ -49,7 +49,7 @@ if [ -f "$ALWAYS" ] && command -v jq >/dev/null 2>&1; then
     else empty end
   ' "$ALWAYS" 2>/dev/null | head -n1 || true)
   if [ "$MATCH" = "yes" ]; then
-    printf '%s\n' "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"AndCode always-allow rule\"}}"
+    printf '%s\n' "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"TariffiaCode always-allow rule\"}}"
     exit 0
   fi
 fi

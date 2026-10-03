@@ -1,4 +1,4 @@
-# Contributing to AndCode
+# Contributing to TariffiaCode
 
 Thank you for your interest in contributing!
 

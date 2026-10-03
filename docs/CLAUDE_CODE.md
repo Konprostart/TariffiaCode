@@ -100,7 +100,7 @@ stable line structure, and the heuristics needed to read it misfire on ordinary 
 ## Permissions
 
 Per-tool approvals use Claude Code's **PermissionRequest hook** bridged to the Android approval UI
-(chat chip + notification). AndCode installs `tariffiacode-claude-permission-hook.sh` into the guest and
+(chat chip + notification). TariffiaCode installs `tariffiacode-claude-permission-hook.sh` into the guest and
 merges a `PermissionRequest` handler into `~/.claude/settings.json`. The hook writes a request under
 `/root/.tariffiacode/claude-bridge` (bind-mounted from the app runtime directory); the app responds with
 allow/deny JSON the hook is polling for.
@@ -108,7 +108,7 @@ allow/deny JSON the hook is polling for.
 | Mode | CLI value | Effect |
 | --- | --- | --- |
 | Plan only | `plan` | Reads and plans; never edits or runs commands |
-| Ask each time | `default` | Unmatched tools prompt in AndCode (requires the hook bridge) |
+| Ask each time | `default` | Unmatched tools prompt in TariffiaCode (requires the hook bridge) |
 | Accept edits (default) | `acceptEdits` | Auto file ops; Bash pre-approved via `--allowedTools` |
 | Full access | `bypassPermissions` | Runs any command without asking |
 

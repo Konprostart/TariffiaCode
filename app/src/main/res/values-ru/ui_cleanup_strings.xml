@@ -52,7 +52,7 @@
     <string name="tts_preview_play">Воспроизвести</string>
     <string name="tts_preview_stop">Остановить</string>
     <string name="tts_preview_failed">Не удалось воспроизвести. Проверьте настройки поставщика речи.</string>
-    <string name="tts_preview_sample">Так AndCode зачитывает ответ вслух.</string>
+    <string name="tts_preview_sample">Так TariffiaCode зачитывает ответ вслух.</string>
     <string name="tts_api_key_label">API-ключ</string>
     <string name="tts_voice_label">Голос</string>
     <string name="tts_voice_id_label">ID голоса</string>
@@ -91,6 +91,6 @@
     <string name="wake_word_notification_title">Ключевое слово активно</string>
     <string name="wake_word_notification_text">Ожидание «%1$s»…</string>
     <string name="wake_word_notification_stop">Остановить</string>
-    <string name="wake_word_requires_assistant">Назначьте AndCode помощником по умолчанию перед включением ключевого слова.</string>
+    <string name="wake_word_requires_assistant">Назначьте TariffiaCode помощником по умолчанию перед включением ключевого слова.</string>
     <string name="wake_word_start_failed">Не удалось запустить обнаружение ключевого слова.</string>
 </resources>

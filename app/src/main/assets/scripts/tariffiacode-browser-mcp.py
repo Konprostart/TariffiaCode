@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""AndCode guest-browser MCP server (stdlib only).
+"""TariffiaCode guest-browser MCP server (stdlib only).
 
-Bridges the agent to the in-app Guest Browser of the AndCode Android app:
+Bridges the agent to the in-app Guest Browser of the TariffiaCode Android app:
 
 - ``browser_show`` asks the app (via a command file in the active workspace) to
   open the guest browser so the user can watch and operate the page.
@@ -282,7 +282,7 @@ TOOLS = [
     {
         "name": "browser_show",
         "description": (
-            "Open the AndCode in-app Guest Browser at the given URL so the user can watch and "
+            "Open the TariffiaCode in-app Guest Browser at the given URL so the user can watch and "
             "operate the page. Call this before other browser_* tools."
         ),
         "inputSchema": {

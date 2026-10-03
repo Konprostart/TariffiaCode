@@ -46,7 +46,7 @@ class LegalScreenInstrumentedTest {
         }
         composeRule.onNodeWithText(string(R.string.legal_doc_privacy_policy)).assertExists()
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithText("AndCode", substring = true).fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithText("TariffiaCode", substring = true).fetchSemanticsNodes().isNotEmpty()
         }
     }
 

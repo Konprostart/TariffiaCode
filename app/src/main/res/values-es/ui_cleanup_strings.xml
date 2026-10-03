@@ -52,7 +52,7 @@
     <string name="tts_preview_play">Reproducir</string>
     <string name="tts_preview_stop">Detener</string>
     <string name="tts_preview_failed">No se pudo reproducir. Revisa los ajustes del proveedor de voz.</string>
-    <string name="tts_preview_sample">Así es como AndCode lee una respuesta en voz alta.</string>
+    <string name="tts_preview_sample">Así es como TariffiaCode lee una respuesta en voz alta.</string>
     <string name="tts_api_key_label">Clave API</string>
     <string name="tts_voice_label">Voz</string>
     <string name="tts_voice_id_label">ID de voz</string>
@@ -91,6 +91,6 @@
     <string name="wake_word_notification_title">Palabra de activación activa</string>
     <string name="wake_word_notification_text">Escuchando \"%1$s\"…</string>
     <string name="wake_word_notification_stop">Detener</string>
-    <string name="wake_word_requires_assistant">Establece AndCode como asistente predeterminado antes de activar la palabra de activación.</string>
+    <string name="wake_word_requires_assistant">Establece TariffiaCode como asistente predeterminado antes de activar la palabra de activación.</string>
     <string name="wake_word_start_failed">No se pudo iniciar la detección de la palabra de activación.</string>
 </resources>

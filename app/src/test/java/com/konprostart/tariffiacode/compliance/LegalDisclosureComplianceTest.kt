@@ -95,7 +95,7 @@ class LegalDisclosureComplianceTest {
      * source, not the whole product (bundled third-party CLIs and runtimes keep their own license).
      */
     @Test
-    fun `MIT licensed claims are scoped to AndCode source, not the whole app`() {
+    fun `MIT licensed claims are scoped to TariffiaCode source, not the whole app`() {
         listOf("README.md", "pages/index.html").forEach { relativePath ->
             val text = readRepoFile(relativePath)
             val matches = Regex("MIT licensed", RegexOption.IGNORE_CASE).findAll(text).toList()
@@ -105,8 +105,8 @@ class LegalDisclosureComplianceTest {
                 val window = text.substring(windowStart, match.range.first)
                 assertTrue(
                     "'MIT licensed' in $relativePath at index ${match.range.first} is not clearly scoped to " +
-                        "AndCode's own source (preceding text: \"$window\")",
-                    window.contains("AndCode", ignoreCase = true),
+                        "TariffiaCode's own source (preceding text: \"$window\")",
+                    window.contains("TariffiaCode", ignoreCase = true),
                 )
             }
         }

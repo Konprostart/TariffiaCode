@@ -534,7 +534,7 @@ fun TariffiaCodeApp(
                         }
                     }
                 }.onFailure { error ->
-                    android.util.Log.w("AndCodeApp", "Failed to attach file", error)
+                    android.util.Log.w("TariffiaCodeApp", "Failed to attach file", error)
                     android.widget.Toast.makeText(
                         context,
                         context.getString(R.string.attachment_load_failed),
