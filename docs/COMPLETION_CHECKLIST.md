@@ -1,4 +1,4 @@
-# AndCode 完成版チェックリスト
+# TariffiaCode 完成版チェックリスト
 
 基準設計: `docs/superpowers/specs/2026-07-18-opencode-android-v2-design.md`
 

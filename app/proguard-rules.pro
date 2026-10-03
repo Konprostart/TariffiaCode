@@ -42,7 +42,7 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 
-# AndCode REST payloads are matched by @SerialName, and persisted JSON must keep stable field names
+# TariffiaCode REST payloads are matched by @SerialName, and persisted JSON must keep stable field names
 # across app updates, so these must not be renamed.
 -keep class com.konprostart.tariffiacode.core.api.** { *; }
 -keep class com.konprostart.tariffiacode.data.connection.ConnectionProfile { *; }

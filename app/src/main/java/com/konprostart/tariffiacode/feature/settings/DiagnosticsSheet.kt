@@ -56,7 +56,7 @@ fun DiagnosticsSheet(
 
     val markdown =
         buildString {
-            appendLine("# AndCode Diagnostics")
+            appendLine("# TariffiaCode Diagnostics")
             appendLine()
             appendLine("## App")
             appendLine("- Version: $appVersion")

@@ -49,7 +49,7 @@ object CrashLog {
             }.toString()
         val report =
             buildString {
-                appendLine("AndCode crash")
+                appendLine("TariffiaCode crash")
                 appendLine("Time: ${TIMESTAMP.format(Date())}")
                 appendLine("Thread: ${thread.name}")
                 appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")

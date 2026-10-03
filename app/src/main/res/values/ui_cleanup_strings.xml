@@ -52,7 +52,7 @@
     <string name="tts_preview_play">Play</string>
     <string name="tts_preview_stop">Stop</string>
     <string name="tts_preview_failed">Playback failed. Check the speech provider settings.</string>
-    <string name="tts_preview_sample">This is how AndCode reads a response aloud.</string>
+    <string name="tts_preview_sample">This is how TariffiaCode reads a response aloud.</string>
     <string name="tts_api_key_label">API key</string>
     <string name="tts_voice_label">Voice</string>
     <string name="tts_voice_id_label">Voice ID</string>
@@ -91,6 +91,6 @@
     <string name="wake_word_notification_title">Wake word active</string>
     <string name="wake_word_notification_text">Listening for \"%1$s\"…</string>
     <string name="wake_word_notification_stop">Stop</string>
-    <string name="wake_word_requires_assistant">Set AndCode as the default assistant before enabling the wake word.</string>
+    <string name="wake_word_requires_assistant">Set TariffiaCode as the default assistant before enabling the wake word.</string>
     <string name="wake_word_start_failed">Wake-word detection could not start.</string>
 </resources>

@@ -1,8 +1,8 @@
 # Third-Party Notices
 
-AndCode includes, depends on, or downloads and runs the third-party software listed below. **This
+TariffiaCode includes, depends on, or downloads and runs the third-party software listed below. **This
 license inventory covers those third-party components only — it is separate from, and not covered
-by, AndCode's own [MIT License](LICENSE), which applies solely to this repository's Kotlin/Android
+by, TariffiaCode's own [MIT License](LICENSE), which applies solely to this repository's Kotlin/Android
 source code.** See [TRADEMARKS.md](TRADEMARKS.md) for trademark notices.
 
 ## Bundled native runtime components (PRoot / Termux-derived)
@@ -10,7 +10,7 @@ source code.** See [TRADEMARKS.md](TRADEMARKS.md) for trademark notices.
 These binaries are downloaded from the official Termux package mirror at build time (pinned by
 package version and SHA-256 hash of the compiled `.deb` in
 [`runtime_tools/termux_assets.lock.json`](runtime_tools/termux_assets.lock.json)) and packaged into
-the APK so the on-device Linux runtime can start. AndCode does not patch or modify these packages
+the APK so the on-device Linux runtime can start. TariffiaCode does not patch or modify these packages
 beyond what Termux's own packaging performs. **Full license text for each of GPL-2.0, GPL-3.0 (which
 LGPL-3.0 incorporates by reference), LGPL-3.0, and the BSD-3-Clause text used by
 `libandroid-shmem` is bundled verbatim, unmodified, in [`THIRD_PARTY_LICENSES/`](THIRD_PARTY_LICENSES/)
@@ -69,9 +69,9 @@ installed and run.
 
 | Component | Source | License | Notes |
 |---|---|---|---|
-| OpenCode | `github.com/anomalyco/opencode` releases (musl Linux binary; URL/version pinned in [`app/src/main/assets/local-runtime-manifest.json`](app/src/main/assets/local-runtime-manifest.json)) | See [anomalyco/opencode](https://github.com/anomalyco/opencode) for the current license | AndCode integrates OpenCode as an independent third-party coding agent runtime; not affiliated with the OpenCode project |
-| Claude Code | `downloads.claude.ai/claude-code/apk/latest` (Anthropic's official Alpine package repository, signature-verified) | Proprietary; governed by Anthropic's own Claude Code terms | Official CLI, unmodified; AndCode does not fork or re-host it |
-| Google Antigravity CLI | `github.com/google-antigravity/antigravity-cli` releases (pinned in `AntigravityManifest.kt`, currently 1.1.7) | Proprietary; governed by Google Antigravity's own terms | Official CLI, unmodified; AndCode does not fork or re-host it |
+| OpenCode | `github.com/anomalyco/opencode` releases (musl Linux binary; URL/version pinned in [`app/src/main/assets/local-runtime-manifest.json`](app/src/main/assets/local-runtime-manifest.json)) | See [anomalyco/opencode](https://github.com/anomalyco/opencode) for the current license | TariffiaCode integrates OpenCode as an independent third-party coding agent runtime; not affiliated with the OpenCode project |
+| Claude Code | `downloads.claude.ai/claude-code/apk/latest` (Anthropic's official Alpine package repository, signature-verified) | Proprietary; governed by Anthropic's own Claude Code terms | Official CLI, unmodified; TariffiaCode does not fork or re-host it |
+| Google Antigravity CLI | `github.com/google-antigravity/antigravity-cli` releases (pinned in `AntigravityManifest.kt`, currently 1.1.7) | Proprietary; governed by Google Antigravity's own terms | Official CLI, unmodified; TariffiaCode does not fork or re-host it |
 
 ## Base Linux root filesystems
 

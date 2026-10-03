@@ -79,7 +79,7 @@ def prepare_native_libs(linux_assets_dir: Path, output_dir: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Prepare Android-packaged native launcher libraries")
-    parser.add_argument("--linux-assets-dir", required=True, help="Generated AndCode runtime assets directory")
+    parser.add_argument("--linux-assets-dir", required=True, help="Generated TariffiaCode runtime assets directory")
     parser.add_argument("--output-dir", required=True, help="Generated jniLibs output directory")
     args = parser.parse_args()
     prepare_native_libs(

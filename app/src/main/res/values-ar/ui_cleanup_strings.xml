@@ -52,7 +52,7 @@
     <string name="tts_preview_play">تشغيل</string>
     <string name="tts_preview_stop">إيقاف</string>
     <string name="tts_preview_failed">تعذّر التشغيل. تحقّق من إعدادات مزوّد الصوت.</string>
-    <string name="tts_preview_sample">هكذا يقرأ AndCode الردود بصوت مسموع.</string>
+    <string name="tts_preview_sample">هكذا يقرأ TariffiaCode الردود بصوت مسموع.</string>
     <string name="tts_api_key_label">مفتاح API</string>
     <string name="tts_voice_label">الصوت</string>
     <string name="tts_voice_id_label">معرّف الصوت</string>
@@ -91,6 +91,6 @@
     <string name="wake_word_notification_title">كلمة التنبيه نشطة</string>
     <string name="wake_word_notification_text">الاستماع إلى \"%1$s\"…</string>
     <string name="wake_word_notification_stop">إيقاف</string>
-    <string name="wake_word_requires_assistant">عيّن AndCode كمساعد افتراضي قبل تفعيل كلمة التنبيه.</string>
+    <string name="wake_word_requires_assistant">عيّن TariffiaCode كمساعد افتراضي قبل تفعيل كلمة التنبيه.</string>
     <string name="wake_word_start_failed">تعذر بدء اكتشاف كلمة التنبيه.</string>
 </resources>
