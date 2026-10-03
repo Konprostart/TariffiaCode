@@ -54,6 +54,12 @@ TERMUX_MAIN_FALLBACK_BASE_URLS = (
 )
 
 
+# Project-controlled source for the exact lock-pinned Termux packages (GitHub Release assets).
+# It uses a dedicated release tag so runtime dependency hosting is not coupled to normal
+# application release tags; the public mirrors above remain the fallback.
+RUNTIME_DEPS_RELEASE_BASE_URL = "https://github.com/Konprostart/TariffiaCode/releases/download/runtime-deps-1"
+
+
 def force_ipv4_downloads() -> bool:
     configured = os.environ.get("OPENCODE_ANDROID_FORCE_IPV4")
     if configured is None:
@@ -132,6 +138,22 @@ def _termux_main_url(base_url: str, relative_path: str) -> str:
     return f"{base_url.rstrip('/')}/{relative_path.lstrip('/')}"
 
 
+def configured_runtime_deps_release_base_urls() -> list[str]:
+    configured = []
+    for key in (
+        "OPENCODE_ANDROID_RUNTIME_DEPS_RELEASE_BASE_URLS",
+        "OPENCODE_ANDROID_RUNTIME_DEPS_RELEASE_BASE_URL",
+    ):
+        raw = os.environ.get(key, "")
+        configured.extend(item.strip() for item in raw.replace(";", ",").split(",") if item.strip())
+    configured.append(RUNTIME_DEPS_RELEASE_BASE_URL)
+    return list(dict.fromkeys(url.rstrip("/") for url in configured if url.strip()))
+
+
+def _runtime_deps_release_url(base_url: str, relative_path: str) -> str:
+    return f"{base_url.rstrip('/')}/{posixpath.basename(relative_path)}"
+
+
 def _packages_index_path(termux_arch: str) -> str:
     return f"dists/stable/main/binary-{termux_arch}/Packages"
 
@@ -146,6 +168,23 @@ def _validate_termux_payload(relative_path: str, payload: bytes) -> None:
 
 def download_termux_main_path(relative_path: str, expected_sha256: str | None = None) -> bytes:
     errors: list[str] = []
+    # The lock pins exact package filenames, so a project-controlled GitHub Release asset can
+    # serve them by basename. The Debian Packages index is not hosted there, so only package
+    # files use the first-party source; the public Termux mirrors below remain the fallback.
+    if "/Packages" not in relative_path:
+        for base_url in configured_runtime_deps_release_base_urls():
+            url = _runtime_deps_release_url(base_url, relative_path)
+            try:
+                payload = download_bytes(url, attempts=1)
+                if expected_sha256:
+                    try:
+                        verify_sha256(payload, expected_sha256)
+                    except ValueError as exc:
+                        errors.append(f"{url}: {exc}")
+                        continue
+                return payload
+            except Exception as exc:  # pragma: no cover - first-party source is optional
+                errors.append(f"{url}: {exc}")
     for base_url in configured_termux_main_base_urls():
         url = _termux_main_url(base_url, relative_path)
         try:
