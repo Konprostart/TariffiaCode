@@ -1,6 +1,8 @@
 package com.konprostart.tariffiacode.ui.navigation
 
 import android.content.Context
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -88,7 +90,7 @@ fun NavGraphBuilder.settingsNavGraph(
                 if (com.konprostart.tariffiacode.BuildConfig.DEBUG) {
                     {
                         SettingsRow(
-                            icon = androidx.compose.material.icons.Icons.Default.Build,
+                            icon = Icons.Default.Build,
                             title = "UI Catalog (debug)",
                             onClick = { navController.navigate(ROUTE_DEV_UI_PREVIEW) },
                         )
