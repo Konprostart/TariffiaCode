@@ -287,6 +287,9 @@ class TariffiaCodeApplication : Application() {
                 accessCoordinator = accessCoordinator,
             )
         localRuntimeInstaller = installer
+        // Before any runtime start or connect: a runtime installed by an earlier build may carry a
+        // stale port (e.g. 4097). Realign it with the manifest so we never launch or connect on it.
+        runCatching { installer.reconcilePersistedPortWithManifest() }
         val launcher =
             LocalRuntimeProcessLauncher(
                 runtimeDirectory = runtimeDirectory,
@@ -405,6 +408,7 @@ class TariffiaCodeApplication : Application() {
                 updateEngine = updateEngine,
                 systemPrompt = { systemPromptStore.selectedPrompt() },
                 messages = runtimeMessages,
+                reconcilePersistedPort = { installer.reconcilePersistedPortWithManifest() },
             )
         // Keeps OpenCode's instructions file in step with the selected preset while the runtime is
         // up. The start sequence writes it too (see LocalRuntimeManager's systemPrompt), which is

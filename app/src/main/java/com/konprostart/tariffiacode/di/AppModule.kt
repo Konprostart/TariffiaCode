@@ -160,6 +160,7 @@ val appModule =
                 processLauncher = get(),
                 updateEngine = updateEngine,
                 messages = get(),
+                reconcilePersistedPort = { get<LocalRuntimeInstaller>().reconcilePersistedPortWithManifest() },
             )
         }
 
