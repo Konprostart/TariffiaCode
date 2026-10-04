@@ -8,16 +8,17 @@ import kotlinx.coroutines.withContext
 import org.apache.sshd.client.SshClient
 import org.apache.sshd.client.channel.ChannelShell
 import org.apache.sshd.client.channel.ClientChannelEvent
-import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.client.keyverifier.ServerKeyVerifier
+import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.common.config.keys.KeyUtils
 import org.apache.sshd.common.config.keys.PublicKeyEntry
-import org.apache.sshd.common.session.SessionContext
+import org.apache.sshd.common.config.keys.loader.KeyPairResourceParser
 import org.apache.sshd.common.util.security.SecurityUtils
 import java.io.IOException
 import java.net.SocketAddress
 import java.security.KeyPair
 import java.security.PublicKey
+import java.util.Base64
 import java.util.EnumSet
 
 /**
@@ -43,6 +44,8 @@ class MinaSshClient(
             var session: ClientSession? = null
             try {
                 client.start()
+                // MINA's verify(timeout) blocks until the handshake (including our host-key check)
+                // completes or throws, so no coroutine-future adapter is needed.
                 session =
                     client.connect(auth.username, host, port)
                         .verify(connectTimeoutMillis)
@@ -68,15 +71,17 @@ class MinaSshClient(
                 runCatching { session?.close() }
                 SshConnectResult.Failure(e.message ?: "SSH connection failed", e)
             } finally {
-                // The SshClient instance is cheap; stop it once this call is done. A live session keeps
-                // its transport, which is owned by the returned SshSession.
                 runCatching { client.stop() }
             }
         }
 
     private fun loadKeyPair(auth: SshAuth.PrivateKey): KeyPair {
-        val parser = SecurityUtils.getKeyPairResourceParser()
-        val pairs = parser.loadKeyPair(auth.keyPem, null, auth.passphrase)
+        val parser: KeyPairResourceParser = SecurityUtils.getKeyPairResourceParser()
+        val provider =
+            auth.passphrase
+                ?.let { org.apache.sshd.common.config.keys.FilePasswordProvider.of(it) }
+                ?: org.apache.sshd.common.config.keys.FilePasswordProvider.EMPTY
+        val pairs = parser.loadKeyPairs(null, null, provider, auth.keyPem.lineSequence().toList())
         return pairs.firstOrNull() ?: throw IOException("No private key found in the provided key material")
     }
 
@@ -100,22 +105,14 @@ internal class FingerprintServerKeyVerifier(
     private val delegate: SshHostKeyVerifier,
 ) : ServerKeyVerifier {
     override fun verifyServerKey(
-        sessionContext: SessionContext,
+        clientSession: ClientSession,
         remoteAddress: SocketAddress,
         serverKey: PublicKey,
     ): Boolean {
-        val hostKey =
-            SshHostKey(
-                keyType = KeyUtils.getKeyType(serverKey),
-                // MINA renders the key as "ssh-ed25519 <base64-wire-blob>"; SHA-256 of that raw blob is
-                // the same fingerprint OpenSSH shows.
-                sha256Fingerprint =
-                    SshFingerprint.sha256(
-                        java.util.Base64.getDecoder().decode(
-                            PublicKeyEntry.toString(serverKey).substringAfter(' ').trim(),
-                        ),
-                    ),
-            )
+        // MINA renders the key as "ssh-ed25519 <base64-wire-blob>"; SHA-256 of that raw blob is the
+        // same fingerprint OpenSSH shows.
+        val blob = Base64.getDecoder().decode(PublicKeyEntry.toString(serverKey).substringAfter(' ').trim())
+        val hostKey = SshHostKey(keyType = KeyUtils.getKeyType(serverKey), sha256Fingerprint = SshFingerprint.sha256(blob))
         return when (delegate.verify(host, port, hostKey)) {
             is SshHostKeyDecision.Trusted -> true
             is SshHostKeyDecision.Unknown -> throw HostKeyUntrustedException(hostKey)
@@ -136,22 +133,18 @@ private class MinaSshSession(
             try {
                 while (channel.isOpen) {
                     var readAny = false
-                    out?.let { stream ->
-                        if (stream.available() > 0) {
-                            val n = stream.read(buffer)
-                            if (n > 0) {
-                                trySend(buffer.copyOf(n))
-                                readAny = true
-                            }
+                    if (out.available() > 0) {
+                        val n = out.read(buffer)
+                        if (n > 0) {
+                            trySend(buffer.copyOf(n))
+                            readAny = true
                         }
                     }
-                    err?.let { stream ->
-                        if (stream.available() > 0) {
-                            val n = stream.read(buffer)
-                            if (n > 0) {
-                                trySend(buffer.copyOf(n))
-                                readAny = true
-                            }
+                    if (err.available() > 0) {
+                        val n = err.read(buffer)
+                        if (n > 0) {
+                            trySend(buffer.copyOf(n))
+                            readAny = true
                         }
                     }
                     if (!readAny) {
@@ -165,15 +158,15 @@ private class MinaSshSession(
         }
 
     override fun writeStandardInput(bytes: ByteArray) {
-        channel.invertedIn?.write(bytes)
-        channel.invertedIn?.flush()
+        channel.invertedIn.write(bytes)
+        channel.invertedIn.flush()
     }
 
     override fun resize(
         columns: Int,
         rows: Int,
     ) {
-        channel.sendWindowChange(columns, rows)
+        runCatching { channel.sendWindowChange(columns, rows) }
     }
 
     override val isOpen: Boolean

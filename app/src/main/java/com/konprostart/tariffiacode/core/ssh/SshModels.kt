@@ -25,14 +25,15 @@ sealed interface SshAuth {
         val keyPem: String,
         val passphrase: String? = null,
     ) : SshAuth
-
-    val username: String
-        get() =
-            when (this) {
-                is Password -> username
-                is PrivateKey -> username
-            }
 }
+
+/** The login username carried by any [SshAuth]. */
+val SshAuth.username: String
+    get() =
+        when (this) {
+            is SshAuth.Password -> username
+            is SshAuth.PrivateKey -> username
+        }
 
 /** A server's public host key as seen by the client, identified by its SHA-256 fingerprint. */
 data class SshHostKey(
