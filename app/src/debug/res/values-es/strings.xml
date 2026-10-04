@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only app label (all locales) so the debug build is distinguishable. -->
+<resources>
+    <string name="app_name">TariffiaCode Debug</string>
+</resources>
