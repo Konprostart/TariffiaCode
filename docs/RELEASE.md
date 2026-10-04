@@ -95,7 +95,7 @@ The workflow retains the latest 100 non-draft, non-prerelease GitHub releases.
 ## Official F-Droid catalog (build-from-source)
 
 The self-hosted repository above only republishes the GitHub-signed APK; it does
-not put AndCode in the official F-Droid catalog (browsable by category, e.g.
+not put TariffiaCode in the official F-Droid catalog (browsable by category, e.g.
 "AI Chat"). That requires F-Droid's own build server to compile the app from
 source, which does not accept Firebase/Google Play services.
 
@@ -136,7 +136,7 @@ AutoName: TariffiaCode
 RepoType: git
 Repo: https://github.com/Konprostart/TariffiaCode
 Binaries: 
-  https://github.com/Konprostart/TariffiaCode/releases/download/v%v/and-code-v%v-fdroid-release.apk
+  https://github.com/Konprostart/TariffiaCode/releases/download/v%v/tariffiacode-v%v-fdroid-release.apk
 
 Builds:
   - versionName: 1.2.22

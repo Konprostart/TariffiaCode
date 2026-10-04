@@ -1,4 +1,4 @@
-# AndCode
+# TariffiaCode
 
 <p align="center">
   <a href="https://github.com/Konprostart/TariffiaCode/actions/workflows/android.yml"><img src="https://github.com/Konprostart/TariffiaCode/actions/workflows/android.yml/badge.svg" alt="CI" /></a>
@@ -9,12 +9,14 @@
 
 **AIコーディングエージェントをAndroidのネイティブGUIでローカル実行 — ターミナル不要です。**
 
-AndCodeはAIコーディングエージェントをスマートフォンで使えるようにするネイティブAndroid GUIアプリです。[OpenCode](https://github.com/sst/opencode)、[Claude Code](https://github.com/anthropics/claude-code)、[Google Antigravity](https://github.com/google-antigravity/antigravity-cli)、[OpenAI Codex](https://github.com/openai/codex)とタッチ操作中心のインターフェースで対話できます — 端末エミュレータもSSHもPCも、オンデバイス実行には一切不要です。PRootによるオンデバイスランタイムか、PC/Mac/Linux上の既存OpenCodeサーバーへのリモート接続で動作します。
+TariffiaCodeはAIコーディングエージェントをスマートフォンで使えるようにするネイティブAndroid GUIアプリです。[OpenCode](https://github.com/sst/opencode)、[Claude Code](https://github.com/anthropics/claude-code)、[Google Antigravity](https://github.com/google-antigravity/antigravity-cli)、[OpenAI Codex](https://github.com/openai/codex)とタッチ操作中心のインターフェースで対話できます — 端末エミュレータもSSHもPCも、オンデバイス実行には一切不要です。PRootによるオンデバイスランタイムか、PC/Mac/Linux上の既存OpenCodeサーバーへのリモート接続で動作します。
 
 [Releases](https://github.com/Konprostart/TariffiaCode/releases/latest) · [English README](README.md)
 
+TariffiaCodeは[AndCode](https://github.com/yuga-hashimoto/and-code)プロジェクトのフォークです。AndCodeのMITライセンスのソースコードと第三者ライセンス表記を引き継ぎ、ここで独自にブランド変更・保守しています。
+
 > [!IMPORTANT]
-> AndCodeは、利用者自身のAndroid端末上で対応する第三者製コマンドラインツールをインストールまたは起動する、独立したローカルファーストGUIです。AndCode自体がClaude、Google Antigravity、OpenAI Codex、OpenCodeなどのAIサービス、サブスクリプション、モデル利用権またはアカウント利用権を提供するものではありません。認証、モデルアクセス、推論およびサービスとの通信は、各公式CLIまたは利用者が設定したプロバイダーによって処理されます。AndCodeはOpenCode、Anthropic、GoogleまたはOpenAIと提携、承認、後援または公式サポート関係にありません。詳細は[法的情報・第三者ソフトウェア](#法的情報第三者ソフトウェア)を参照してください。
+> TariffiaCodeは、利用者自身のAndroid端末上で対応する第三者製コマンドラインツールをインストールまたは起動する、独立したローカルファーストGUIです。TariffiaCode自体がClaude、Google Antigravity、OpenAI Codex、OpenCodeなどのAIサービス、サブスクリプション、モデル利用権またはアカウント利用権を提供するものではありません。認証、モデルアクセス、推論およびサービスとの通信は、各公式CLIまたは利用者が設定したプロバイダーによって処理されます。TariffiaCodeはOpenCode、Anthropic、GoogleまたはOpenAIと提携、承認、後援または公式サポート関係にありません。詳細は[法的情報・第三者ソフトウェア](#法的情報第三者ソフトウェア)を参照してください。
 
 <div align="center">
 
@@ -24,7 +26,7 @@ AndCodeはAIコーディングエージェントをスマートフォンで使�
   <tr>
     <td align="center"><img src="screenshots/navigation-drawer.jpg" width="180" alt="エージェント、プロジェクト、最近のチャットを表示するナビゲーションドロワー"><br><em>ナビゲーションドロワー</em></td>
     <td align="center"><img src="screenshots/model-picker.jpg" width="180" alt="お気に入りのモデルを検索できるモデル・実行先ピッカー"><br><em>モデル・実行先ピッカー</em></td>
-    <td align="center"><img src="screenshots/repository-chat.jpg" width="180" alt="AndCodeのリポジトリを調査するエージェントとのチャット"><br><em>リポジトリチャット</em></td>
+    <td align="center"><img src="screenshots/repository-chat.jpg" width="180" alt="TariffiaCodeのリポジトリを調査するエージェントとのチャット"><br><em>リポジトリチャット</em></td>
   </tr>
   <tr>
     <td align="center"><img src="screenshots/image-generation.jpg" width="180" alt="会話内に表示されたエージェント生成画像"><br><em>画像生成</em></td>
@@ -36,7 +38,7 @@ AndCodeはAIコーディングエージェントをスマートフォンで使�
 </div>
 
 > [!IMPORTANT]
-> AndCodeは独立したオープンソースプロジェクトです。OpenCode、Anthropic、Googleのいずれとも一切関係ありません。
+> TariffiaCodeは独立したオープンソースプロジェクトです。OpenCode、Anthropic、Googleのいずれとも一切関係ありません。
 
 ---
 
@@ -116,7 +118,7 @@ OpenAIのCodex CLIは、OpenCodeやClaude Codeと同じAlpine/PRootサンドボ�
 
 ## リモートOpenCode
 
-オンデバイスエージェントに加えて、AndCodeは追加機能としてPC/Mac/Linux上のOpenCodeに接続できます：
+オンデバイスエージェントに加えて、TariffiaCodeは追加機能としてPC/Mac/Linux上のOpenCodeに接続できます：
 
 - **リモート接続** — LANまたはTailscale経由で接続
 - **実行先切り替え** — 会話中でもAndroidローカル／PCリモート間をシームレスに切り替え（ハンドオフ）
@@ -260,14 +262,14 @@ adb install -r app/build/outputs/apk/github/debug/app-github-debug.apk
 
 ## 法的情報・第三者ソフトウェア
 
-- **公式CLIは端末内で実行されます。** OpenCode、Claude Code、Google Antigravity、OpenAI Codexは各プロジェクトの公式配布チャネルから取得した無改変のバイナリであり、この端末のPRoot Linux環境内（OpenCodeについては利用者自身のPC/Mac/Linux上）で実行されます。AndCodeはこれらのエージェントロジックをフォーク・改変・再実装していません。
-- **アカウントやAPI設定は利用者自身が用意します。** AndCodeはClaude、Antigravity、Codex、OpenCode用モデル、GitHubへのアクセスを販売・提供しません。利用者自身のアカウントまたはプロバイダー設定で認証し、各サービスの最新の利用規約が適用されます。
-- **AndCode独自サーバーへプロンプトやトークンを中継しません。** プロンプト、ファイル、OAuthトークンが経由するAndCode独自バックエンドは存在しません。リクエストは端末上のCLI（またはPC上のOpenCodeサーバー）から、利用者が設定したプロバイダーへ直接送信されます。詳細は[docs/AUTHENTICATION_AND_DATA_FLOW.md](docs/AUTHENTICATION_AND_DATA_FLOW.md)を参照してください。
-- **OAuthトークンを他のツールへ転用しません。** Claude Code、Antigravity、Codexは、それぞれの公式CLIが通常行うのと同様に、OAuth認証情報をLinux/Debian rootfs内に保持します。AndCodeはこれをAndroidアプリの設定領域、他エージェントの認証情報保存領域、外部サービスへコピーすることはありません。
+- **公式CLIは端末内で実行されます。** OpenCode、Claude Code、Google Antigravity、OpenAI Codexは各プロジェクトの公式配布チャネルから取得した無改変のバイナリであり、この端末のPRoot Linux環境内（OpenCodeについては利用者自身のPC/Mac/Linux上）で実行されます。TariffiaCodeはこれらのエージェントロジックをフォーク・改変・再実装していません。
+- **アカウントやAPI設定は利用者自身が用意します。** TariffiaCodeはClaude、Antigravity、Codex、OpenCode用モデル、GitHubへのアクセスを販売・提供しません。利用者自身のアカウントまたはプロバイダー設定で認証し、各サービスの最新の利用規約が適用されます。
+- **TariffiaCode独自サーバーへプロンプトやトークンを中継しません。** プロンプト、ファイル、OAuthトークンが経由するTariffiaCode独自バックエンドは存在しません。リクエストは端末上のCLI（またはPC上のOpenCodeサーバー）から、利用者が設定したプロバイダーへ直接送信されます。詳細は[docs/AUTHENTICATION_AND_DATA_FLOW.md](docs/AUTHENTICATION_AND_DATA_FLOW.md)を参照してください。
+- **OAuthトークンを他のツールへ転用しません。** Claude Code、Antigravity、Codexは、それぞれの公式CLIが通常行うのと同様に、OAuth認証情報をLinux/Debian rootfs内に保持します。TariffiaCodeはこれをAndroidアプリの設定領域、他エージェントの認証情報保存領域、外部サービスへコピーすることはありません。
 - **関連文書：** [PRIVACY.md](PRIVACY.md)、[TERMS.md](TERMS.md)、[THIRD_PARTY_SERVICES.md](THIRD_PARTY_SERVICES.md)、[TRADEMARKS.md](TRADEMARKS.md)、[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)（同梱ランタイムコンポーネントおよび依存ライブラリのOSSライセンス一覧）。これらはアプリ内の**設定 → 法的情報・プライバシー**からオフラインでも確認できます。
 
 ランタイム生成処理の一部は、MITライセンスのHermes Agent Android実装に含まれる汎用Termuxパッケージ解決・展開処理をコーディングエージェント向けに再設計しています。同梱する第三者コンポーネントとライセンスの一覧は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を参照してください。
 
 ## ライセンス
 
-このリポジトリの**AndCodeソースコード**は[MITライセンス](LICENSE)です。このライセンスが適用されるのはAndCode自身のKotlin/Androidコードのみであり、AndCodeが導入・起動する第三者CLIやランタイム（Claude Code、Google Antigravity、OpenAI Codex、OpenCode、PRoot、Alpine/Debianパッケージなど）には適用されません。それぞれ独自の配布元ライセンスが適用されます。詳細は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)および[TRADEMARKS.md](TRADEMARKS.md)を参照してください。
+このリポジトリの**TariffiaCodeソースコード**は[MITライセンス](LICENSE)です。このライセンスが適用されるのはTariffiaCode自身のKotlin/Androidコードのみであり、TariffiaCodeが導入・起動する第三者CLIやランタイム（Claude Code、Google Antigravity、OpenAI Codex、OpenCode、PRoot、Alpine/Debianパッケージなど）には適用されません。それぞれ独自の配布元ライセンスが適用されます。詳細は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)および[TRADEMARKS.md](TRADEMARKS.md)を参照してください。

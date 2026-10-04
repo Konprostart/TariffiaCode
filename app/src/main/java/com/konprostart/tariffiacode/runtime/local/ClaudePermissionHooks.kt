@@ -57,7 +57,7 @@ object ClaudePermissionHooks {
                     "type": "command",
                     "command": "$HOOK_GUEST_PATH",
                     "timeout": $HOOK_TIMEOUT_SEC,
-                    "statusMessage": "Waiting for AndCode approval"
+                    "statusMessage": "Waiting for TariffiaCode approval"
                   }
                 ]
               }
@@ -94,7 +94,7 @@ object ClaudePermissionHooks {
                                 put("type", "command")
                                 put("command", HOOK_GUEST_PATH)
                                 put("timeout", HOOK_TIMEOUT_SEC)
-                                put("statusMessage", "Waiting for AndCode approval")
+                                put("statusMessage", "Waiting for TariffiaCode approval")
                             },
                         )
                     },

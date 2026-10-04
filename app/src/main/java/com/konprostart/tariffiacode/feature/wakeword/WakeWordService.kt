@@ -401,7 +401,7 @@ class WakeWordService : Service() {
 
     private fun requestAssistant() {
         if (!AssistantStatus.isActive(this)) {
-            Log.e(TAG, "Wake word disabled because AndCode is no longer the active assistant")
+            Log.e(TAG, "Wake word disabled because TariffiaCode is no longer the active assistant")
             persistEnabled(false)
             stopSelf()
             return

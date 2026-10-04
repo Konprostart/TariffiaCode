@@ -6,7 +6,7 @@
 # Requires: adb connected (see ADB setup in Local runtime settings)
 set -e
 adb get-state >/dev/null 2>&1 || {
-    echo "android: adb has no connected device. Enable wireless debugging and connect via AndCode -> Settings -> Local runtime -> ADB." >&2
+    echo "android: adb has no connected device. Enable wireless debugging and connect via TariffiaCode -> Settings -> Local runtime -> ADB." >&2
     exit 1
 }
 COMPONENT="${1:-}"

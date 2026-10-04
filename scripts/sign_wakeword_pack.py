@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a signed AndCode wake-word pack manifest.
+"""Create a signed TariffiaCode wake-word pack manifest.
 
 The private key is read from ANDROIDCODE_WAKEWORD_SIGNING_KEY and is never
 written into the repository. The generated JSON matches WakeWordPackManager's

@@ -45,7 +45,7 @@ fun OpenCodeBrand(modifier: Modifier = Modifier) {
         }
         Column {
             Text(
-                text = "AndCode",
+                text = "TariffiaCode",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )

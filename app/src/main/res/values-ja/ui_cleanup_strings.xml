@@ -52,7 +52,7 @@
     <string name="tts_preview_play">再生</string>
     <string name="tts_preview_stop">停止</string>
     <string name="tts_preview_failed">再生できませんでした。音声プロバイダーの設定を確認してください。</string>
-    <string name="tts_preview_sample">AndCodeはこのように応答を読み上げます。</string>
+    <string name="tts_preview_sample">TariffiaCodeはこのように応答を読み上げます。</string>
     <string name="tts_api_key_label">APIキー</string>
     <string name="tts_voice_label">音声</string>
     <string name="tts_voice_id_label">音声ID</string>
@@ -91,6 +91,6 @@
     <string name="wake_word_notification_title">ウェイクワード有効</string>
     <string name="wake_word_notification_text">「%1$s」を待機中…</string>
     <string name="wake_word_notification_stop">停止</string>
-    <string name="wake_word_requires_assistant">ウェイクワードを有効にする前に、AndCodeを既定のアシスタントに設定してください。</string>
+    <string name="wake_word_requires_assistant">ウェイクワードを有効にする前に、TariffiaCodeを既定のアシスタントに設定してください。</string>
     <string name="wake_word_start_failed">ウェイクワード検出を開始できませんでした。</string>
 </resources>

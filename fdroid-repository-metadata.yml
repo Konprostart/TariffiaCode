@@ -7,7 +7,8 @@ IssueTracker: https://github.com/Konprostart/TariffiaCode/issues
 Changelog: https://github.com/Konprostart/TariffiaCode/releases
 Summary: Run coding agents on Android
 Description: |
-  AndCode is an open-source Android client for coding agents.
+  TariffiaCode is an open-source Android client for coding agents, forked
+  from the AndCode project.
   .
   It can connect to a remote OpenCode server or run a local Linux
   environment on the device.
