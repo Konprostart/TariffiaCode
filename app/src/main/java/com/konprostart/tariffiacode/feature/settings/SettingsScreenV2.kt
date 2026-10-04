@@ -75,6 +75,8 @@ fun SettingsScreenV2(
     appVersion: String,
     /** Optional in-app TariffiaCode APK update card, rendered in the App settings section. */
     appUpdateContent: (@Composable () -> Unit)? = null,
+    /** Optional debug-only developer entry (e.g. the on-device UI catalog). Null in release. */
+    devToolsContent: (@Composable () -> Unit)? = null,
     onOpenDrawer: () -> Unit,
     onOpenAssistantSettings: () -> Unit,
     onOpenVoiceSettings: () -> Unit,
@@ -339,6 +341,10 @@ fun SettingsScreenV2(
 
             SettingsSection(title = stringResource(R.string.section_app_settings)) {
                 appUpdateContent?.let { content ->
+                    content()
+                    SettingsDivider()
+                }
+                devToolsContent?.let { content ->
                     content()
                     SettingsDivider()
                 }

@@ -28,6 +28,7 @@ import com.konprostart.tariffiacode.feature.settings.ModelVisibilityScreen
 import com.konprostart.tariffiacode.feature.settings.OpenCodeAgentSettingsScreen
 import com.konprostart.tariffiacode.feature.settings.OpenCodeAgentSettingsViewModel
 import com.konprostart.tariffiacode.feature.settings.ProviderSettingsScreen
+import com.konprostart.tariffiacode.feature.settings.SettingsRow
 import com.konprostart.tariffiacode.feature.settings.SettingsScreenV2
 import com.konprostart.tariffiacode.feature.settings.SettingsViewModel
 import com.konprostart.tariffiacode.feature.settings.SystemPromptScreen
@@ -83,6 +84,18 @@ fun NavGraphBuilder.settingsNavGraph(
                     onDownload = { url -> UrlLauncher.openUrl(context, url) },
                 )
             },
+            devToolsContent =
+                if (com.konprostart.tariffiacode.BuildConfig.DEBUG) {
+                    {
+                        SettingsRow(
+                            icon = androidx.compose.material.icons.Icons.Default.Build,
+                            title = "UI Catalog (debug)",
+                            onClick = { navController.navigate(ROUTE_DEV_UI_PREVIEW) },
+                        )
+                    }
+                } else {
+                    null
+                },
             onOpenDrawer = onOpenDrawer,
             onOpenAssistantSettings = onOpenAssistantSettings,
             onOpenVoiceSettings = { navController.navigate(ROUTE_SETTINGS_VOICE) },
