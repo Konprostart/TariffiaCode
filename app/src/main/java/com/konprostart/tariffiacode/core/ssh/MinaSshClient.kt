@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.withContext
 import org.apache.sshd.client.SshClient as MinaApacheSshClient
 import org.apache.sshd.client.channel.ChannelShell
+import org.apache.sshd.client.channel.ClientChannel
 import org.apache.sshd.client.channel.ClientChannelEvent
 import org.apache.sshd.client.keyverifier.ServerKeyVerifier
 import org.apache.sshd.client.session.ClientSession
@@ -123,7 +124,7 @@ internal class FingerprintServerKeyVerifier(
 /** A live interactive shell backed by a MINA [ChannelShell]. */
 private class MinaSshSession(
     private val session: ClientSession,
-    private val channel: ChannelShell,
+    private val channel: ClientChannel,
 ) : SshSession {
     override val output: Flow<ByteArray> =
         channelFlow {
