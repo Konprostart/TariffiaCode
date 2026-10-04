@@ -5,7 +5,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.withContext
-import org.apache.sshd.client.SshClient
+import org.apache.sshd.client.SshClient as MinaApacheSshClient
 import org.apache.sshd.client.channel.ChannelShell
 import org.apache.sshd.client.channel.ClientChannelEvent
 import org.apache.sshd.client.keyverifier.ServerKeyVerifier
@@ -29,8 +29,8 @@ import java.util.EnumSet
  * returns [SshHostKeyDecision.Trusted], the connection is refused so the UI can present the fingerprint.
  */
 class MinaSshClient(
-    private val clientFactory: () -> SshClient = { SshClient.setUpDefaultClient() },
-) : SshClient {
+    private val clientFactory: () -> MinaApacheSshClient = { MinaApacheSshClient.setUpDefaultClient() },
+) : SshConnectionClient {
     override suspend fun connect(
         host: String,
         port: Int,

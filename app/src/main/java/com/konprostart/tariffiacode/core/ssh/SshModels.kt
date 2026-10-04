@@ -129,7 +129,7 @@ sealed interface SshConnectResult {
  * The single seam the rest of the app depends on. Implemented by [MinaSshClient]. Small on purpose:
  * connect → open an interactive shell → stream I/O → close.
  */
-interface SshClient {
+interface SshConnectionClient {
     /**
      * Connect to [host]:[port] and authenticate with [auth], enforcing host-key verification through
      * [verifier]. Cancellable and timeout-bounded.
