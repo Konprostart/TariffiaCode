@@ -2,13 +2,12 @@ package com.konprostart.tariffiacode.core.ssh
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.withContext
 import org.apache.sshd.client.SshClient as MinaApacheSshClient
 import org.apache.sshd.client.channel.ChannelShell
-import org.apache.sshd.client.channel.ClientChannel
-import org.apache.sshd.client.channel.ClientChannelEvent
 import org.apache.sshd.client.keyverifier.ServerKeyVerifier
 import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.common.config.keys.KeyUtils
@@ -16,18 +15,23 @@ import org.apache.sshd.common.config.keys.PublicKeyEntry
 import org.apache.sshd.common.config.keys.loader.KeyPairResourceParser
 import org.apache.sshd.common.util.security.SecurityUtils
 import java.io.IOException
+import java.io.PipedInputStream
+import java.io.PipedOutputStream
 import java.net.SocketAddress
 import java.security.KeyPair
 import java.security.PublicKey
 import java.util.Base64
-import java.util.EnumSet
 
 /**
- * Apache MINA SSHD backed [SshClient]. Pure-JVM and Android-compatible, isolated behind the [SshClient]
- * interface so nothing else depends on MINA types.
+ * Apache MINA SSHD backed [SshConnectionClient]. Pure-JVM and Android-compatible, isolated behind the
+ * [SshConnectionClient] interface so nothing else depends on MINA types.
  *
  * Host keys are NEVER auto-accepted: the verifier is consulted during the handshake and, unless it
  * returns [SshHostKeyDecision.Trusted], the connection is refused so the UI can present the fingerprint.
+ *
+ * Channel I/O is bound through MINA's supported [ChannelShell.setIn]/[ChannelShell.setOut]/
+ * [ChannelShell.setErr] stream API rather than relying on the `getInvertedOut`/`getInvertedErr`
+ * accessors: we own the pipes, which keeps Kotlin/Java interop explicit and stable.
  */
 class MinaSshClient(
     private val clientFactory: () -> MinaApacheSshClient = { MinaApacheSshClient.setUpDefaultClient() },
@@ -62,9 +66,16 @@ class MinaSshClient(
                 channel.setUsePty(true)
                 channel.ptyType = "xterm-256color"
                 channel.setEnv("TERM", "xterm-256color")
+
+                // Bind our own stdin/stdout/stderr pipes BEFORE opening the channel so no remote
+                // output is missed once the shell starts.
+                val sshSession = MinaSshSession(session, channel)
+                channel.setIn(sshSession.remoteInput)
+                channel.setOut(sshSession.remoteOutput)
+                channel.setErr(sshSession.remoteError)
                 channel.open().verify(connectTimeoutMillis)
 
-                SshConnectResult.Connected(MinaSshSession(session, channel))
+                SshConnectResult.Connected(sshSession)
             } catch (e: HostKeyUntrustedException) {
                 runCatching { session?.close() }
                 SshConnectResult.HostKeyUntrusted(e.hostKey)
@@ -121,35 +132,58 @@ internal class FingerprintServerKeyVerifier(
     }
 }
 
-/** A live interactive shell backed by a MINA [ChannelShell]. */
+/**
+ * A live interactive shell backed by a MINA [ChannelShell].
+ *
+ * MINA writes remote stdout/stderr into the [PipedOutputStream]s we hand to `setOut`/`setErr`; the
+ * paired [PipedInputStream]s are drained here. stdin is the opposite direction: bytes written to
+ * [writeStandardInput] go into a pipe whose read side MINA consumes via `setIn`.
+ */
 private class MinaSshSession(
     private val session: ClientSession,
-    private val channel: ClientChannel,
+    private val channel: ChannelShell,
 ) : SshSession {
+    private val stdoutPipe = PipedOutputStream()
+    private val stderrPipe = PipedOutputStream()
+    private val stdinPipe = PipedOutputStream()
+
+    /** Read side MINA consumes for remote stdin. */
+    val remoteInput: PipedInputStream = PipedInputStream(stdinPipe, PIPE_BUFFER_SIZE)
+
+    /** Write side MINA fills with remote stdout. */
+    val remoteOutput: PipedOutputStream = stdoutPipe
+
+    /** Write side MINA fills with remote stderr. */
+    val remoteError: PipedOutputStream = stderrPipe
+
+    private val stdout: PipedInputStream = PipedInputStream(stdoutPipe, PIPE_BUFFER_SIZE)
+    private val stderr: PipedInputStream = PipedInputStream(stderrPipe, PIPE_BUFFER_SIZE)
+
+    @Volatile
+    private var open = true
+
     override val output: Flow<ByteArray> =
         channelFlow {
-            val out = channel.invertedOut
-            val err = channel.invertedErr
-            val buffer = ByteArray(4096)
+            val buffer = ByteArray(PIPE_BUFFER_SIZE)
             try {
-                while (channel.isOpen) {
+                while (open) {
                     var readAny = false
-                    if (out.available() > 0) {
-                        val n = out.read(buffer)
+                    if (stdout.available() > 0) {
+                        val n = stdout.read(buffer)
                         if (n > 0) {
                             trySend(buffer.copyOf(n))
                             readAny = true
                         }
                     }
-                    if (err.available() > 0) {
-                        val n = err.read(buffer)
+                    if (stderr.available() > 0) {
+                        val n = stderr.read(buffer)
                         if (n > 0) {
                             trySend(buffer.copyOf(n))
                             readAny = true
                         }
                     }
                     if (!readAny) {
-                        channel.waitFor(EnumSet.of(ClientChannelEvent.CLOSED), 50L)
+                        delay(POLL_INTERVAL_MILLIS)
                     }
                 }
             } finally {
@@ -159,8 +193,9 @@ private class MinaSshSession(
         }
 
     override fun writeStandardInput(bytes: ByteArray) {
-        channel.invertedIn.write(bytes)
-        channel.invertedIn.flush()
+        if (!open) return
+        stdinPipe.write(bytes)
+        stdinPipe.flush()
     }
 
     override fun resize(
@@ -171,10 +206,20 @@ private class MinaSshSession(
     }
 
     override val isOpen: Boolean
-        get() = channel.isOpen && session.isOpen
+        get() = open
 
     override fun close() {
+        if (!open) return
+        open = false
+        runCatching { stdinPipe.close() }
+        runCatching { stdoutPipe.close() }
+        runCatching { stderrPipe.close() }
         runCatching { channel.close(false) }
         runCatching { session.close(false) }
+    }
+
+    private companion object {
+        const val PIPE_BUFFER_SIZE = 8192
+        const val POLL_INTERVAL_MILLIS = 20L
     }
 }

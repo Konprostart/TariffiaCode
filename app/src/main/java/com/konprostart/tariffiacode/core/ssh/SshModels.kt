@@ -2,7 +2,7 @@ package com.konprostart.tariffiacode.core.ssh
 
 /**
  * SSH foundation models. These are transport-only: no VPS/agent/git concepts live here. The client is
- * deliberately isolated behind [SshClient] so a later Terminal/VPS feature can consume a live PTY
+ * deliberately isolated behind [SshConnectionClient] so a later Terminal/VPS feature can consume a live PTY
  * without coupling to a specific SSH library.
  */
 
