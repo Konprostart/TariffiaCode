@@ -1189,4 +1189,12 @@
     <string name="full_development_tools_installed">تم تثبيت أدوات التطوير الكاملة</string>
     <string name="install_full_development_tools_button">تثبيت مجموعة الأدوات الكاملة</string>
     <string name="runtime_full_development_tools_start_failed">تعذر بدء تثبيت أدوات التطوير</string>
+
+    <string name="app_update_title">تحديثات TariffiaCode</string>
+    <string name="app_update_source_note">يتحقق من أحدث إصدار من GitHub Release الرسمي.</string>
+    <string name="app_up_to_date_label">TariffiaCode %1$s محدث</string>
+    <string name="app_update_available_label">TariffiaCode %1$s متاح</string>
+    <string name="app_update_installed_version">المثبت: %1$s</string>
+    <string name="app_update_available_version">المتاح: %1$s</string>
+    <string name="app_update_download_button">تنزيل %1$s</string>
 </resources>

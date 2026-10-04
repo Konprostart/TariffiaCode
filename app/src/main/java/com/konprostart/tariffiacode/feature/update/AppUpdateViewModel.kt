@@ -50,8 +50,7 @@ class AppUpdateViewModel(
         fun factory(installedVersion: String): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    AppUpdateViewModel(installedVersion) as T
+                override fun <T : ViewModel> create(modelClass: Class<T>): T = AppUpdateViewModel(installedVersion) as T
             }
     }
 }

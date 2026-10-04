@@ -31,9 +31,9 @@ import com.konprostart.tariffiacode.feature.settings.ProviderSettingsScreen
 import com.konprostart.tariffiacode.feature.settings.SettingsScreenV2
 import com.konprostart.tariffiacode.feature.settings.SettingsViewModel
 import com.konprostart.tariffiacode.feature.settings.SystemPromptScreen
-import com.konprostart.tariffiacode.feature.update.AppUpdateSectionCard
 import com.konprostart.tariffiacode.feature.settings.VoiceSettingsScreen
 import com.konprostart.tariffiacode.feature.support.GitHubSupportSheetHost
+import com.konprostart.tariffiacode.feature.update.AppUpdateSectionCard
 import com.konprostart.tariffiacode.feature.wakeword.VoskModelState
 import com.konprostart.tariffiacode.feature.wakeword.WakeWordSettingsPolicy
 import com.konprostart.tariffiacode.runtime.RuntimeRegistry

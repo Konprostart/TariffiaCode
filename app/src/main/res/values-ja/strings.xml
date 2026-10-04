@@ -1199,4 +1199,12 @@
     <string name="full_development_tools_installed">完全な開発ツールをインストール済み</string>
     <string name="install_full_development_tools_button">完全なツールチェーンをインストール</string>
     <string name="runtime_full_development_tools_start_failed">開発ツールのインストールを開始できません</string>
+
+    <string name="app_update_title">TariffiaCodeの更新</string>
+    <string name="app_update_source_note">公式GitHub Releaseから最新版を確認します。</string>
+    <string name="app_up_to_date_label">TariffiaCode %1$sは最新です</string>
+    <string name="app_update_available_label">TariffiaCode %1$sを利用できます</string>
+    <string name="app_update_installed_version">インストール済み: %1$s</string>
+    <string name="app_update_available_version">利用可能: %1$s</string>
+    <string name="app_update_download_button">%1$sをダウンロード</string>
 </resources>
