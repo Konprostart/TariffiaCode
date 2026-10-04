@@ -173,6 +173,11 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
+        // Debug-only package name, so a debug build can be installed alongside the release app
+        // instead of replacing it. Release and F-Droid keep the production applicationId.
+        debug {
+            applicationIdSuffix = ".debug"
+        }
     }
     testOptions {
         unitTests {
