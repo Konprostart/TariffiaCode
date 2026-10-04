@@ -69,4 +69,10 @@ fun decodeRouteArg(value: String): String = String(Base64.getUrlDecoder().decode
 private fun encodeRouteArg(value: String): String =
     Base64.getUrlEncoder().withoutPadding().encodeToString(value.toByteArray(Charsets.UTF_8))
 
+/**
+ * Debug-only UI catalog. Never registered or reachable in a release build (see TariffiaCodeApp's
+ * NavHost, where the destination is added only under BuildConfig.DEBUG).
+ */
+const val ROUTE_DEV_UI_PREVIEW = "dev-ui-preview"
+
 val DRAWER_ROOT_ROUTES = setOf(ROUTE_CHAT, ROUTE_SETTINGS, ROUTE_SCHEDULES)
