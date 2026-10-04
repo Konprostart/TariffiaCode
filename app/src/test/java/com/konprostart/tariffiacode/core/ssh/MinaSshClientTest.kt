@@ -3,7 +3,7 @@ package com.konprostart.tariffiacode.core.ssh
 import kotlinx.coroutines.test.runTest
 import org.apache.sshd.server.SshServer
 import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider
-import org.apache.sshd.server.shell.ProcessShellCommandFactory
+import org.apache.sshd.server.shell.InteractiveProcessShellFactory
 import org.apache.sshd.server.auth.password.PasswordAuthenticator
 import org.apache.sshd.server.auth.pubkey.PublickeyAuthenticator
 import org.apache.sshd.server.session.ServerSession
@@ -58,8 +58,8 @@ class MinaSshClientTest {
             PublickeyAuthenticator { username, key, _: ServerSession ->
                 username == "tester" && authorizedKeys.any { it == key }
             }
-        // A simple shell command factory so `createShellChannel` can open a PTY.
-        s.shellFactory = ProcessShellCommandFactory.INSTANCE
+        // A simple shell factory so `createShellChannel` can open a PTY.
+        s.shellFactory = InteractiveProcessShellFactory.INSTANCE
         s.start()
         server = s
         return s
