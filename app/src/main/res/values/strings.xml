@@ -1202,4 +1202,13 @@
     <string name="full_development_tools_installed">Complete development tools are installed</string>
     <string name="install_full_development_tools_button">Install complete toolchain</string>
     <string name="runtime_full_development_tools_start_failed">Could not start development tool installation</string>
+
+    <!-- In-app TariffiaCode APK update check (separate from the OpenCode runtime updater). -->
+    <string name="app_update_title">TariffiaCode updates</string>
+    <string name="app_update_source_note">Checks the latest release from the official GitHub Release.</string>
+    <string name="app_up_to_date_label">TariffiaCode %1$s is up to date</string>
+    <string name="app_update_available_label">TariffiaCode %1$s is available</string>
+    <string name="app_update_installed_version">Installed: %1$s</string>
+    <string name="app_update_available_version">Available: %1$s</string>
+    <string name="app_update_download_button">Download %1$s</string>
 </resources>

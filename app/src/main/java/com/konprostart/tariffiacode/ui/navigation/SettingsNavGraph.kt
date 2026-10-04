@@ -33,6 +33,7 @@ import com.konprostart.tariffiacode.feature.settings.SettingsViewModel
 import com.konprostart.tariffiacode.feature.settings.SystemPromptScreen
 import com.konprostart.tariffiacode.feature.settings.VoiceSettingsScreen
 import com.konprostart.tariffiacode.feature.support.GitHubSupportSheetHost
+import com.konprostart.tariffiacode.feature.update.AppUpdateSectionCard
 import com.konprostart.tariffiacode.feature.wakeword.VoskModelState
 import com.konprostart.tariffiacode.feature.wakeword.WakeWordSettingsPolicy
 import com.konprostart.tariffiacode.runtime.RuntimeRegistry
@@ -76,6 +77,12 @@ fun NavGraphBuilder.settingsNavGraph(
             localRuntimeIdleStopEnabled = preferences().localRuntimeIdleStopEnabled,
             onToggleLocalRuntimeIdleStop = appPreferences::setLocalRuntimeIdleStopEnabled,
             appVersion = appVersion,
+            appUpdateContent = {
+                AppUpdateSectionCard(
+                    installedVersion = appVersion,
+                    onDownload = { url -> UrlLauncher.openUrl(context, url) },
+                )
+            },
             onOpenDrawer = onOpenDrawer,
             onOpenAssistantSettings = onOpenAssistantSettings,
             onOpenVoiceSettings = { navController.navigate(ROUTE_SETTINGS_VOICE) },
