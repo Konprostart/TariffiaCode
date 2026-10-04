@@ -2,6 +2,8 @@ package com.konprostart.tariffiacode.feature.update
 
 import com.konprostart.tariffiacode.runtime.local.compareRuntimeVersions
 import com.konprostart.tariffiacode.runtime.local.normalizeRuntimeVersion
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -35,20 +37,27 @@ sealed interface AppUpdateCheck {
     ) : AppUpdateCheck
 }
 
-/** Default network fetch of the Releases API payload, used when no override is injected. */
-private fun defaultFetchRelease(): String {
-    val request =
-        Request.Builder()
-            .url(AppUpdateReleaseClient.RELEASES_ENDPOINT)
-            .header("Accept", "application/vnd.github+json")
-            .header("User-Agent", "TariffiaCode")
-            .get()
-            .build()
-    return OkHttpClient().newCall(request).execute().use { response ->
-        require(response.isSuccessful) { "TariffiaCode release check failed with HTTP ${response.code}" }
-        requireNotNull(response.body) { "TariffiaCode release response had no body" }.string()
+/**
+ * Default network fetch of the Releases API payload, used when no override is injected.
+ *
+ * The blocking OkHttp call runs on [Dispatchers.IO]; on the Android main thread it would throw
+ * [android.os.NetworkOnMainThreadException]. Mirrors how
+ * [com.konprostart.tariffiacode.runtime.local.LocalRuntimeReleaseClient] performs its fetch.
+ */
+private suspend fun defaultFetchRelease(): String =
+    withContext(Dispatchers.IO) {
+        val request =
+            Request.Builder()
+                .url(AppUpdateReleaseClient.RELEASES_ENDPOINT)
+                .header("Accept", "application/vnd.github+json")
+                .header("User-Agent", "TariffiaCode")
+                .get()
+                .build()
+        OkHttpClient().newCall(request).execute().use { response ->
+            require(response.isSuccessful) { "TariffiaCode release check failed with HTTP ${response.code}" }
+            requireNotNull(response.body) { "TariffiaCode release response had no body" }.string()
+        }
     }
-}
 
 /**
  * Checks the public TariffiaCode GitHub Releases for a newer published APK.
@@ -61,7 +70,7 @@ private fun defaultFetchRelease(): String {
  * [fetchRelease] is injectable so the parsing/comparison logic is unit-testable without a network.
  */
 class AppUpdateReleaseClient(
-    private val fetchRelease: () -> String = ::defaultFetchRelease,
+    private val fetchRelease: suspend () -> String = ::defaultFetchRelease,
     private val json: Json =
         Json {
             ignoreUnknownKeys = true
@@ -73,7 +82,7 @@ class AppUpdateReleaseClient(
      *   expected `tariffiacode-<tag>-release.apk` asset exists, else [AppUpdateCheck.UpToDate].
      *   Throws on network/API/parse failures; callers surface that as an error state.
      */
-    fun check(currentVersion: String): AppUpdateCheck {
+    suspend fun check(currentVersion: String): AppUpdateCheck {
         val payload = fetchRelease()
         val releases = json.decodeFromString<List<GitHubReleaseDto>>(payload)
         val latest =
