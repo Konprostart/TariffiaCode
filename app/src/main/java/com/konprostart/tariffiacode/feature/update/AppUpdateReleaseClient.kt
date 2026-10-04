@@ -16,10 +16,51 @@ import okhttp3.Request
 data class AppUpdateRelease(
     val version: String,
     val apkUrl: String,
+)
+
+/**
+ * Where the in-app update checker looks, and which release asset it accepts.
+ *
+ * Two channels exist so the debug build never offers a production APK (and vice versa):
+ * - [Release]: the normal production releases feed; only stable, non-prerelease tags; expects the
+ *   production `tariffiacode-<tag>-release.apk` asset. Unchanged production behaviour.
+ * - [Debug]: a dedicated rolling `debug-latest` prerelease holding exactly one asset,
+ *   `tariffiacode-debug.apk`. Prereleases are allowed here (the channel *is* a prerelease).
+ */
+enum class AppUpdateChannel(
+    val releasesEndpoint: String,
+    val allowPrerelease: Boolean,
 ) {
+    Release(
+        releasesEndpoint = "https://api.github.com/repos/Konprostart/TariffiaCode/releases",
+        allowPrerelease = false,
+    ),
+    Debug(
+        // The single dedicated debug release; the client reads this tag directly.
+        releasesEndpoint = "https://api.github.com/repos/Konprostart/TariffiaCode/releases/tags/debug-latest",
+        allowPrerelease = true,
+    ),
+    ;
+
+    /** Expected APK asset name for a release tag on this channel. */
+    fun apkAssetName(tag: String): String =
+        when (this) {
+            Release -> "tariffiacode-${tag.trim()}-release.apk"
+            Debug -> "tariffiacode-debug.apk"
+        }
+
+    /** True when [tag] belongs to this channel (guards against cross-channel assets/versions). */
+    fun acceptsTag(tag: String): Boolean =
+        when (this) {
+            // Production tags are the plain version tags (e.g. v1.2.29); the debug channel must
+            // never be treated as a production release.
+            Release -> !tag.trim().startsWith(DEBUG_TAG_PREFIX)
+            Debug -> tag.trim() == DEBUG_TAG
+        }
+
     companion object {
-        /** Asset name pattern published by the release workflow for a given tag (e.g. v1.2.27). */
-        fun apkAssetName(tag: String): String = "tariffiacode-$tag-release.apk"
+        const val DEBUG_TAG = "debug-latest"
+        private const val DEBUG_TAG_PREFIX = "debug-"
     }
 }
 
@@ -38,17 +79,17 @@ sealed interface AppUpdateCheck {
 }
 
 /**
- * Default network fetch of the Releases API payload, used when no override is injected.
+ * Default network fetch of a Releases API payload, used when no override is injected.
  *
  * The blocking OkHttp call runs on [Dispatchers.IO]; on the Android main thread it would throw
  * [android.os.NetworkOnMainThreadException]. Mirrors how
  * [com.konprostart.tariffiacode.runtime.local.LocalRuntimeReleaseClient] performs its fetch.
  */
-private suspend fun defaultFetchRelease(): String =
+private suspend fun defaultFetchRelease(endpoint: String): String =
     withContext(Dispatchers.IO) {
         val request =
             Request.Builder()
-                .url(AppUpdateReleaseClient.RELEASES_ENDPOINT)
+                .url(endpoint)
                 .header("Accept", "application/vnd.github+json")
                 .header("User-Agent", "TariffiaCode")
                 .get()
@@ -60,7 +101,7 @@ private suspend fun defaultFetchRelease(): String =
     }
 
 /**
- * Checks the public TariffiaCode GitHub Releases for a newer published APK.
+ * Checks GitHub Releases for a newer published APK on one [AppUpdateChannel].
  *
  * Mirrors the OpenCode runtime updater's networking and version-comparison approach
  * ([com.konprostart.tariffiacode.runtime.local.LocalRuntimeReleaseClient]) but is independent: this
@@ -70,7 +111,8 @@ private suspend fun defaultFetchRelease(): String =
  * [fetchRelease] is injectable so the parsing/comparison logic is unit-testable without a network.
  */
 class AppUpdateReleaseClient(
-    private val fetchRelease: suspend () -> String = ::defaultFetchRelease,
+    private val channel: AppUpdateChannel = AppUpdateChannel.Release,
+    private val fetchRelease: suspend () -> String = { defaultFetchRelease(channel.releasesEndpoint) },
     private val json: Json =
         Json {
             ignoreUnknownKeys = true
@@ -78,19 +120,33 @@ class AppUpdateReleaseClient(
         },
 ) {
     /**
-     * @return [AppUpdateCheck.Available] when a newer non-draft, non-prerelease release with the
-     *   expected `tariffiacode-<tag>-release.apk` asset exists, else [AppUpdateCheck.UpToDate].
-     *   Throws on network/API/parse failures; callers surface that as an error state.
+     * @return [AppUpdateCheck.Available] when a newer release on this channel, carrying the channel's
+     *   expected APK asset, exists; else [AppUpdateCheck.UpToDate]. Throws on network/API/parse
+     *   failures; callers surface that as an error state.
      */
     suspend fun check(currentVersion: String): AppUpdateCheck {
         val payload = fetchRelease()
-        val releases = json.decodeFromString<List<GitHubReleaseDto>>(payload)
+        // The GitHub release-tag endpoint returns a single object; the list endpoint returns an array.
+        // Both are handled so one client serves either channel shape.
+        val releases =
+            runCatching { json.decodeFromString<List<GitHubReleaseDto>>(payload) }
+                .getOrElse { listOf(json.decodeFromString<GitHubReleaseDto>(payload)) }
         val latest =
             releases
-                .filter { !it.draft && !it.prerelease }
+                .filter { !it.draft && (channel.allowPrerelease || !it.prerelease) }
+                .filter { channel.acceptsTag(it.tagName) }
                 .mapNotNull { dto ->
+                    // The release tag is the version for the production channel. The debug channel
+                    // uses a rolling `debug-latest` tag, so its version comes from the release name
+                    // (e.g. "1.2.30"). Fall back to the tag so both shapes work.
+                    val versionSource =
+                        if (channel == AppUpdateChannel.Debug) {
+                            dto.name?.takeIf { it.isNotBlank() } ?: dto.tagName
+                        } else {
+                            dto.tagName
+                        }
                     val version =
-                        runCatching { normalizeRuntimeVersion(dto.tagName) }.getOrNull() ?: return@mapNotNull null
+                        runCatching { normalizeRuntimeVersion(versionSource) }.getOrNull() ?: return@mapNotNull null
                     dto to version
                 }
                 .maxWithOrNull(compareBy { (_, version) -> ParsedVersion(version) })
@@ -102,7 +158,7 @@ class AppUpdateReleaseClient(
             return AppUpdateCheck.UpToDate(normalizedCurrent, latestVersion)
         }
 
-        val assetName = AppUpdateRelease.apkAssetName(dto.tagName.trim())
+        val assetName = channel.apkAssetName(dto.tagName)
         val asset =
             requireNotNull(dto.assets.firstOrNull { it.name == assetName }) {
                 "TariffiaCode release ${dto.tagName} does not contain $assetName"
@@ -124,6 +180,7 @@ class AppUpdateReleaseClient(
     @Serializable
     private data class GitHubReleaseDto(
         @SerialName("tag_name") val tagName: String,
+        @SerialName("name") val name: String? = null,
         @SerialName("draft") val draft: Boolean = false,
         @SerialName("prerelease") val prerelease: Boolean = false,
         @SerialName("assets") val assets: List<GitHubReleaseAssetDto> = emptyList(),
@@ -141,6 +198,6 @@ class AppUpdateReleaseClient(
 
     companion object {
         /** Public Releases API for the TariffiaCode repository (server-side latest-first order). */
-        val RELEASES_ENDPOINT: HttpUrl = "https://api.github.com/repos/Konprostart/TariffiaCode/releases".toHttpUrl()
+        val RELEASES_ENDPOINT: HttpUrl = AppUpdateChannel.Release.releasesEndpoint.toHttpUrl()
     }
 }

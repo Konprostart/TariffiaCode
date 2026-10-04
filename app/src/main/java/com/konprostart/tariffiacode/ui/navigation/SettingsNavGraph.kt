@@ -84,6 +84,14 @@ fun NavGraphBuilder.settingsNavGraph(
                 AppUpdateSectionCard(
                     installedVersion = appVersion,
                     onDownload = { url -> UrlLauncher.openUrl(context, url) },
+                    // Debug builds track the dedicated `debug-latest` channel so they never offer a
+                    // production APK; release keeps the production feed unchanged.
+                    channel =
+                        if (com.konprostart.tariffiacode.BuildConfig.DEBUG) {
+                            com.konprostart.tariffiacode.feature.update.AppUpdateChannel.Debug
+                        } else {
+                            com.konprostart.tariffiacode.feature.update.AppUpdateChannel.Release
+                        },
                 )
             },
             devToolsContent =

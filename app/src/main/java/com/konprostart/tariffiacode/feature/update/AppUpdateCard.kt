@@ -36,7 +36,8 @@ import com.konprostart.tariffiacode.R
 fun AppUpdateSectionCard(
     installedVersion: String,
     onDownload: (String) -> Unit,
-    viewModel: AppUpdateViewModel = viewModel(factory = AppUpdateViewModel.factory(installedVersion)),
+    channel: AppUpdateChannel = AppUpdateChannel.Release,
+    viewModel: AppUpdateViewModel = viewModel(factory = AppUpdateViewModel.factory(installedVersion, channel)),
 ) {
     val state by viewModel.state.collectAsState()
     LaunchedEffect(Unit) { viewModel.checkForUpdate() }

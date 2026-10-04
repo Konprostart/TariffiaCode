@@ -107,4 +107,69 @@ class AppUpdateReleaseClientTest {
             assertTrue(result is AppUpdateCheck.Available)
             assertFalse("fetch dispatched on IO must not run on the main thread", ranOnMain)
         }
+
+    // ---- Debug channel ----
+    // The debug channel reads the single object returned by `/releases/tags/debug-latest`; the
+    // rolling tag carries no version, so the version comes from the release `name`.
+
+    private fun debugRelease(
+        version: String,
+        assetName: String = "tariffiacode-debug.apk",
+        withAsset: Boolean = true,
+    ): String {
+        val assets =
+            if (withAsset) {
+                """"assets":[{"name":"$assetName","browser_download_url":
+                    "https://github.com/Konprostart/TariffiaCode/releases/download/debug-latest/$assetName"}]"""
+            } else {
+                """"assets":[]"""
+            }
+        return """{"tag_name":"debug-latest","name":"$version","draft":false,"prerelease":true,$assets}"""
+    }
+
+    private fun debugClient(payload: String): AppUpdateReleaseClient =
+        AppUpdateReleaseClient(channel = AppUpdateChannel.Debug, fetchRelease = { payload })
+
+    @Test
+    fun `debug channel offers a newer debug update`() =
+        runTest {
+            val result = debugClient(debugRelease("1.2.30")).check("1.2.29")
+            assertTrue(result is AppUpdateCheck.Available)
+            val available = result as AppUpdateCheck.Available
+            assertEquals("1.2.30", available.release.version)
+            assertTrue(available.release.apkUrl.contains("debug-latest/tariffiacode-debug.apk"))
+            assertTrue(available.release.apkUrl.contains("download=1"))
+        }
+
+    @Test
+    fun `debug channel is up to date when not newer`() =
+        runTest {
+            val result = debugClient(debugRelease("1.2.29")).check("1.2.29")
+            assertTrue(result is AppUpdateCheck.UpToDate)
+        }
+
+    @Test
+    fun `debug channel requires the dedicated debug asset and rejects a production asset`() =
+        runTest {
+            val result =
+                runCatching {
+                    debugClient(debugRelease("1.2.30", assetName = "tariffiacode-1.2.30-release.apk")).check("1.2.29")
+                }
+            assertTrue("debug channel must not accept a production release asset", result.isFailure)
+        }
+
+    @Test
+    fun `debug channel asset name is constant`() {
+        assertEquals("tariffiacode-debug.apk", AppUpdateChannel.Debug.apkAssetName("debug-latest"))
+        assertEquals("tariffiacode-debug.apk", AppUpdateChannel.Debug.apkAssetName("anything"))
+    }
+
+    @Test
+    fun `release channel accepts only production tags and tag based asset`() {
+        assertTrue(AppUpdateChannel.Release.acceptsTag("v1.2.30"))
+        assertFalse("release channel must not accept the debug tag", AppUpdateChannel.Release.acceptsTag("debug-latest"))
+        assertEquals("tariffiacode-v1.2.30-release.apk", AppUpdateChannel.Release.apkAssetName("v1.2.30"))
+        assertTrue(AppUpdateChannel.Debug.acceptsTag("debug-latest"))
+        assertFalse(AppUpdateChannel.Debug.acceptsTag("v1.2.30"))
+    }
 }
