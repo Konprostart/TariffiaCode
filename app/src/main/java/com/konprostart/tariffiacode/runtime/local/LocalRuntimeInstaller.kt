@@ -290,6 +290,19 @@ class LocalRuntimeInstaller(
             runCatching { json.decodeFromString<LocalRuntimeMetadata>(metadataFile.readText()) }.getOrNull()
         }
 
+    /**
+     * Realigns the persisted runtime port (`metadata.json`) with the port declared by the bundled
+     * manifest, without rebuilding the runtime or touching the rootfs, workspace, sessions, or auth
+     * state. Cheap and idempotent; callers run it before any runtime start so a stale port left by
+     * an earlier build can never launch or connect. See [RuntimeMetadataPortMigration].
+     */
+    fun reconcilePersistedPortWithManifest() {
+        accessCoordinator.write {
+            val manifestPort = runCatching { manifestReader.read().port }.getOrNull() ?: return@write
+            RuntimeMetadataPortMigration.reconcile(File(runtimeDirectory, METADATA_FILE), manifestPort)
+        }
+    }
+
     /** Records [agent] as provisioned, so a later reinstall keeps it. */
     fun recordAgent(agent: LocalAgent) {
         accessCoordinator.write {

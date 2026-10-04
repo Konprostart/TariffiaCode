@@ -46,6 +46,7 @@ data class LocalRuntimeMetadata(
     fun without(agent: LocalAgent): LocalRuntimeMetadata = copy(components = components - agent.id)
 }
 
+@Suppress("LongParameterList")
 class LocalRuntimeManager(
     private val runtimeDirectory: File,
     private val abi: String,
@@ -66,6 +67,12 @@ class LocalRuntimeManager(
      */
     private val systemPrompt: () -> String? = { null },
     private val messages: LocalRuntimeMessages = LocalRuntimeMessages,
+    /**
+     * Realigns the persisted runtime port with the bundled manifest before the runtime starts or
+     * connects. Injected (rather than called on [installer] directly) so a JVM test can prove it
+     * runs before any probe/start, and so it stays a no-op when the installer is absent.
+     */
+    private val reconcilePersistedPort: () -> Unit = {},
 ) {
     private val json: Json =
         Json {
@@ -131,6 +138,7 @@ class LocalRuntimeManager(
 
     suspend fun start(): Result<LocalRuntimeStatus.Ready> =
         operationMutex.withLock {
+            reconcilePersistedPort()
             startLocked()
         }
 
@@ -142,6 +150,8 @@ class LocalRuntimeManager(
             // exception used to escape ensureRunning() uncaught and crash the app on every
             // subsequent start of the local runtime.
             runCatching { updateEngine?.recover() }
+            // Before reading the persisted port: a stale port must never be probed or connected to.
+            reconcilePersistedPort()
             val metadata =
                 readMetadata()
                     ?: return@withLock Result.failure(IllegalStateException("Local runtime is not installed"))
