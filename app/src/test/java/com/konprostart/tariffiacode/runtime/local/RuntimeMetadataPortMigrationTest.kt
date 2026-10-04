@@ -37,8 +37,7 @@ class RuntimeMetadataPortMigrationTest {
             writeText(json.encodeToString(LocalRuntimeMetadata.serializer(), metadata(port)))
         }
 
-    private fun read(file: File): LocalRuntimeMetadata =
-        json.decodeFromString(LocalRuntimeMetadata.serializer(), file.readText())
+    private fun read(file: File): LocalRuntimeMetadata = json.decodeFromString(LocalRuntimeMetadata.serializer(), file.readText())
 
     @Test
     fun `migrates the port and keeps every other field`() {
