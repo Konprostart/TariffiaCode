@@ -2,21 +2,18 @@ package com.konprostart.tariffiacode.core.ssh
 
 import kotlinx.coroutines.test.runTest
 import org.apache.sshd.server.SshServer
-import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider
-import org.apache.sshd.server.shell.InteractiveProcessShellFactory
 import org.apache.sshd.server.auth.password.PasswordAuthenticator
 import org.apache.sshd.server.auth.pubkey.PublickeyAuthenticator
+import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider
 import org.apache.sshd.server.session.ServerSession
+import org.apache.sshd.server.shell.InteractiveProcessShellFactory
 import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.PublicKey
-import java.security.interfaces.RSAPublicKey
 import java.util.Base64
 
 /**

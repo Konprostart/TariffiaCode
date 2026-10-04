@@ -6,7 +6,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.withContext
-import org.apache.sshd.client.SshClient as MinaApacheSshClient
 import org.apache.sshd.client.channel.ChannelShell
 import org.apache.sshd.client.keyverifier.ServerKeyVerifier
 import org.apache.sshd.client.session.ClientSession
@@ -21,6 +20,7 @@ import java.net.SocketAddress
 import java.security.KeyPair
 import java.security.PublicKey
 import java.util.Base64
+import org.apache.sshd.client.SshClient as MinaApacheSshClient
 
 /**
  * Apache MINA SSHD backed [SshConnectionClient]. Pure-JVM and Android-compatible, isolated behind the
