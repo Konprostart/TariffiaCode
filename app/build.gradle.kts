@@ -262,6 +262,12 @@ dependencies {
     // QR code scanning for connection setup
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
+    // Pure-JVM SSH client (Apache MINA SSHD) for the on-device SSH foundation. Kept isolated behind
+    // core/ssh; BouncyCastle supplies the modern cipher/key algorithms MINA expects.
+    implementation("org.apache.sshd:sshd-core:2.18.0")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.80")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.80")
+
     // Encrypted SharedPreferences
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.documentfile:documentfile:1.0.1")
