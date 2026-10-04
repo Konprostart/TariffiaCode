@@ -73,6 +73,8 @@ fun SettingsScreenV2(
     localRuntimeIdleStopEnabled: Boolean = true,
     onToggleLocalRuntimeIdleStop: (Boolean) -> Unit = {},
     appVersion: String,
+    /** Optional in-app TariffiaCode APK update card, rendered in the App settings section. */
+    appUpdateContent: (@Composable () -> Unit)? = null,
     onOpenDrawer: () -> Unit,
     onOpenAssistantSettings: () -> Unit,
     onOpenVoiceSettings: () -> Unit,
@@ -336,6 +338,10 @@ fun SettingsScreenV2(
             }
 
             SettingsSection(title = stringResource(R.string.section_app_settings)) {
+                appUpdateContent?.let { content ->
+                    content()
+                    SettingsDivider()
+                }
                 SettingsToggleRow(
                     icon = Icons.Default.Notifications,
                     title = stringResource(R.string.notifications_row),
