@@ -45,7 +45,8 @@ class MinaSshClient(
     ): SshConnectResult =
         withContext(Dispatchers.IO) {
             val client = clientFactory()
-            client.serverKeyVerifier = FingerprintServerKeyVerifier(host, port, verifier)
+            val hostKeyVerifier = FingerprintServerKeyVerifier(host, port, verifier)
+            client.serverKeyVerifier = hostKeyVerifier
             var session: ClientSession? = null
             try {
                 client.start()
@@ -76,12 +77,16 @@ class MinaSshClient(
                 channel.open().verify(connectTimeoutMillis)
 
                 SshConnectResult.Connected(sshSession)
-            } catch (e: HostKeyUntrustedException) {
-                runCatching { session?.close() }
-                SshConnectResult.HostKeyUntrusted(e.hostKey)
             } catch (e: Exception) {
                 runCatching { session?.close() }
-                SshConnectResult.Failure(e.message ?: "SSH connection failed", e)
+                // MINA wraps verifier-rejection exceptions, so we surface an untrusted host key from
+                // the verifier's recorded state rather than relying on exception types.
+                val untrusted = hostKeyVerifier.untrustedKey
+                if (untrusted != null) {
+                    SshConnectResult.HostKeyUntrusted(untrusted)
+                } else {
+                    SshConnectResult.Failure(e.message ?: "SSH connection failed", e)
+                }
             } finally {
                 runCatching { client.stop() }
             }
@@ -102,20 +107,21 @@ class MinaSshClient(
     }
 }
 
-/** Thrown internally when the user has not yet trusted a presented host key. */
-internal class HostKeyUntrustedException(
-    val hostKey: SshHostKey,
-) : IOException("SSH host key is not trusted")
-
 /**
- * MINA server-key verifier that defers to the app's [SshHostKeyVerifier]. Unknown keys abort the
- * handshake so the UI can show the fingerprint; a mismatch against a trusted key is rejected too.
+ * MINA server-key verifier that defers to the app's [SshHostKeyVerifier]. Unknown keys are rejected
+ * (return false) and recorded in [untrustedKey] so the UI can show the fingerprint; a mismatch against
+ * a trusted key is rejected too. Exceptions are avoided because MINA wraps them during the handshake.
  */
 internal class FingerprintServerKeyVerifier(
     private val host: String,
     private val port: Int,
     private val delegate: SshHostKeyVerifier,
 ) : ServerKeyVerifier {
+    /** Set when the presented key is not yet trusted; the connection is rejected in that case. */
+    @Volatile
+    var untrustedKey: SshHostKey? = null
+        private set
+
     override fun verifyServerKey(
         clientSession: ClientSession,
         remoteAddress: SocketAddress,
@@ -127,7 +133,10 @@ internal class FingerprintServerKeyVerifier(
         val hostKey = SshHostKey(keyType = KeyUtils.getKeyType(serverKey), sha256Fingerprint = SshFingerprint.sha256(blob))
         return when (delegate.verify(host, port, hostKey)) {
             is SshHostKeyDecision.Trusted -> true
-            is SshHostKeyDecision.Unknown -> throw HostKeyUntrustedException(hostKey)
+            is SshHostKeyDecision.Unknown -> {
+                untrustedKey = hostKey
+                false
+            }
         }
     }
 }
