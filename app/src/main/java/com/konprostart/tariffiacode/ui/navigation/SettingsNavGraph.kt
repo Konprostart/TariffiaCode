@@ -574,9 +574,35 @@ fun NavGraphBuilder.settingsNavGraph(
             onConnect = remoteProjectViewModel::connect,
             onDisconnect = remoteProjectViewModel::disconnect,
             onReconnect = remoteProjectViewModel::reconnect,
+            onOpenTerminal = { navController.navigate(ROUTE_REMOTE_TERMINAL) },
             onFormChange = remoteProjectViewModel::updateForm,
             onSave = remoteProjectViewModel::saveProject,
             onDismissEditor = remoteProjectViewModel::dismissEditor,
+        )
+    }
+
+    composable(ROUTE_REMOTE_TERMINAL) {
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        val terminalViewModel: com.konprostart.tariffiacode.feature.terminal.RemoteTerminalViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel(
+                key = "remote-terminal",
+                factory =
+                    com.konprostart.tariffiacode.ui.ViewModelFactory {
+                        com.konprostart.tariffiacode.feature.terminal.RemoteTerminalViewModel(
+                            shellClient = com.konprostart.tariffiacode.core.ssh.MinaSshShellClient(),
+                            credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
+                            // The terminal opens against whichever SSH connection the VPS runtime is set to.
+                            profileProvider = { app.vpsRuntimeTarget.selectedProfile.value },
+                        )
+                    },
+            )
+        val terminalState by terminalViewModel.state.collectAsState()
+        com.konprostart.tariffiacode.feature.terminal.RemoteTerminalScreen(
+            state = terminalState,
+            onBack = { navController.popBackStack() },
+            onConnect = terminalViewModel::connect,
+            onDisconnect = terminalViewModel::disconnect,
+            onSend = terminalViewModel::sendLine,
         )
     }
 
