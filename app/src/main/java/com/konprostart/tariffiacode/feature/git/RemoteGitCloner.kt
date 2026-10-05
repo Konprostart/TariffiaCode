@@ -61,13 +61,14 @@ class RemoteGitCloner(
         return "if [ -e $path ] && [ -n \"$dollar(ls -A $path 2>/dev/null)\" ]; then " +
             "echo ${SshShellCommandExecutor.NONEMPTY_MARKER}; " +
             "else git clone --depth 1 $url $path 2>&1; " +
-            "echo \"${SshShellCommandExecutor.EXIT_MARKER}${dollar}?\"; fi"
+            "echo \"${SshShellCommandExecutor.EXIT_MARKER}$dollar?\"; fi"
     }
 
     private fun parse(output: String): RemoteGitCloneResult {
         if (output.contains(SshShellCommandExecutor.NONEMPTY_MARKER)) return RemoteGitCloneResult.TargetNotEmpty
-        val match = Regex(Regex.escape(SshShellCommandExecutor.EXIT_MARKER) + "(\\d+)").find(output)
-            ?: return RemoteGitCloneResult.Failed("No result from the VPS", output)
+        val match =
+            Regex(Regex.escape(SshShellCommandExecutor.EXIT_MARKER) + "(\\d+)").find(output)
+                ?: return RemoteGitCloneResult.Failed("No result from the VPS", output)
         val exit = match.groupValues[1].toInt()
         return if (exit == 0) {
             RemoteGitCloneResult.Success(output.substringBefore(match.value).trim())
