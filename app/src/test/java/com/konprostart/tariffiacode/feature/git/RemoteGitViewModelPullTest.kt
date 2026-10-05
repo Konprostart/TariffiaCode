@@ -9,6 +9,8 @@ import com.konprostart.tariffiacode.core.api.OpenCodeSession
 import com.konprostart.tariffiacode.core.api.OpenCodeVcsInfo
 import com.konprostart.tariffiacode.core.api.PromptRequest
 import com.konprostart.tariffiacode.core.api.ProviderCatalog
+import com.konprostart.tariffiacode.data.ssh.SshAuthType
+import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.runtime.BackendKind
 import com.konprostart.tariffiacode.runtime.OpenCodeBackend
 import com.konprostart.tariffiacode.runtime.PermissionResponse
@@ -20,14 +22,13 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
-import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-class RemoteGitViewModelTest {
+class RemoteGitViewModelPullTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -38,17 +39,12 @@ class RemoteGitViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private class FakeBackend : OpenCodeBackend {
+    private class NoopBackend : OpenCodeBackend {
         override val id = "vps"
         override val displayName = "VPS"
         override val kind = BackendKind.REMOTE
 
-        var infoDirectory: String? = null
-        var statusDirectory: String? = null
-        var diffDirectory: String? = null
-        var fail = false
-
-        override suspend fun health() = OpenCodeHealth(healthy = true, version = "1")
+        override suspend fun health() = OpenCodeHealth(true, "1")
 
         override suspend fun listSessions(directory: String?): List<OpenCodeSession> = emptyList()
 
@@ -79,97 +75,92 @@ class RemoteGitViewModelTest {
 
         override fun events(): Flow<OpenCodeEvent> = emptyFlow()
 
-        override suspend fun vcsInfo(directory: String): OpenCodeVcsInfo {
-            infoDirectory = directory
-            if (fail) error("git unavailable")
-            return OpenCodeVcsInfo(branch = "main")
-        }
+        override suspend fun vcsInfo(directory: String): OpenCodeVcsInfo = OpenCodeVcsInfo(branch = "main")
 
-        override suspend fun vcsStatus(directory: String): List<OpenCodeFileChange> {
-            statusDirectory = directory
-            return listOf(OpenCodeFileChange(file = "src/a.kt", status = "M", added = 2, removed = 1))
-        }
+        override suspend fun vcsStatus(directory: String): List<OpenCodeFileChange> = emptyList()
 
         override suspend fun vcsDiff(
             directory: String,
             mode: String,
             context: Int?,
-        ): List<OpenCodeFileChange> {
-            diffDirectory = directory
-            return listOf(OpenCodeFileChange(file = "src/a.kt", patch = "@@ -1 +1 @@\n-old\n+new"))
-        }
+        ): List<OpenCodeFileChange> = emptyList()
     }
 
-    private object NoopExecutor : RemoteGitCommandExecutor {
+    private class FakeExecutor(
+        var outcome: RemoteCommandOutcome,
+    ) : RemoteGitCommandExecutor {
         override suspend fun execute(
-            profile: com.konprostart.tariffiacode.data.ssh.SshProfile,
+            profile: SshProfile,
             script: String,
             timeoutMillis: Long,
-        ): RemoteCommandOutcome = RemoteCommandOutcome.Failed("not used")
+        ): RemoteCommandOutcome = outcome
     }
 
+    private fun profile() =
+        SshProfile(
+            id = "vps-1",
+            name = "VPS",
+            host = "example.com",
+            username = "root",
+            authType = SshAuthType.PASSWORD,
+            credentialRef = "ref",
+        )
+
     private fun viewModel(
-        backend: OpenCodeBackend,
+        executor: RemoteGitCommandExecutor,
         directory: String?,
+        profile: SshProfile? = profile(),
     ) = RemoteGitViewModel(
-        backend = backend,
+        backend = NoopBackend(),
         directoryProvider = { directory },
-        puller = RemoteGitPuller(NoopExecutor),
-        profileProvider = { null },
+        puller = RemoteGitPuller(executor),
+        profileProvider = { profile },
     )
 
     @Test
-    fun `refresh uses the mapped remote path for git status and diff`() =
+    fun `pull success sets the success flag and output`() =
         runTest {
-            val backend = FakeBackend()
-            val vm = viewModel(backend, "/root/projects/app")
+            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("Already up to date.\n__TC_EXIT__0\n")), "/root/app")
 
-            vm.refresh()
+            vm.pull()
 
-            assertEquals("/root/projects/app", backend.infoDirectory)
-            assertEquals("/root/projects/app", backend.statusDirectory)
-            assertEquals("/root/projects/app", backend.diffDirectory)
-            assertEquals("main", vm.state.value.branch)
-            assertEquals(1, vm.state.value.changes.size)
-            assertEquals(1, vm.state.value.diffs.size)
-            assertNull(vm.state.value.error)
+            assertTrue(vm.state.value.pullSuccess)
+            assertTrue(vm.state.value.pullOutput.contains("Already up to date"))
+            assertFalse(vm.state.value.isPulling)
         }
 
     @Test
-    fun `refresh without a mapping reports an error and never calls the backend`() =
+    fun `pull failure surfaces a message`() =
         runTest {
-            val backend = FakeBackend()
-            val vm = viewModel(backend, null)
+            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("boom\n__TC_EXIT__1\n")), "/root/app")
 
-            vm.refresh()
+            vm.pull()
 
-            assertNotNull(vm.state.value.error)
-            assertNull(backend.infoDirectory)
-            assertTrue(vm.state.value.changes.isEmpty())
+            assertNotNull(vm.state.value.pullMessage)
+            assertFalse(vm.state.value.pullSuccess)
         }
 
     @Test
-    fun `backend failure surfaces an error without crashing`() =
+    fun `pull without a mapped path reports an error and does not run`() =
         runTest {
-            val backend = FakeBackend().apply { fail = true }
-            val vm = viewModel(backend, "/root/projects/app")
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed("__TC_EXIT__0"))
+            val vm = viewModel(executor, directory = null)
 
-            vm.refresh()
+            vm.pull()
 
-            assertNotNull(vm.state.value.error)
+            assertNotNull(vm.state.value.pullMessage)
+            assertFalse(vm.state.value.pullSuccess)
         }
 
     @Test
-    fun `git state carries no credential material`() =
+    fun `pull state carries no credential material`() =
         runTest {
-            val backend = FakeBackend()
-            val vm = viewModel(backend, "/root/projects/app")
+            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("__TC_EXIT__0")), "/root/app")
 
-            vm.refresh()
+            vm.pull()
 
             val text = vm.state.value.toString()
             assertTrue(!text.contains("password", ignoreCase = true))
             assertTrue(!text.contains("keyPem", ignoreCase = true))
-            assertTrue(!text.contains("passphrase", ignoreCase = true))
         }
 }

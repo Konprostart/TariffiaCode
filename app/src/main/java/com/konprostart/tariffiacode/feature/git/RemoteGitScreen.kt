@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -40,6 +42,7 @@ fun RemoteGitScreen(
     state: RemoteGitUiState,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
+    onPull: () -> Unit,
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -78,6 +81,7 @@ fun RemoteGitScreen(
             state.directory?.let { directory ->
                 Text(directory, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            PullSection(state = state, onPull = onPull)
             if (state.isLoading) {
                 CircularProgressIndicator()
             }
@@ -109,6 +113,49 @@ fun RemoteGitScreen(
                 )
                 state.diffs.forEach { diff -> DiffBlock(diff) }
             }
+        }
+    }
+}
+
+@Composable
+private fun PullSection(
+    state: RemoteGitUiState,
+    onPull: () -> Unit,
+) {
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Button(onClick = onPull, enabled = !state.isPulling) {
+            if (state.isPulling) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(stringResource(R.string.remote_git_pull))
+        }
+        state.pullMessage?.let { message ->
+            Spacer(Modifier.width(10.dp))
+            Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+        if (state.pullSuccess) {
+            Spacer(Modifier.width(10.dp))
+            Text(
+                stringResource(R.string.remote_git_pull_success),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+    if (state.pullOutput.isNotBlank()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ) {
+            Text(
+                state.pullOutput,
+                modifier = Modifier.padding(12.dp),
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
