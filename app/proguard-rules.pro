@@ -63,3 +63,15 @@
 -keepclassmembers class * implements com.sun.jna.** { *; }
 -dontwarn com.sun.jna.**
 -dontwarn java.awt.**
+
+# Apache MINA SSHD + BouncyCastle (SSH/VPS transport). They reference optional JDK/OSGi/slf4j classes
+# that do not exist on Android; warn-only is enough to let R8 finish, and keeping their classes intact
+# preserves the reflection-based key/cipher loading the SSH client relies on.
+-dontwarn javax.security.auth.login.**
+-dontwarn javax.naming.**
+-dontwarn org.slf4j.**
+-dontwarn org.ietf.jgss.**
+-dontwarn org.apache.sshd.**
+-dontwarn org.bouncycastle.**
+-keep class org.apache.sshd.** { *; }
+-keep class org.bouncycastle.** { *; }
