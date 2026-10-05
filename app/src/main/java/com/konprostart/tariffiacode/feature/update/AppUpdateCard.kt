@@ -1,5 +1,6 @@
 package com.konprostart.tariffiacode.feature.update
 
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,11 +23,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.konprostart.tariffiacode.R
+import java.io.File
 
 /**
  * Hosts [AppUpdateCard] inside the settings app-settings section, owning its own [AppUpdateViewModel]
@@ -35,16 +38,25 @@ import com.konprostart.tariffiacode.R
 @Composable
 fun AppUpdateSectionCard(
     installedVersion: String,
-    onDownload: (String) -> Unit,
     channel: AppUpdateChannel = AppUpdateChannel.Release,
-    viewModel: AppUpdateViewModel = viewModel(factory = AppUpdateViewModel.factory(installedVersion, channel)),
+    context: Context = LocalContext.current,
+    viewModel: AppUpdateViewModel =
+        viewModel(
+            factory =
+                AppUpdateViewModel.factory(
+                    installedVersion = installedVersion,
+                    installer = AndroidAppUpdateInstaller(context.applicationContext),
+                    apkFileProvider = { File(context.applicationContext.cacheDir, "updates/tariffiacode-update.apk") },
+                    channel = channel,
+                ),
+        ),
 ) {
     val state by viewModel.state.collectAsState()
     LaunchedEffect(Unit) { viewModel.checkForUpdate() }
     AppUpdateCard(
         state = state,
         onCheck = viewModel::checkForUpdate,
-        onDownload = onDownload,
+        onDownload = viewModel::downloadAndInstall,
     )
 }
 
@@ -69,7 +81,7 @@ fun AppUpdateCard(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
         )
-        if (state.isChecking) {
+        if (state.isChecking || state.isDownloading) {
             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
         }
     }
@@ -137,7 +149,7 @@ fun AppUpdateCard(
             Spacer(Modifier.padding(vertical = 6.dp))
             Button(
                 onClick = { onDownload(check.release.apkUrl) },
-                enabled = !state.isChecking,
+                enabled = !state.isChecking && !state.isDownloading,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Default.SystemUpdate, contentDescription = stringResource(R.string.cd_update))
@@ -145,6 +157,11 @@ fun AppUpdateCard(
                 Text(stringResource(R.string.app_update_download_button, check.release.version))
             }
         }
+    }
+
+    state.installMessage?.let { message ->
+        Spacer(Modifier.padding(vertical = 4.dp))
+        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     }
 
     state.error?.let { error ->

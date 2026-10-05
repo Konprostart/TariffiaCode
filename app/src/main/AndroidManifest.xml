@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Needed only to hand the downloaded update APK to the system package installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!--
         The agent works on files the user points it at, and those live all over the device: a
         repository under Download, notes in Documents, a folder synced from a PC. Scoped storage
@@ -191,6 +193,17 @@
             <meta-data
                 android:name="com.konprostart.tariffiacode.startup.CatalogReconcileInitializer"
                 tools:node="remove" />
+        </provider>
+
+        <!-- Shares the downloaded update APK with the system installer as a content:// URI. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
         </provider>
 
     </application>

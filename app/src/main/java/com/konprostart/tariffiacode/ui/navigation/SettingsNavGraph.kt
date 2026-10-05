@@ -83,7 +83,6 @@ fun NavGraphBuilder.settingsNavGraph(
             appUpdateContent = {
                 AppUpdateSectionCard(
                     installedVersion = appVersion,
-                    onDownload = { url -> UrlLauncher.openUrl(context, url) },
                     // Debug builds track the dedicated `debug-latest` channel so they never offer a
                     // production APK; release keeps the production feed unchanged.
                     channel =
