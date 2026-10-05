@@ -66,6 +66,7 @@ fun RemoteProjectScreen(
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onReconnect: () -> Unit,
+    onOpenTerminal: () -> Unit,
     onFormChange: ((RemoteProjectForm) -> RemoteProjectForm) -> Unit,
     onSave: () -> Unit,
     onDismissEditor: () -> Unit,
@@ -116,6 +117,7 @@ fun RemoteProjectScreen(
                 onConnect = onConnect,
                 onDisconnect = onDisconnect,
                 onReconnect = onReconnect,
+                onOpenTerminal = onOpenTerminal,
             )
             if (state.projects.isEmpty()) {
                 Text(stringResource(R.string.remote_project_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -176,6 +178,7 @@ private fun VpsConnectionCard(
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onReconnect: () -> Unit,
+    onOpenTerminal: () -> Unit,
 ) {
     val connecting = state is RuntimeState.Connecting
     val connected = state is RuntimeState.Connected
@@ -218,6 +221,7 @@ private fun VpsConnectionCard(
                         Text(if (connecting) stringResource(R.string.ssh_connecting) else stringResource(R.string.ssh_connect))
                     }
                 }
+                OutlinedButton(onClick = onOpenTerminal) { Text(stringResource(R.string.remote_terminal_title)) }
             }
         }
     }
