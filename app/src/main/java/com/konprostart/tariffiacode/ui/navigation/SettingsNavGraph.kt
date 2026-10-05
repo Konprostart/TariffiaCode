@@ -576,6 +576,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onReconnect = remoteProjectViewModel::reconnect,
             onOpenTerminal = { navController.navigate(ROUTE_REMOTE_TERMINAL) },
             onOpenGit = { navController.navigate(ROUTE_REMOTE_GIT) },
+            onOpenClone = { navController.navigate(ROUTE_REMOTE_GIT_CLONE) },
             onFormChange = remoteProjectViewModel::updateForm,
             onSave = remoteProjectViewModel::saveProject,
             onDismissEditor = remoteProjectViewModel::dismissEditor,
@@ -627,6 +628,35 @@ fun NavGraphBuilder.settingsNavGraph(
             state = gitState,
             onBack = { navController.popBackStack() },
             onRefresh = gitViewModel::refresh,
+        )
+    }
+
+    composable(ROUTE_REMOTE_GIT_CLONE) {
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        val cloneViewModel: com.konprostart.tariffiacode.feature.git.RemoteGitCloneViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel(
+                key = "remote-git-clone",
+                factory =
+                    com.konprostart.tariffiacode.ui.ViewModelFactory {
+                        com.konprostart.tariffiacode.feature.git.RemoteGitCloneViewModel(
+                            cloner =
+                                com.konprostart.tariffiacode.feature.git.RemoteGitCloner(
+                                    com.konprostart.tariffiacode.feature.git.SshShellCommandExecutor(
+                                        shellClient = com.konprostart.tariffiacode.core.ssh.MinaSshShellClient(),
+                                        credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
+                                    ),
+                                ),
+                            profileProvider = { app.vpsRuntimeTarget.selectedProfile.value },
+                        )
+                    },
+            )
+        val cloneState by cloneViewModel.state.collectAsState()
+        com.konprostart.tariffiacode.feature.git.RemoteGitCloneScreen(
+            state = cloneState,
+            onBack = { navController.popBackStack() },
+            onUrlChange = cloneViewModel::updateUrl,
+            onPathChange = cloneViewModel::updatePath,
+            onClone = cloneViewModel::clone,
         )
     }
 

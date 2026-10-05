@@ -1259,4 +1259,10 @@
     <string name="remote_git_branch">Branch: %1$s</string>
     <string name="remote_git_clean">Working tree clean.</string>
     <string name="remote_git_diff">Changes</string>
+    <string name="remote_git_clone_title">Clone</string>
+    <string name="remote_git_clone_intro">Clone a Git repository onto the VPS at an absolute path. The path must not already contain files.</string>
+    <string name="remote_git_clone_url">Repository URL</string>
+    <string name="remote_git_clone_path">Remote path</string>
+    <string name="remote_git_clone_action">Clone on VPS</string>
+    <string name="remote_git_clone_success">Clone finished.</string>
 </resources>
