@@ -1251,4 +1251,8 @@
     <string name="remote_terminal_title">Terminal</string>
     <string name="remote_terminal_idle">Connect to open a shell on the VPS.</string>
     <string name="remote_terminal_input_hint">Type a command</string>
+    <string name="remote_git_title">Git</string>
+    <string name="remote_git_branch">Branch: %1$s</string>
+    <string name="remote_git_clean">Working tree clean.</string>
+    <string name="remote_git_diff">Changes</string>
 </resources>
