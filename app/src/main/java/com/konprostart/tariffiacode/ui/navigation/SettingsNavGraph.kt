@@ -78,10 +78,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onToggleLocalRuntimeIdleStop = appPreferences::setLocalRuntimeIdleStopEnabled,
             appVersion = appVersion,
             appUpdateContent = {
-                AppUpdateSectionCard(
-                    installedVersion = appVersion,
-                    onDownload = { url -> UrlLauncher.openUrl(context, url) },
-                )
+                AppUpdateSectionCard(installedVersion = appVersion)
             },
             onOpenDrawer = onOpenDrawer,
             onOpenAssistantSettings = onOpenAssistantSettings,

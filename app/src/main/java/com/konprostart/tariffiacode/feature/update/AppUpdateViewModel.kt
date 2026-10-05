@@ -8,23 +8,31 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 
 data class AppUpdateUiState(
     val installedVersion: String,
     val check: AppUpdateCheck? = null,
     val isChecking: Boolean = false,
+    val isDownloading: Boolean = false,
+    val installMessage: String? = null,
     val error: String? = null,
 )
 
 /**
- * Drives the in-app "TariffiaCode update available" check.
+ * Drives the in-app "TariffiaCode update available" flow.
  *
- * Reuses [AppUpdateReleaseClient] for the lookup and never installs anything: when an update is
- * available, the UI offers the official APK URL and the user starts the download themselves.
+ * Reuses [AppUpdateReleaseClient] for the lookup, then downloads the official release APK and hands it to
+ * the system package installer via [AppUpdateInstaller]. When the app lacks permission to install
+ * packages it sends the user to the system screen instead. Never installs silently; the user confirms the
+ * standard Android install/update prompt.
  */
 class AppUpdateViewModel(
     installedVersion: String,
     private val client: AppUpdateReleaseClient = AppUpdateReleaseClient(),
+    private val downloader: AppUpdateApkDownloader = OkHttpAppUpdateApkDownloader(),
+    private val installer: AppUpdateInstaller,
+    private val apkFileProvider: () -> File,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(AppUpdateUiState(installedVersion = installedVersion))
     val state: StateFlow<AppUpdateUiState> = mutableState.asStateFlow()
@@ -45,12 +53,49 @@ class AppUpdateViewModel(
         }
     }
 
+    /** Download the release APK and start the system install/update prompt. */
+    fun downloadAndInstall(apkUrl: String) {
+        if (mutableState.value.isDownloading) return
+        if (!installer.canInstall()) {
+            installer.requestInstallPermission()
+            mutableState.update { it.copy(installMessage = "Allow installing unknown apps, then tap again") }
+            return
+        }
+        mutableState.update { it.copy(isDownloading = true, installMessage = null, error = null) }
+        viewModelScope.launch {
+            runCatching {
+                val destination = apkFileProvider()
+                downloader.download(apkUrl, destination)
+                destination
+            }
+                .onSuccess { apk ->
+                    runCatching { installer.install(apk) }
+                        .onSuccess { mutableState.update { it.copy(isDownloading = false, installMessage = "Starting installer…") } }
+                        .onFailure { error ->
+                            mutableState.update {
+                                it.copy(isDownloading = false, error = error.message ?: "Could not start the installer")
+                            }
+                        }
+                }
+                .onFailure { error ->
+                    mutableState.update { it.copy(isDownloading = false, error = error.message ?: "Could not download the update") }
+                }
+        }
+    }
+
     companion object {
-        /** Factory so the installed version can be passed without an extra DI graph. */
-        fun factory(installedVersion: String): ViewModelProvider.Factory =
+        /** Factory so the installed version and Android collaborators can be passed without a DI graph. */
+        fun factory(
+            installedVersion: String,
+            installer: AppUpdateInstaller,
+            apkFileProvider: () -> File,
+            downloader: AppUpdateApkDownloader = OkHttpAppUpdateApkDownloader(),
+            client: AppUpdateReleaseClient = AppUpdateReleaseClient(),
+        ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(modelClass: Class<T>): T = AppUpdateViewModel(installedVersion) as T
+                override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                    AppUpdateViewModel(installedVersion, client, downloader, installer, apkFileProvider) as T
             }
     }
 }
