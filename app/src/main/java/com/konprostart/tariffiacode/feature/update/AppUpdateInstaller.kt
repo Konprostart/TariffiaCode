@@ -27,8 +27,7 @@ interface AppUpdateInstaller {
 class AndroidAppUpdateInstaller(
     private val context: Context,
 ) : AppUpdateInstaller {
-    override fun canInstall(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.O || context.packageManager.canRequestPackageInstalls()
+    override fun canInstall(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || context.packageManager.canRequestPackageInstalls()
 
     override fun install(apk: File) {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apk)
@@ -41,6 +40,7 @@ class AndroidAppUpdateInstaller(
     }
 
     override fun requestInstallPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val intent =
             Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                 data = Uri.parse("package:${context.packageName}")

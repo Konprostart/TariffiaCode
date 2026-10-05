@@ -25,19 +25,21 @@ class OkHttpAppUpdateApkDownloader(
     override suspend fun download(
         apkUrl: String,
         destination: File,
-    ) = withContext(Dispatchers.IO) {
-        val request =
-            Request.Builder()
-                .url(apkUrl)
-                .header("User-Agent", "TariffiaCode")
-                .get()
-                .build()
-        client.newCall(request).execute().use { response ->
-            require(response.isSuccessful) { "APK download failed with HTTP ${response.code}" }
-            val body = requireNotNull(response.body) { "APK download response had no body" }
-            destination.parentFile?.mkdirs()
-            destination.outputStream().use { output ->
-                body.byteStream().use { input -> input.copyTo(output) }
+    ) {
+        withContext(Dispatchers.IO) {
+            val request =
+                Request.Builder()
+                    .url(apkUrl)
+                    .header("User-Agent", "TariffiaCode")
+                    .get()
+                    .build()
+            client.newCall(request).execute().use { response ->
+                require(response.isSuccessful) { "APK download failed with HTTP ${response.code}" }
+                val body = requireNotNull(response.body) { "APK download response had no body" }
+                destination.parentFile?.mkdirs()
+                destination.outputStream().use { output ->
+                    body.byteStream().use { input -> input.copyTo(output) }
+                }
             }
         }
     }
