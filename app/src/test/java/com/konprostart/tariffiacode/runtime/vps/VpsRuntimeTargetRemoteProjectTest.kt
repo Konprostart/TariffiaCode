@@ -56,17 +56,19 @@ class VpsRuntimeTargetRemoteProjectTest {
         return SshCredentialStore(load = { entries }, save = { updated -> entries.putAll(updated) })
     }
 
-    private fun profile(sshPort: Int, trusted: String? = null) =
-        SshProfile(
-            id = "vps-1",
-            name = "My VPS",
-            host = "127.0.0.1",
-            port = sshPort,
-            username = "tester",
-            authType = SshAuthType.PASSWORD,
-            credentialRef = "ref",
-            trustedHostKeyFingerprint = trusted,
-        )
+    private fun profile(
+        sshPort: Int,
+        trusted: String? = null,
+    ) = SshProfile(
+        id = "vps-1",
+        name = "My VPS",
+        host = "127.0.0.1",
+        port = sshPort,
+        username = "tester",
+        authType = SshAuthType.PASSWORD,
+        credentialRef = "ref",
+        trustedHostKeyFingerprint = trusted,
+    )
 
     private suspend fun VpsRuntimeTarget.trustServer(sshPort: Int): SshProfile {
         selectProfile(profile(sshPort))
@@ -181,11 +183,17 @@ class VpsRuntimeTargetRemoteProjectTest {
             client.use { socket ->
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
                 val requestLine = reader.readLine() ?: return
-                val contentLength = reader.lineSequenceHeaders()
-                // Drain any request body.
+                // Drain headers (and remember Content-Length so any request body is consumed too).
+                var contentLength = 0
+                while (true) {
+                    val line = reader.readLine() ?: break
+                    if (line.isEmpty()) break
+                    if (line.startsWith("Content-Length:", ignoreCase = true)) {
+                        contentLength = line.substringAfter(':').trim().toIntOrNull() ?: 0
+                    }
+                }
                 if (contentLength > 0) {
-                    val body = CharArray(contentLength)
-                    reader.read(body)
+                    reader.read(CharArray(contentLength))
                 }
                 val (status, body) =
                     when {
@@ -221,17 +229,5 @@ class VpsRuntimeTargetRemoteProjectTest {
             runCatching { server.close() }
             runCatching { accepting.interrupt() }
         }
-    }
-
-    private fun BufferedReader.lineSequenceHeaders(): Int {
-        var contentLength = 0
-        while (true) {
-            val line = readLine() ?: break
-            if (line.isEmpty()) break
-            if (line.startsWith("Content-Length:", ignoreCase = true)) {
-                contentLength = line.substringAfter(':').trim().toIntOrNull() ?: 0
-            }
-        }
-        return contentLength
     }
 }
