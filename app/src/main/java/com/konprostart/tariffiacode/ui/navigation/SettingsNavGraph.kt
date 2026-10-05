@@ -107,6 +107,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onOpenLocalRuntime = { navController.navigate(LOCAL_RUNTIME_MANAGEMENT_ROUTE) },
             onOpenGuestBrowser = { navController.navigate(ROUTE_GUEST_BROWSER) },
             onOpenRemoteConnection = { navController.navigate(ROUTE_REMOTE_CONNECTION) },
+            onOpenSshSettings = { navController.navigate(ROUTE_SETTINGS_SSH) },
             onOpenWorkspaces = { navController.navigate(ROUTE_WORKSPACES) },
             onOpenDiagnostics = onShowDiagnostics,
             onOpenSupport = { showSupportSheet = true },
@@ -495,6 +496,43 @@ fun NavGraphBuilder.settingsNavGraph(
                 }
             },
             onBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(ROUTE_SETTINGS_SSH) {
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        val sshViewModel: com.konprostart.tariffiacode.feature.ssh.SshSettingsViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel(
+                key = "settings-ssh",
+                factory =
+                    com.konprostart.tariffiacode.ui.ViewModelFactory {
+                        val profileStore = com.konprostart.tariffiacode.data.ssh.SshProfileStore(app.settings)
+                        val credentialStore = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings)
+                        com.konprostart.tariffiacode.feature.ssh.SshSettingsViewModel(
+                            profiles = profileStore,
+                            credentials = credentialStore,
+                            connections =
+                                com.konprostart.tariffiacode.feature.ssh.SshConnectionManager(
+                                    client = com.konprostart.tariffiacode.core.ssh.MinaSshClient(),
+                                    credentials = credentialStore,
+                                ),
+                        )
+                    },
+            )
+        val sshState by sshViewModel.state.collectAsState()
+        com.konprostart.tariffiacode.feature.ssh.SshSettingsScreen(
+            state = sshState,
+            onBack = { navController.popBackStack() },
+            onAddProfile = sshViewModel::newProfile,
+            onEditProfile = sshViewModel::editProfile,
+            onDeleteProfile = sshViewModel::deleteProfile,
+            onFormChange = sshViewModel::updateForm,
+            onSaveProfile = sshViewModel::saveProfile,
+            onDismissEditor = sshViewModel::dismissEditor,
+            onConnect = sshViewModel::connect,
+            onDisconnect = sshViewModel::closeConnection,
+            onTrustHostKey = sshViewModel::trustPendingHostKey,
+            onDismissHostKey = sshViewModel::dismissPendingHostKey,
         )
     }
 

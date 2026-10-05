@@ -337,6 +337,40 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
                 .apply()
         }
 
+    /** Non-secret SSH connection profiles, JSON-encoded. Secrets live in [sshCredentials]. */
+    var sshProfiles: List<com.konprostart.tariffiacode.data.ssh.SshProfile>
+        get() =
+            com.konprostart.tariffiacode.data.ssh.SshProfileCodec.decode(
+                preferences.getString(KEY_SSH_PROFILES, null).orEmpty(),
+            )
+        set(value) {
+            preferences.edit()
+                .putString(
+                    KEY_SSH_PROFILES,
+                    com.konprostart.tariffiacode.data.ssh.SshProfileCodec.encode(value),
+                )
+                .apply()
+        }
+
+    /**
+     * SSH secrets keyed by the profile's credential reference, each a JSON-encoded
+     * [com.konprostart.tariffiacode.data.ssh.SshCredential]. Encrypted with the same MasterKey as
+     * every other stored secret; never written to plaintext.
+     */
+    var sshCredentials: Map<String, String>
+        get() =
+            com.konprostart.tariffiacode.runtime.local.LocalProviderCredentialStore.decodeMap(
+                preferences.getString(KEY_SSH_CREDENTIALS, null),
+            )
+        set(value) {
+            preferences.edit()
+                .putString(
+                    KEY_SSH_CREDENTIALS,
+                    com.konprostart.tariffiacode.runtime.local.LocalProviderCredentialStore.encodeMap(value),
+                )
+                .apply()
+        }
+
     var githubToken: String?
         get() = preferences.getString(KEY_GITHUB_TOKEN, null)
         set(value) = preferences.edit().putString(KEY_GITHUB_TOKEN, value).apply()
@@ -576,6 +610,8 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
         private const val KEY_HIDDEN_WORKSPACE_PATHS = "hidden_workspace_paths"
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
         private const val KEY_UNREAD_SESSIONS = "unread_sessions"
+        private const val KEY_SSH_PROFILES = "ssh_profiles"
+        private const val KEY_SSH_CREDENTIALS = "ssh_credentials"
         private const val KEY_GITHUB_TOKEN = "github_token"
         private const val KEY_GITHUB_LOGIN = "github_login"
         private const val KEY_GITHUB_STAR_PROMPT_SHOWN = "github_star_prompt_shown"
