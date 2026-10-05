@@ -575,6 +575,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onDisconnect = remoteProjectViewModel::disconnect,
             onReconnect = remoteProjectViewModel::reconnect,
             onOpenTerminal = { navController.navigate(ROUTE_REMOTE_TERMINAL) },
+            onOpenGit = { navController.navigate(ROUTE_REMOTE_GIT) },
             onFormChange = remoteProjectViewModel::updateForm,
             onSave = remoteProjectViewModel::saveProject,
             onDismissEditor = remoteProjectViewModel::dismissEditor,
@@ -603,6 +604,29 @@ fun NavGraphBuilder.settingsNavGraph(
             onConnect = terminalViewModel::connect,
             onDisconnect = terminalViewModel::disconnect,
             onSend = terminalViewModel::sendLine,
+        )
+    }
+
+    composable(ROUTE_REMOTE_GIT) {
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        val gitViewModel: com.konprostart.tariffiacode.feature.git.RemoteGitViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel(
+                key = "remote-git",
+                factory =
+                    com.konprostart.tariffiacode.ui.ViewModelFactory {
+                        com.konprostart.tariffiacode.feature.git.RemoteGitViewModel(
+                            backend = app.vpsRuntimeTarget,
+                            // Read-only git for the remote project mapped onto the VPS runtime.
+                            directoryProvider = { app.vpsRuntimeTarget.selectedRemoteProject.value?.remotePath },
+                        )
+                    },
+            )
+        val gitState by gitViewModel.state.collectAsState()
+        androidx.compose.runtime.LaunchedEffect(Unit) { gitViewModel.refresh() }
+        com.konprostart.tariffiacode.feature.git.RemoteGitScreen(
+            state = gitState,
+            onBack = { navController.popBackStack() },
+            onRefresh = gitViewModel::refresh,
         )
     }
 
