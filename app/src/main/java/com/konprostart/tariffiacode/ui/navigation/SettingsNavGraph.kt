@@ -1,6 +1,8 @@
 package com.konprostart.tariffiacode.ui.navigation
 
 import android.content.Context
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,6 +30,7 @@ import com.konprostart.tariffiacode.feature.settings.ModelVisibilityScreen
 import com.konprostart.tariffiacode.feature.settings.OpenCodeAgentSettingsScreen
 import com.konprostart.tariffiacode.feature.settings.OpenCodeAgentSettingsViewModel
 import com.konprostart.tariffiacode.feature.settings.ProviderSettingsScreen
+import com.konprostart.tariffiacode.feature.settings.SettingsRow
 import com.konprostart.tariffiacode.feature.settings.SettingsScreenV2
 import com.konprostart.tariffiacode.feature.settings.SettingsViewModel
 import com.konprostart.tariffiacode.feature.settings.SystemPromptScreen
@@ -78,8 +81,30 @@ fun NavGraphBuilder.settingsNavGraph(
             onToggleLocalRuntimeIdleStop = appPreferences::setLocalRuntimeIdleStopEnabled,
             appVersion = appVersion,
             appUpdateContent = {
-                AppUpdateSectionCard(installedVersion = appVersion)
+                AppUpdateSectionCard(
+                    installedVersion = appVersion,
+                    // Debug builds track the dedicated `debug-latest` channel so they never offer a
+                    // production APK; release keeps the production feed unchanged.
+                    channel =
+                        if (com.konprostart.tariffiacode.BuildConfig.DEBUG) {
+                            com.konprostart.tariffiacode.feature.update.AppUpdateChannel.Debug
+                        } else {
+                            com.konprostart.tariffiacode.feature.update.AppUpdateChannel.Release
+                        },
+                )
             },
+            devToolsContent =
+                if (com.konprostart.tariffiacode.BuildConfig.DEBUG) {
+                    {
+                        SettingsRow(
+                            icon = Icons.Default.Build,
+                            title = "UI Catalog (debug)",
+                            onClick = { navController.navigate(ROUTE_DEV_UI_PREVIEW) },
+                        )
+                    }
+                } else {
+                    null
+                },
             onOpenDrawer = onOpenDrawer,
             onOpenAssistantSettings = onOpenAssistantSettings,
             onOpenVoiceSettings = { navController.navigate(ROUTE_SETTINGS_VOICE) },
@@ -89,6 +114,8 @@ fun NavGraphBuilder.settingsNavGraph(
             onOpenLocalRuntime = { navController.navigate(LOCAL_RUNTIME_MANAGEMENT_ROUTE) },
             onOpenGuestBrowser = { navController.navigate(ROUTE_GUEST_BROWSER) },
             onOpenRemoteConnection = { navController.navigate(ROUTE_REMOTE_CONNECTION) },
+            onOpenSshSettings = { navController.navigate(ROUTE_SETTINGS_SSH) },
+            onOpenRemoteProjects = { navController.navigate(ROUTE_SETTINGS_REMOTE_PROJECTS) },
             onOpenWorkspaces = { navController.navigate(ROUTE_WORKSPACES) },
             onOpenDiagnostics = onShowDiagnostics,
             onOpenSupport = { showSupportSheet = true },
@@ -477,6 +504,184 @@ fun NavGraphBuilder.settingsNavGraph(
                 }
             },
             onBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(ROUTE_SETTINGS_SSH) {
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        val sshViewModel: com.konprostart.tariffiacode.feature.ssh.SshSettingsViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel(
+                key = "settings-ssh",
+                factory =
+                    com.konprostart.tariffiacode.ui.ViewModelFactory {
+                        val profileStore = com.konprostart.tariffiacode.data.ssh.SshProfileStore(app.settings)
+                        val credentialStore = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings)
+                        com.konprostart.tariffiacode.feature.ssh.SshSettingsViewModel(
+                            profiles = profileStore,
+                            credentials = credentialStore,
+                            connections =
+                                com.konprostart.tariffiacode.feature.ssh.SshConnectionManager(
+                                    client = com.konprostart.tariffiacode.core.ssh.MinaSshClient(),
+                                    credentials = credentialStore,
+                                ),
+                        )
+                    },
+            )
+        val sshState by sshViewModel.state.collectAsState()
+        com.konprostart.tariffiacode.feature.ssh.SshSettingsScreen(
+            state = sshState,
+            onBack = { navController.popBackStack() },
+            onAddProfile = sshViewModel::newProfile,
+            onEditProfile = sshViewModel::editProfile,
+            onDeleteProfile = sshViewModel::deleteProfile,
+            onFormChange = sshViewModel::updateForm,
+            onSaveProfile = sshViewModel::saveProfile,
+            onDismissEditor = sshViewModel::dismissEditor,
+            onConnect = sshViewModel::connect,
+            onDisconnect = sshViewModel::closeConnection,
+            onTrustHostKey = sshViewModel::trustPendingHostKey,
+            onDismissHostKey = sshViewModel::dismissPendingHostKey,
+        )
+    }
+
+    composable(ROUTE_SETTINGS_REMOTE_PROJECTS) {
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        val remoteProjectViewModel: com.konprostart.tariffiacode.feature.remote.RemoteProjectViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel(
+                key = "settings-remote-projects",
+                factory =
+                    com.konprostart.tariffiacode.ui.ViewModelFactory {
+                        val sshProfiles = com.konprostart.tariffiacode.data.ssh.SshProfileStore(app.settings)
+                        com.konprostart.tariffiacode.feature.remote.RemoteProjectViewModel(
+                            store =
+                                com.konprostart.tariffiacode.data.remote.RemoteProjectStore(
+                                    app.settings,
+                                    sshProfiles,
+                                ),
+                            sshProfiles = sshProfiles,
+                            // The single VPS runtime drives the connection lifecycle for the applied mapping.
+                            controller = app.vpsRuntimeTarget,
+                            // Applying a mapping points the VPS runtime at the mapping's SSH profile and
+                            // remote path; the existing OpenCode experience then uses that directory.
+                            onApply = { project, profile ->
+                                app.vpsRuntimeTarget.selectProfile(profile)
+                                app.vpsRuntimeTarget.selectRemoteProject(project)
+                            },
+                        )
+                    },
+            )
+        val remoteProjectState by remoteProjectViewModel.state.collectAsState()
+        com.konprostart.tariffiacode.feature.remote.RemoteProjectScreen(
+            state = remoteProjectState,
+            onBack = { navController.popBackStack() },
+            onAdd = remoteProjectViewModel::newProject,
+            onEdit = remoteProjectViewModel::editProject,
+            onDelete = remoteProjectViewModel::deleteProject,
+            onApply = remoteProjectViewModel::apply,
+            onConnect = remoteProjectViewModel::connect,
+            onDisconnect = remoteProjectViewModel::disconnect,
+            onReconnect = remoteProjectViewModel::reconnect,
+            onOpenTerminal = { navController.navigate(ROUTE_REMOTE_TERMINAL) },
+            onOpenGit = { navController.navigate(ROUTE_REMOTE_GIT) },
+            onOpenClone = { navController.navigate(ROUTE_REMOTE_GIT_CLONE) },
+            onFormChange = remoteProjectViewModel::updateForm,
+            onSave = remoteProjectViewModel::saveProject,
+            onDismissEditor = remoteProjectViewModel::dismissEditor,
+        )
+    }
+
+    composable(ROUTE_REMOTE_TERMINAL) {
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        val terminalViewModel: com.konprostart.tariffiacode.feature.terminal.RemoteTerminalViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel(
+                key = "remote-terminal",
+                factory =
+                    com.konprostart.tariffiacode.ui.ViewModelFactory {
+                        com.konprostart.tariffiacode.feature.terminal.RemoteTerminalViewModel(
+                            shellClient = com.konprostart.tariffiacode.core.ssh.MinaSshShellClient(),
+                            credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
+                            // The terminal opens against whichever SSH connection the VPS runtime is set to.
+                            profileProvider = { app.vpsRuntimeTarget.selectedProfile.value },
+                        )
+                    },
+            )
+        val terminalState by terminalViewModel.state.collectAsState()
+        com.konprostart.tariffiacode.feature.terminal.RemoteTerminalScreen(
+            state = terminalState,
+            onBack = { navController.popBackStack() },
+            onConnect = terminalViewModel::connect,
+            onDisconnect = terminalViewModel::disconnect,
+            onSend = terminalViewModel::sendLine,
+        )
+    }
+
+    composable(ROUTE_REMOTE_GIT) {
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        val gitViewModel: com.konprostart.tariffiacode.feature.git.RemoteGitViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel(
+                key = "remote-git",
+                factory =
+                    com.konprostart.tariffiacode.ui.ViewModelFactory {
+                        com.konprostart.tariffiacode.feature.git.RemoteGitViewModel(
+                            backend = app.vpsRuntimeTarget,
+                            // Read-only git for the remote project mapped onto the VPS runtime.
+                            directoryProvider = { app.vpsRuntimeTarget.selectedRemoteProject.value?.remotePath },
+                            // Pull runs `git pull` on the VPS over the existing SSH shell executor.
+                            puller =
+                                com.konprostart.tariffiacode.feature.git.RemoteGitPuller(
+                                    com.konprostart.tariffiacode.feature.git.SshShellCommandExecutor(
+                                        shellClient = com.konprostart.tariffiacode.core.ssh.MinaSshShellClient(),
+                                        credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
+                                    ),
+                                ),
+                            pusher =
+                                com.konprostart.tariffiacode.feature.git.RemoteGitPusher(
+                                    com.konprostart.tariffiacode.feature.git.SshShellCommandExecutor(
+                                        shellClient = com.konprostart.tariffiacode.core.ssh.MinaSshShellClient(),
+                                        credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
+                                    ),
+                                ),
+                            profileProvider = { app.vpsRuntimeTarget.selectedProfile.value },
+                        )
+                    },
+            )
+        val gitState by gitViewModel.state.collectAsState()
+        androidx.compose.runtime.LaunchedEffect(Unit) { gitViewModel.refresh() }
+        com.konprostart.tariffiacode.feature.git.RemoteGitScreen(
+            state = gitState,
+            onBack = { navController.popBackStack() },
+            onRefresh = gitViewModel::refresh,
+            onPull = gitViewModel::pull,
+            onPush = gitViewModel::push,
+        )
+    }
+
+    composable(ROUTE_REMOTE_GIT_CLONE) {
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        val cloneViewModel: com.konprostart.tariffiacode.feature.git.RemoteGitCloneViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel(
+                key = "remote-git-clone",
+                factory =
+                    com.konprostart.tariffiacode.ui.ViewModelFactory {
+                        com.konprostart.tariffiacode.feature.git.RemoteGitCloneViewModel(
+                            cloner =
+                                com.konprostart.tariffiacode.feature.git.RemoteGitCloner(
+                                    com.konprostart.tariffiacode.feature.git.SshShellCommandExecutor(
+                                        shellClient = com.konprostart.tariffiacode.core.ssh.MinaSshShellClient(),
+                                        credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
+                                    ),
+                                ),
+                            profileProvider = { app.vpsRuntimeTarget.selectedProfile.value },
+                        )
+                    },
+            )
+        val cloneState by cloneViewModel.state.collectAsState()
+        com.konprostart.tariffiacode.feature.git.RemoteGitCloneScreen(
+            state = cloneState,
+            onBack = { navController.popBackStack() },
+            onUrlChange = cloneViewModel::updateUrl,
+            onPathChange = cloneViewModel::updatePath,
+            onClone = cloneViewModel::clone,
         )
     }
 

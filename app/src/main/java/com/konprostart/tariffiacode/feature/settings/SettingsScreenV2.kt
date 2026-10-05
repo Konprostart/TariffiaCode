@@ -75,6 +75,8 @@ fun SettingsScreenV2(
     appVersion: String,
     /** Optional in-app TariffiaCode APK update card, rendered in the App settings section. */
     appUpdateContent: (@Composable () -> Unit)? = null,
+    /** Optional debug-only developer entry (e.g. the on-device UI catalog). Null in release. */
+    devToolsContent: (@Composable () -> Unit)? = null,
     onOpenDrawer: () -> Unit,
     onOpenAssistantSettings: () -> Unit,
     onOpenVoiceSettings: () -> Unit,
@@ -84,6 +86,8 @@ fun SettingsScreenV2(
     onOpenLocalRuntime: () -> Unit,
     onOpenGuestBrowser: () -> Unit = {},
     onOpenRemoteConnection: () -> Unit,
+    onOpenSshSettings: () -> Unit = {},
+    onOpenRemoteProjects: () -> Unit = {},
     onOpenWorkspaces: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenSupport: () -> Unit = {},
@@ -331,6 +335,18 @@ fun SettingsScreenV2(
                 )
                 SettingsDivider()
                 SettingsRow(
+                    icon = Icons.Default.Terminal,
+                    title = stringResource(R.string.settings_ssh_row),
+                    onClick = onOpenSshSettings,
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Folder,
+                    title = stringResource(R.string.settings_remote_project_row),
+                    onClick = onOpenRemoteProjects,
+                )
+                SettingsDivider()
+                SettingsRow(
                     icon = Icons.Default.Folder,
                     title = stringResource(R.string.settings_workspace_row),
                     onClick = onOpenWorkspaces,
@@ -339,6 +355,10 @@ fun SettingsScreenV2(
 
             SettingsSection(title = stringResource(R.string.section_app_settings)) {
                 appUpdateContent?.let { content ->
+                    content()
+                    SettingsDivider()
+                }
+                devToolsContent?.let { content ->
                     content()
                     SettingsDivider()
                 }

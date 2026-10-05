@@ -38,6 +38,7 @@ import java.io.File
 @Composable
 fun AppUpdateSectionCard(
     installedVersion: String,
+    channel: AppUpdateChannel = AppUpdateChannel.Release,
     context: Context = LocalContext.current,
     viewModel: AppUpdateViewModel =
         viewModel(
@@ -46,6 +47,7 @@ fun AppUpdateSectionCard(
                     installedVersion = installedVersion,
                     installer = AndroidAppUpdateInstaller(context.applicationContext),
                     apkFileProvider = { File(context.applicationContext.cacheDir, "updates/tariffiacode-update.apk") },
+                    channel = channel,
                 ),
         ),
 ) {

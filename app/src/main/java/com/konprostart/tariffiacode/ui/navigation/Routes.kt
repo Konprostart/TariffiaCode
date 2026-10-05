@@ -15,6 +15,11 @@ const val ROUTE_SETTINGS_AGENT_CLAUDE = "settings-agent-claude"
 const val ROUTE_SETTINGS_AGENT_ANTIGRAVITY = "settings-agent-antigravity"
 const val ROUTE_SETTINGS_AGENT_CODEX = "settings-agent-codex"
 const val ROUTE_SETTINGS_GITHUB = "settings-github"
+const val ROUTE_SETTINGS_SSH = "settings-ssh"
+const val ROUTE_SETTINGS_REMOTE_PROJECTS = "settings-remote-projects"
+const val ROUTE_REMOTE_TERMINAL = "remote-terminal"
+const val ROUTE_REMOTE_GIT = "remote-git"
+const val ROUTE_REMOTE_GIT_CLONE = "remote-git-clone"
 const val ROUTE_SETTINGS_MCP = "settings-mcp"
 const val ROUTE_SETTINGS_MCP_CLAUDE = "settings-mcp-claude"
 const val ROUTE_SETTINGS_MCP_ANTIGRAVITY = "settings-mcp-antigravity"
@@ -68,5 +73,11 @@ fun decodeRouteArg(value: String): String = String(Base64.getUrlDecoder().decode
 
 private fun encodeRouteArg(value: String): String =
     Base64.getUrlEncoder().withoutPadding().encodeToString(value.toByteArray(Charsets.UTF_8))
+
+/**
+ * Debug-only UI catalog. Never registered or reachable in a release build (see TariffiaCodeApp's
+ * NavHost, where the destination is added only under BuildConfig.DEBUG).
+ */
+const val ROUTE_DEV_UI_PREVIEW = "dev-ui-preview"
 
 val DRAWER_ROOT_ROUTES = setOf(ROUTE_CHAT, ROUTE_SETTINGS, ROUTE_SCHEDULES)

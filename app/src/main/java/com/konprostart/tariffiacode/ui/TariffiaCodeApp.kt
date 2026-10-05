@@ -105,6 +105,7 @@ import com.konprostart.tariffiacode.ui.navigation.ClaudeSettingsActions
 import com.konprostart.tariffiacode.ui.navigation.DRAWER_ROOT_ROUTES
 import com.konprostart.tariffiacode.ui.navigation.ROUTE_ANDROID_SETUP
 import com.konprostart.tariffiacode.ui.navigation.ROUTE_CHAT
+import com.konprostart.tariffiacode.ui.navigation.ROUTE_DEV_UI_PREVIEW
 import com.konprostart.tariffiacode.ui.navigation.ROUTE_ONBOARDING
 import com.konprostart.tariffiacode.ui.navigation.ROUTE_REMOTE_CONNECTION
 import com.konprostart.tariffiacode.ui.navigation.ROUTE_SCHEDULES
@@ -1295,6 +1296,17 @@ fun TariffiaCodeApp(
                             // only takes effect once they are re-armed.
                             onExactAlarmsGranted = app.scheduleManager::rescheduleAll,
                         )
+                    }
+
+                    // Debug-only on-device UI catalog. Never registered in release: the route is
+                    // added to the graph only when BuildConfig.DEBUG is true, so a release build has
+                    // no such destination and cannot navigate to it.
+                    if (BuildConfig.DEBUG) {
+                        composable(ROUTE_DEV_UI_PREVIEW) {
+                            com.konprostart.tariffiacode.ui.dev.DevUiCatalogScreen(
+                                onBack = { navController.popBackStack() },
+                            )
+                        }
                     }
 
                     composable(

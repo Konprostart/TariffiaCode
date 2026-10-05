@@ -84,13 +84,14 @@ class AppUpdateViewModel(
     }
 
     companion object {
-        /** Factory so the installed version and Android collaborators can be passed without a DI graph. */
+        /** Factory so the installed version, update channel and Android collaborators need no DI graph. */
         fun factory(
             installedVersion: String,
             installer: AppUpdateInstaller,
             apkFileProvider: () -> File,
+            channel: AppUpdateChannel = AppUpdateChannel.Release,
             downloader: AppUpdateApkDownloader = OkHttpAppUpdateApkDownloader(),
-            client: AppUpdateReleaseClient = AppUpdateReleaseClient(),
+            client: AppUpdateReleaseClient = AppUpdateReleaseClient(channel),
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

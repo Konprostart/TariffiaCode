@@ -93,6 +93,49 @@ val hasReleaseSigning =
             resolved.isFile
         }
 
+// Dedicated, STABLE debug signing key so repeated debug APKs share one identity and can update each
+// other in place. Supplied only in CI; local debug builds fall back to AGP's default debug keystore.
+val debugStoreFile =
+    (
+        System.getenv("DEBUG_KEYSTORE_FILE")
+            ?: findProperty("DEBUG_KEYSTORE_FILE")?.toString()
+    )
+        ?.takeIf { it.isNotBlank() }
+val debugStorePassword =
+    (
+        System.getenv("DEBUG_KEYSTORE_PASSWORD")
+            ?: findProperty("DEBUG_KEYSTORE_PASSWORD")?.toString()
+    )
+        ?.takeIf { it.isNotBlank() }
+val debugKeyAlias =
+    (
+        System.getenv("DEBUG_KEY_ALIAS")
+            ?: findProperty("DEBUG_KEY_ALIAS")?.toString()
+    )
+        ?.takeIf { it.isNotBlank() }
+val debugKeyPassword =
+    (
+        System.getenv("DEBUG_KEY_PASSWORD")
+            ?: findProperty("DEBUG_KEY_PASSWORD")?.toString()
+    )
+        ?.takeIf { it.isNotBlank() }
+val hasDebugSigning =
+    listOf(
+        debugStoreFile,
+        debugStorePassword,
+        debugKeyAlias,
+        debugKeyPassword,
+    ).all { !it.isNullOrBlank() } &&
+        debugStoreFile!!.let { path ->
+            val resolved =
+                if (File(path).isAbsolute) {
+                    File(path)
+                } else {
+                    File(rootProject.projectDir, path)
+                }
+            resolved.isFile
+        }
+
 android {
     namespace = "com.konprostart.tariffiacode"
     compileSdk = 35
@@ -107,8 +150,8 @@ android {
         applicationId = "com.konprostart.tariffiacode"
         minSdk = 26
         targetSdk = 35
-        versionCode = 66
-        versionName = "1.2.27"
+        versionCode = 68
+        versionName = "1.2.29"
         buildConfigField("String", "GITHUB_CLIENT_ID", "\"$githubClientId\"")
 
         // The on-device runtime (see ANDROID_ABIS in scripts/prepare_android_runtime_native_libs.py)
@@ -161,6 +204,28 @@ android {
         }
     }
 
+    // Stable debug signing config, only when the CI-provided debug keystore is present. When absent
+    // (normal local development) the debug build type keeps AGP's default debug signing.
+    if (hasDebugSigning) {
+        signingConfigs {
+            create("debugStable") {
+                val storeFilePath = debugStoreFile!!
+                storeFile =
+                    if (File(storeFilePath).isAbsolute) {
+                        File(storeFilePath)
+                    } else {
+                        File(rootProject.projectDir, storeFilePath)
+                    }
+                storePassword = debugStorePassword
+                keyAlias = debugKeyAlias
+                keyPassword = debugKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -171,6 +236,16 @@ android {
             )
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
+            }
+        }
+        // Debug-only package name, so a debug build can be installed alongside the release app
+        // instead of replacing it. Release and F-Droid keep the production applicationId.
+        debug {
+            applicationIdSuffix = ".debug"
+            // Use the stable CI debug key when provided so repeated debug APKs share one signing
+            // identity; otherwise keep AGP's default debug signing for local development.
+            if (hasDebugSigning) {
+                signingConfig = signingConfigs.getByName("debugStable")
             }
         }
     }
@@ -210,6 +285,9 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/DEPENDENCIES"
+            excludes += "/META-INF/{LICENSE,LICENSE.txt,NOTICE,NOTICE.txt}"
+            excludes += "/META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
         jniLibs {
             useLegacyPackaging = true
@@ -256,6 +334,12 @@ dependencies {
 
     // QR code scanning for connection setup
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+
+    // Pure-JVM SSH client (Apache MINA SSHD) for the on-device SSH foundation. Kept isolated behind
+    // core/ssh; BouncyCastle supplies the modern cipher/key algorithms MINA expects.
+    implementation("org.apache.sshd:sshd-core:2.18.0")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.80")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.80")
 
     // Encrypted SharedPreferences
     implementation("androidx.security:security-crypto:1.1.0-alpha06")

@@ -18,6 +18,7 @@ import com.konprostart.tariffiacode.core.locale.AppLanguage
 import com.konprostart.tariffiacode.core.notification.RuntimeNotificationHelper
 import com.konprostart.tariffiacode.core.runtime.RuntimeWorkTracker
 import com.konprostart.tariffiacode.core.security.SecretRedaction
+import com.konprostart.tariffiacode.core.ssh.MinaSshPortForwarder
 import com.konprostart.tariffiacode.core.storage.DeviceStorage
 import com.konprostart.tariffiacode.core.storage.DeviceStorageAccess
 import com.konprostart.tariffiacode.core.util.debounceFalseEdge
@@ -31,6 +32,7 @@ import com.konprostart.tariffiacode.data.repository.RuntimeCatalogRepository
 import com.konprostart.tariffiacode.data.repository.SessionAutoArchiver
 import com.konprostart.tariffiacode.data.schedule.ScheduleRepository
 import com.konprostart.tariffiacode.data.settings.AppPreferencesRepository
+import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.di.appModule
 import com.konprostart.tariffiacode.di.viewModelModule
 import com.konprostart.tariffiacode.feature.schedule.AppScheduleStore
@@ -77,6 +79,8 @@ import com.konprostart.tariffiacode.runtime.local.LocalRuntimeUpdater
 import com.konprostart.tariffiacode.runtime.local.SystemPromptStore
 import com.konprostart.tariffiacode.runtime.local.VerifiedRuntimeDownloader
 import com.konprostart.tariffiacode.runtime.local.applyOpenCodeSystemPrompt
+import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeConnector
+import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeTarget
 import com.konprostart.tariffiacode.startup.CatalogReconcileInitializer
 import com.konprostart.tariffiacode.startup.RuntimeAutoStartInitializer
 import com.konprostart.tariffiacode.startup.RuntimeAutoStartTrigger
@@ -148,6 +152,14 @@ class TariffiaCodeApplication : Application() {
         private set
 
     lateinit var runtimeRegistry: RuntimeRegistry
+        private set
+
+    /**
+     * The single "OpenCode VPS" runtime. It reaches an already-installed OpenCode server on a VPS over
+     * SSH (local port forward) once a stored SSH profile is selected for it. Left with no profile it
+     * reports itself unavailable rather than failing, so it never disturbs existing runtimes.
+     */
+    lateinit var vpsRuntimeTarget: VpsRuntimeTarget
         private set
 
     lateinit var catalogRepository: RuntimeCatalogRepository
@@ -458,11 +470,15 @@ class TariffiaCodeApplication : Application() {
         // debugging that state is re-established every 30 seconds and would hold the lock forever;
         // it instead blocks the idle auto-stop directly, in LocalRuntimeService.checkIdleStop.
         adbConnectionManager.startAutoReconnect(applicationScope)
+        // An SSH-reached OpenCode on a VPS is just another remote runtime: the same OpenCode experience
+        // runs through RemoteOpenCodeBackend, only the endpoint is a loopback forward instead of a URL
+        // the user typed. Selecting an SSH profile for it is a later step; with none it stays unavailable.
+        vpsRuntimeTarget = VpsRuntimeTarget(VpsRuntimeConnector(MinaSshPortForwarder(), SshCredentialStore(settings)))
         runtimeRegistry =
             RuntimeRegistry(
                 store = settings,
                 localTarget = LocalRuntimeTarget(localRuntimeManager, messages = runtimeMessages),
-                additionalTargets = listOf(claudeCodeTarget, antigravityTarget, codexTarget),
+                additionalTargets = listOf(claudeCodeTarget, antigravityTarget, codexTarget, vpsRuntimeTarget),
             )
         // Surface the installed/version state to the workspace picker without waiting for the
         // first chat to touch Antigravity.
