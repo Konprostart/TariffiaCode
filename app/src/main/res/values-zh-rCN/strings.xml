@@ -1257,4 +1257,6 @@
     <string name="remote_git_clone_success">Clone finished.</string>
     <string name="remote_git_pull">Pull</string>
     <string name="remote_git_pull_success">Pulled.</string>
+    <string name="remote_git_push">Push</string>
+    <string name="remote_git_push_success">Pushed.</string>
 </resources>

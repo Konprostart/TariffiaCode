@@ -627,6 +627,13 @@ fun NavGraphBuilder.settingsNavGraph(
                                         credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
                                     ),
                                 ),
+                            pusher =
+                                com.konprostart.tariffiacode.feature.git.RemoteGitPusher(
+                                    com.konprostart.tariffiacode.feature.git.SshShellCommandExecutor(
+                                        shellClient = com.konprostart.tariffiacode.core.ssh.MinaSshShellClient(),
+                                        credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
+                                    ),
+                                ),
                             profileProvider = { app.vpsRuntimeTarget.selectedProfile.value },
                         )
                     },
@@ -638,6 +645,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onBack = { navController.popBackStack() },
             onRefresh = gitViewModel::refresh,
             onPull = gitViewModel::pull,
+            onPush = gitViewModel::push,
         )
     }
 
