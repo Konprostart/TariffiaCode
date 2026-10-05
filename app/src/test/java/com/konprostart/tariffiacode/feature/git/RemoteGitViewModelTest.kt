@@ -100,10 +100,23 @@ class RemoteGitViewModelTest {
         }
     }
 
+    private object NoopExecutor : RemoteGitCommandExecutor {
+        override suspend fun execute(
+            profile: com.konprostart.tariffiacode.data.ssh.SshProfile,
+            script: String,
+            timeoutMillis: Long,
+        ): RemoteCommandOutcome = RemoteCommandOutcome.Failed("not used")
+    }
+
     private fun viewModel(
         backend: OpenCodeBackend,
         directory: String?,
-    ) = RemoteGitViewModel(backend) { directory }
+    ) = RemoteGitViewModel(
+        backend = backend,
+        directoryProvider = { directory },
+        puller = RemoteGitPuller(NoopExecutor),
+        profileProvider = { null },
+    )
 
     @Test
     fun `refresh uses the mapped remote path for git status and diff`() =

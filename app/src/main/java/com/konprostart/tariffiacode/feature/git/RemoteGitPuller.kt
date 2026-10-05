@@ -61,8 +61,9 @@ class RemoteGitPuller(
     }
 
     private fun parse(output: String): RemoteGitPullResult {
-        val match = Regex(Regex.escape(SshShellCommandExecutor.EXIT_MARKER) + "(\\d+)").find(output)
-            ?: return RemoteGitPullResult.Failed("No result from the VPS", output)
+        val match =
+            Regex(Regex.escape(SshShellCommandExecutor.EXIT_MARKER) + "(\\d+)").find(output)
+                ?: return RemoteGitPullResult.Failed("No result from the VPS", output)
         val exit = match.groupValues[1].toInt()
         return if (exit == 0) {
             RemoteGitPullResult.Success(output.substringBefore(match.value).trim())
