@@ -552,8 +552,10 @@ fun NavGraphBuilder.settingsNavGraph(
                                     sshProfiles,
                                 ),
                             sshProfiles = sshProfiles,
-                            // Applying a mapping points the single VPS runtime at the mapping's SSH profile
-                            // and remote path; the existing OpenCode experience then uses that directory.
+                            // The single VPS runtime drives the connection lifecycle for the applied mapping.
+                            controller = app.vpsRuntimeTarget,
+                            // Applying a mapping points the VPS runtime at the mapping's SSH profile and
+                            // remote path; the existing OpenCode experience then uses that directory.
                             onApply = { project, profile ->
                                 app.vpsRuntimeTarget.selectProfile(profile)
                                 app.vpsRuntimeTarget.selectRemoteProject(project)
@@ -569,6 +571,9 @@ fun NavGraphBuilder.settingsNavGraph(
             onEdit = remoteProjectViewModel::editProject,
             onDelete = remoteProjectViewModel::deleteProject,
             onApply = remoteProjectViewModel::apply,
+            onConnect = remoteProjectViewModel::connect,
+            onDisconnect = remoteProjectViewModel::disconnect,
+            onReconnect = remoteProjectViewModel::reconnect,
             onFormChange = remoteProjectViewModel::updateForm,
             onSave = remoteProjectViewModel::saveProject,
             onDismissEditor = remoteProjectViewModel::dismissEditor,
