@@ -1241,4 +1241,9 @@
     <string name="remote_project_dangling">The SSH connection for this mapping no longer exists.</string>
     <string name="remote_project_delete">Delete remote project</string>
     <string name="remote_project_delete_confirm">Delete "%1$s"?</string>
+    <string name="remote_project_connection">VPS connection</string>
+    <string name="remote_project_reconnect">Reconnect</string>
+    <string name="remote_project_disconnected">Disconnected</string>
+    <string name="remote_project_failed">Failed</string>
+    <string name="remote_project_unavailable">Unavailable</string>
 </resources>

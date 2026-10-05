@@ -60,7 +60,8 @@ class VpsRuntimeTarget(
     private val remoteHost: String = VpsRuntimeConnector.DEFAULT_REMOTE_HOST,
     private val remotePort: Int = VpsRuntimeConnector.DEFAULT_REMOTE_PORT,
     override val id: String = DEFAULT_ID,
-) : RuntimeTarget {
+) : RuntimeTarget,
+    VpsConnectionController {
     override val displayName: String = "OpenCode VPS"
     override val type: RuntimeType = RuntimeType.REMOTE
     override val kind: BackendKind = BackendKind.REMOTE
@@ -98,7 +99,7 @@ class VpsRuntimeTarget(
     private var forward: SshPortForward? = null
 
     /** True while the SSH forward backing this runtime is open. Exposed for tests/diagnostics. */
-    val isForwardOpen: Boolean
+    override val isForwardOpen: Boolean
         get() = forward?.isOpen == true
 
     /** Choose which stored SSH connection this target uses. Does not connect. */
@@ -146,7 +147,11 @@ class VpsRuntimeTarget(
                 forward = outcome.forward
                 backend = RemoteOpenCodeBackend(outcome.profile)
                 mutablePendingHostKey.value = null
-                healthResult()
+                val result = healthResult()
+                // A forward that came up but whose OpenCode is unhealthy is still a failed connection:
+                // release it so the target is left in a clean, non-connected state.
+                if (mutableState.value !is RuntimeState.Connected) closeResources()
+                result
             }
             is VpsConnectOutcome.NeedsHostKeyTrust -> {
                 mutablePendingHostKey.value = outcome.hostKey
@@ -173,10 +178,14 @@ class VpsRuntimeTarget(
         }
     }
 
+    /** Fresh connection: drop any existing forward/session, then connect again. */
+    override suspend fun reconnect(): Result<OpenCodeHealth> {
+        disconnect()
+        return connect()
+    }
+
     override fun disconnect() {
-        runCatching { forward?.close() }
-        forward = null
-        backend = null
+        closeResources()
         mutablePendingHostKey.value = null
         mutableState.value =
             if (mutableSelectedProfile.value == null) {
@@ -184,6 +193,13 @@ class VpsRuntimeTarget(
             } else {
                 RuntimeState.Disconnected
             }
+    }
+
+    /** Close the SSH forward/session and drop the backend. Safe to call repeatedly. Does not touch state. */
+    private fun closeResources() {
+        runCatching { forward?.close() }
+        forward = null
+        backend = null
     }
 
     override suspend fun listWorkspaces(): List<WorkspaceRef> {

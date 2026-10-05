@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.data.remote.RemoteProject
 import com.konprostart.tariffiacode.data.remote.RemoteProjectStore
+import com.konprostart.tariffiacode.runtime.RuntimeState
 
 /** Settings screen that lists Remote Project mappings and edits/applies them. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,6 +63,9 @@ fun RemoteProjectScreen(
     onEdit: (String) -> Unit,
     onDelete: (String) -> Unit,
     onApply: (String) -> Unit,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
+    onReconnect: () -> Unit,
     onFormChange: ((RemoteProjectForm) -> RemoteProjectForm) -> Unit,
     onSave: () -> Unit,
     onDismissEditor: () -> Unit,
@@ -104,6 +110,12 @@ fun RemoteProjectScreen(
                 text = stringResource(R.string.remote_project_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            VpsConnectionCard(
+                state = state.connectionState,
+                onConnect = onConnect,
+                onDisconnect = onDisconnect,
+                onReconnect = onReconnect,
             )
             if (state.projects.isEmpty()) {
                 Text(stringResource(R.string.remote_project_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -157,6 +169,69 @@ fun RemoteProjectScreen(
         )
     }
 }
+
+@Composable
+private fun VpsConnectionCard(
+    state: RuntimeState,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
+    onReconnect: () -> Unit,
+) {
+    val connecting = state is RuntimeState.Connecting
+    val connected = state is RuntimeState.Connected
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.remote_project_connection), fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = stateLabel(state),
+                    style = MaterialTheme.typography.labelMedium,
+                    color =
+                        if (state is RuntimeState.Failed) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                )
+            }
+            (state as? RuntimeState.Failed)?.let { failed ->
+                Text(failed.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+            (state as? RuntimeState.Unavailable)?.let { unavailable ->
+                Text(unavailable.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (connected) {
+                    OutlinedButton(onClick = onDisconnect) { Text(stringResource(R.string.ssh_disconnect)) }
+                    Button(onClick = onReconnect) { Text(stringResource(R.string.remote_project_reconnect)) }
+                } else {
+                    Button(onClick = onConnect, enabled = !connecting) {
+                        if (connecting) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(if (connecting) stringResource(R.string.ssh_connecting) else stringResource(R.string.ssh_connect))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun stateLabel(state: RuntimeState): String =
+    when (state) {
+        RuntimeState.Disconnected -> stringResource(R.string.remote_project_disconnected)
+        RuntimeState.Connecting -> stringResource(R.string.ssh_connecting)
+        is RuntimeState.Connected -> stringResource(R.string.ssh_connected)
+        is RuntimeState.Failed -> stringResource(R.string.remote_project_failed)
+        is RuntimeState.Unavailable -> stringResource(R.string.remote_project_unavailable)
+    }
 
 @Composable
 private fun RemoteProjectRow(
