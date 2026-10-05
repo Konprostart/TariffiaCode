@@ -200,7 +200,7 @@ private fun SshCredentialFields(
 }
 
 @Composable
-private fun HostKeyDialog(
+internal fun HostKeyDialog(
     pending: PendingHostKey,
     onTrust: () -> Unit,
     onDismiss: () -> Unit,

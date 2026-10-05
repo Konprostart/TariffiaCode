@@ -341,7 +341,7 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
     var sshProfiles: List<com.konprostart.tariffiacode.data.ssh.SshProfile>
         get() =
             com.konprostart.tariffiacode.data.ssh.SshProfileCodec.decode(
-                preferences.getString(KEY_SSH_PROFILES, null),
+                preferences.getString(KEY_SSH_PROFILES, null).orEmpty(),
             )
         set(value) {
             preferences.edit()

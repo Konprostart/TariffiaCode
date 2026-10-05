@@ -56,7 +56,14 @@ class SshConnectionManagerTest {
     }
 
     private fun credentialStore(credential: SshCredential?): SshCredentialStore {
-        val map = if (credential == null) emptyMap() else mapOf("ref" to com.konprostart.tariffiacode.data.ssh.SshCredentialCodec.encode(credential))
+        val map =
+            if (credential == null) {
+                emptyMap()
+            } else {
+                mapOf(
+                    "ref" to com.konprostart.tariffiacode.data.ssh.SshCredentialCodec.encode(credential),
+                )
+            }
         return SshCredentialStore(load = { map }, save = {})
     }
 

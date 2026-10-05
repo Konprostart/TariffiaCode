@@ -1197,4 +1197,37 @@
     <string name="app_update_installed_version">المثبت: %1$s</string>
     <string name="app_update_available_version">المتاح: %1$s</string>
     <string name="app_update_download_button">تنزيل %1$s</string>
+<!-- SSH connection profiles (settings). Secrets are stored encrypted; never shown back. -->
+    <string name="settings_ssh_row">SSH connections</string>
+    <string name="ssh_title">SSH connections</string>
+    <string name="ssh_intro">Save SSH servers and connect with a password or private key. Host keys must be confirmed before first use.</string>
+    <string name="ssh_add_profile">Add SSH server</string>
+    <string name="ssh_no_profiles">No SSH servers yet.</string>
+    <string name="ssh_profile_name">Name</string>
+    <string name="ssh_host">Host or IP</string>
+    <string name="ssh_port">Port</string>
+    <string name="ssh_username">Username</string>
+    <string name="ssh_auth_type">Authentication</string>
+    <string name="ssh_auth_password">Password</string>
+    <string name="ssh_auth_private_key">Private key</string>
+    <string name="ssh_password">Password</string>
+    <string name="ssh_private_key_pem">Private key (PEM)</string>
+    <string name="ssh_passphrase">Key passphrase (optional)</string>
+    <string name="ssh_credential_stored">A credential is already stored. Leave blank to keep it.</string>
+    <string name="ssh_credential_required">Enter a credential before saving.</string>
+    <string name="ssh_field_required">This field is required.</string>
+    <string name="ssh_port_invalid">Enter a port between 1 and 65535.</string>
+    <string name="ssh_host_invalid">Enter a host name or IP address.</string>
+    <string name="ssh_connect">Connect</string>
+    <string name="ssh_connecting">Connecting…</string>
+    <string name="ssh_disconnect">Disconnect</string>
+    <string name="ssh_connected">Connected</string>
+    <string name="ssh_delete_profile">Delete SSH server</string>
+    <string name="ssh_delete_confirm">Delete "%1$s"? Its stored credential will also be removed.</string>
+    <string name="ssh_host_key_title">Confirm host key</string>
+    <string name="ssh_host_key_message">The server presented this host key fingerprint:</string>
+    <string name="ssh_host_key_trust">Trust and connect</string>
+    <string name="ssh_host_key_mismatch_title">Host key changed</string>
+    <string name="ssh_host_key_mismatch_message">The server presented a key that does not match the trusted one. This may indicate a man-in-the-middle attack. Connection refused.</string>
+    <string name="ssh_error_missing_credential">No stored credential for this profile.</string>
 </resources>

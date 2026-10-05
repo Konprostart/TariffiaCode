@@ -10,8 +10,7 @@ class SshCredentialStoreTest {
         var entries: Map<String, String> = emptyMap()
     }
 
-    private fun storeOn(backend: FakeBackend) =
-        SshCredentialStore(load = { backend.entries }, save = { backend.entries = it })
+    private fun storeOn(backend: FakeBackend) = SshCredentialStore(load = { backend.entries }, save = { backend.entries = it })
 
     @Test
     fun `password and private key are stored separately and read back`() {

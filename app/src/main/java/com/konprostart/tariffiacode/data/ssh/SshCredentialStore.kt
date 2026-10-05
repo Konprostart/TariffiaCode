@@ -15,7 +15,7 @@ class SshCredentialStore(
     private val save: (Map<String, String>) -> Unit,
 ) {
     constructor(settings: SecureSettingsRepository) : this(
-        load = { settings.sshCredentials() },
+        load = { settings.sshCredentials },
         save = { settings.sshCredentials = it },
     )
 

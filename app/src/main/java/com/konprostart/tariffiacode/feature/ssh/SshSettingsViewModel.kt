@@ -147,7 +147,7 @@ class SshSettingsViewModel(
         val port = form.portOrNull ?: SshProfile.DEFAULT_PORT
         val profile =
             SshProfile(
-                id = form.id.ifBlank { SshProfile().id },
+                id = form.id.ifBlank { java.util.UUID.randomUUID().toString() },
                 name = form.name.trim(),
                 host = form.host.trim(),
                 port = port,
