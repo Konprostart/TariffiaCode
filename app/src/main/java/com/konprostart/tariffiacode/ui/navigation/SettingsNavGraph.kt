@@ -108,6 +108,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onOpenGuestBrowser = { navController.navigate(ROUTE_GUEST_BROWSER) },
             onOpenRemoteConnection = { navController.navigate(ROUTE_REMOTE_CONNECTION) },
             onOpenSshSettings = { navController.navigate(ROUTE_SETTINGS_SSH) },
+            onOpenRemoteProjects = { navController.navigate(ROUTE_SETTINGS_REMOTE_PROJECTS) },
             onOpenWorkspaces = { navController.navigate(ROUTE_WORKSPACES) },
             onOpenDiagnostics = onShowDiagnostics,
             onOpenSupport = { showSupportSheet = true },
@@ -533,6 +534,44 @@ fun NavGraphBuilder.settingsNavGraph(
             onDisconnect = sshViewModel::closeConnection,
             onTrustHostKey = sshViewModel::trustPendingHostKey,
             onDismissHostKey = sshViewModel::dismissPendingHostKey,
+        )
+    }
+
+    composable(ROUTE_SETTINGS_REMOTE_PROJECTS) {
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        val remoteProjectViewModel: com.konprostart.tariffiacode.feature.remote.RemoteProjectViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel(
+                key = "settings-remote-projects",
+                factory =
+                    com.konprostart.tariffiacode.ui.ViewModelFactory {
+                        val sshProfiles = com.konprostart.tariffiacode.data.ssh.SshProfileStore(app.settings)
+                        com.konprostart.tariffiacode.feature.remote.RemoteProjectViewModel(
+                            store =
+                                com.konprostart.tariffiacode.data.remote.RemoteProjectStore(
+                                    app.settings,
+                                    sshProfiles,
+                                ),
+                            sshProfiles = sshProfiles,
+                            // Applying a mapping points the single VPS runtime at the mapping's SSH profile
+                            // and remote path; the existing OpenCode experience then uses that directory.
+                            onApply = { project, profile ->
+                                app.vpsRuntimeTarget.selectProfile(profile)
+                                app.vpsRuntimeTarget.selectRemoteProject(project)
+                            },
+                        )
+                    },
+            )
+        val remoteProjectState by remoteProjectViewModel.state.collectAsState()
+        com.konprostart.tariffiacode.feature.remote.RemoteProjectScreen(
+            state = remoteProjectState,
+            onBack = { navController.popBackStack() },
+            onAdd = remoteProjectViewModel::newProject,
+            onEdit = remoteProjectViewModel::editProject,
+            onDelete = remoteProjectViewModel::deleteProject,
+            onApply = remoteProjectViewModel::apply,
+            onFormChange = remoteProjectViewModel::updateForm,
+            onSave = remoteProjectViewModel::saveProject,
+            onDismissEditor = remoteProjectViewModel::dismissEditor,
         )
     }
 

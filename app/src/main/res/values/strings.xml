@@ -1245,4 +1245,22 @@
     <string name="ssh_host_key_mismatch_title">Host key changed</string>
     <string name="ssh_host_key_mismatch_message">The server presented a key that does not match the trusted one. This may indicate a man-in-the-middle attack. Connection refused.</string>
     <string name="ssh_error_missing_credential">No stored credential for this profile.</string>
+
+    <!-- Remote Project mapping (project ↔ SSH/VPS profile ↔ remote path). Holds no credentials. -->
+    <string name="settings_remote_project_row">Remote projects</string>
+    <string name="remote_project_title">Remote projects</string>
+    <string name="remote_project_intro">Map a project to an SSH/VPS connection and a path on that server. The existing OpenCode experience then uses that path as the workspace.</string>
+    <string name="remote_project_add">Add remote project</string>
+    <string name="remote_project_empty">No remote projects yet.</string>
+    <string name="remote_project_project">Project</string>
+    <string name="remote_project_select_profile">Select SSH connection</string>
+    <string name="remote_project_remote_path">Remote path</string>
+    <string name="remote_project_path_invalid">Enter an absolute path, for example /root/projects/app.</string>
+    <string name="remote_project_display_name">Display name (optional)</string>
+    <string name="remote_project_apply">Use</string>
+    <string name="remote_project_applied">Applied</string>
+    <string name="remote_project_unknown_profile">SSH connection missing</string>
+    <string name="remote_project_dangling">The SSH connection for this mapping no longer exists.</string>
+    <string name="remote_project_delete">Delete remote project</string>
+    <string name="remote_project_delete_confirm">Delete "%1$s"?</string>
 </resources>
