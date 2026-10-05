@@ -100,8 +100,8 @@ class VpsRuntimeTargetTest {
     fun `connect forwards SSH and uses the existing OpenCode backend for health`() =
         runTest {
             val ssh = startSshServer()
-            startOpenCodeService(version = "9.9.9")
-            val target = target(credentialStore())
+            val service = startOpenCodeService(version = "9.9.9")
+            val target = target(credentialStore(), remotePort = service.port)
 
             target.trustServer(ssh.port)
             val result = target.connect()
@@ -131,8 +131,8 @@ class VpsRuntimeTargetTest {
     fun `disconnect closes the forward and the runtime can reconnect`() =
         runTest {
             val ssh = startSshServer()
-            startOpenCodeService()
-            val target = target(credentialStore())
+            val service = startOpenCodeService()
+            val target = target(credentialStore(), remotePort = service.port)
 
             target.trustServer(ssh.port)
             assertTrue(target.connect().isSuccess)
@@ -181,20 +181,21 @@ class VpsRuntimeTargetTest {
      */
     private class TestOpenCodeService(version: String) : AutoCloseable {
         private val server = ServerSocket().apply { bind(InetSocketAddress("127.0.0.1", 0)) }
-        private val accepting = Thread {
-            while (!server.isClosed) {
-                val client =
-                    try {
-                        server.accept()
-                    } catch (_: Exception) {
-                        return@Thread
-                    }
-                Thread { handle(client, version) }.apply { isDaemon = true }.start()
+        private val accepting =
+            Thread {
+                while (!server.isClosed) {
+                    val client =
+                        try {
+                            server.accept()
+                        } catch (_: Exception) {
+                            return@Thread
+                        }
+                    Thread { handle(client, version) }.apply { isDaemon = true }.start()
+                }
+            }.apply {
+                isDaemon = true
+                start()
             }
-        }.apply {
-            isDaemon = true
-            start()
-        }
 
         val port: Int get() = server.localPort
 
