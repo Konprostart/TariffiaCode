@@ -86,7 +86,10 @@ class MinaSshPortForwarderTest {
                         }
                     }.start()
                 }
-            }.apply { isDaemon = true; start() }
+            }.apply {
+                isDaemon = true
+                start()
+            }
         echoThread = thread
         return socket
     }
