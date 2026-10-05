@@ -619,6 +619,15 @@ fun NavGraphBuilder.settingsNavGraph(
                             backend = app.vpsRuntimeTarget,
                             // Read-only git for the remote project mapped onto the VPS runtime.
                             directoryProvider = { app.vpsRuntimeTarget.selectedRemoteProject.value?.remotePath },
+                            // Pull runs `git pull` on the VPS over the existing SSH shell executor.
+                            puller =
+                                com.konprostart.tariffiacode.feature.git.RemoteGitPuller(
+                                    com.konprostart.tariffiacode.feature.git.SshShellCommandExecutor(
+                                        shellClient = com.konprostart.tariffiacode.core.ssh.MinaSshShellClient(),
+                                        credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
+                                    ),
+                                ),
+                            profileProvider = { app.vpsRuntimeTarget.selectedProfile.value },
                         )
                     },
             )
@@ -628,6 +637,7 @@ fun NavGraphBuilder.settingsNavGraph(
             state = gitState,
             onBack = { navController.popBackStack() },
             onRefresh = gitViewModel::refresh,
+            onPull = gitViewModel::pull,
         )
     }
 
