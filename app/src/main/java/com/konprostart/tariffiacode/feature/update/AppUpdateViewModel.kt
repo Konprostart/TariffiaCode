@@ -46,11 +46,15 @@ class AppUpdateViewModel(
     }
 
     companion object {
-        /** Factory so the installed version can be passed without an extra DI graph. */
-        fun factory(installedVersion: String): ViewModelProvider.Factory =
+        /** Factory so the installed version and update channel can be passed without an extra DI graph. */
+        fun factory(
+            installedVersion: String,
+            channel: AppUpdateChannel = AppUpdateChannel.Release,
+        ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(modelClass: Class<T>): T = AppUpdateViewModel(installedVersion) as T
+                override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                    AppUpdateViewModel(installedVersion, AppUpdateReleaseClient(channel)) as T
             }
     }
 }

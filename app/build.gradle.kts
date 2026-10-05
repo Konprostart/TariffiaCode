@@ -93,6 +93,49 @@ val hasReleaseSigning =
             resolved.isFile
         }
 
+// Dedicated, STABLE debug signing key so repeated debug APKs share one identity and can update each
+// other in place. Supplied only in CI; local debug builds fall back to AGP's default debug keystore.
+val debugStoreFile =
+    (
+        System.getenv("DEBUG_KEYSTORE_FILE")
+            ?: findProperty("DEBUG_KEYSTORE_FILE")?.toString()
+    )
+        ?.takeIf { it.isNotBlank() }
+val debugStorePassword =
+    (
+        System.getenv("DEBUG_KEYSTORE_PASSWORD")
+            ?: findProperty("DEBUG_KEYSTORE_PASSWORD")?.toString()
+    )
+        ?.takeIf { it.isNotBlank() }
+val debugKeyAlias =
+    (
+        System.getenv("DEBUG_KEY_ALIAS")
+            ?: findProperty("DEBUG_KEY_ALIAS")?.toString()
+    )
+        ?.takeIf { it.isNotBlank() }
+val debugKeyPassword =
+    (
+        System.getenv("DEBUG_KEY_PASSWORD")
+            ?: findProperty("DEBUG_KEY_PASSWORD")?.toString()
+    )
+        ?.takeIf { it.isNotBlank() }
+val hasDebugSigning =
+    listOf(
+        debugStoreFile,
+        debugStorePassword,
+        debugKeyAlias,
+        debugKeyPassword,
+    ).all { !it.isNullOrBlank() } &&
+        debugStoreFile!!.let { path ->
+            val resolved =
+                if (File(path).isAbsolute) {
+                    File(path)
+                } else {
+                    File(rootProject.projectDir, path)
+                }
+            resolved.isFile
+        }
+
 android {
     namespace = "com.konprostart.tariffiacode"
     compileSdk = 35
@@ -161,6 +204,28 @@ android {
         }
     }
 
+    // Stable debug signing config, only when the CI-provided debug keystore is present. When absent
+    // (normal local development) the debug build type keeps AGP's default debug signing.
+    if (hasDebugSigning) {
+        signingConfigs {
+            create("debugStable") {
+                val storeFilePath = debugStoreFile!!
+                storeFile =
+                    if (File(storeFilePath).isAbsolute) {
+                        File(storeFilePath)
+                    } else {
+                        File(rootProject.projectDir, storeFilePath)
+                    }
+                storePassword = debugStorePassword
+                keyAlias = debugKeyAlias
+                keyPassword = debugKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -177,6 +242,11 @@ android {
         // instead of replacing it. Release and F-Droid keep the production applicationId.
         debug {
             applicationIdSuffix = ".debug"
+            // Use the stable CI debug key when provided so repeated debug APKs share one signing
+            // identity; otherwise keep AGP's default debug signing for local development.
+            if (hasDebugSigning) {
+                signingConfig = signingConfigs.getByName("debugStable")
+            }
         }
     }
     testOptions {
