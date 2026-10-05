@@ -95,11 +95,17 @@ class RemoteTerminalViewModelTest {
             trustedHostKeyFingerprint = trusted,
         )
 
+    private fun viewModel(
+        client: SshShellClient,
+        credential: SshCredential?,
+        profileProvider: () -> SshProfile?,
+    ) = RemoteTerminalViewModel(client, credentialStore(credential), profileProvider)
+
     @Test
     fun `connect success opens the shell and streams output`() =
         runTest {
             val session = FakeSession()
-            val vm = RemoteTerminalViewModel(FakeShellClient(SshShellResult.Opened(session)), credentialStore(SshCredential.Password("s")), { profile() })
+            val vm = viewModel(FakeShellClient(SshShellResult.Opened(session)), SshCredential.Password("s")) { profile() }
 
             vm.connect()
 
@@ -116,7 +122,7 @@ class RemoteTerminalViewModelTest {
     @Test
     fun `missing profile reports an error without opening`() =
         runTest {
-            val vm = RemoteTerminalViewModel(FakeShellClient(SshShellResult.Failure("x")), credentialStore(SshCredential.Password("s")), { null })
+            val vm = viewModel(FakeShellClient(SshShellResult.Failure("x")), SshCredential.Password("s")) { null }
             vm.connect()
             assertNotNull(vm.state.value.error)
             assertFalse(vm.state.value.isOpen)
@@ -125,7 +131,7 @@ class RemoteTerminalViewModelTest {
     @Test
     fun `missing credential reports an error`() =
         runTest {
-            val vm = RemoteTerminalViewModel(FakeShellClient(SshShellResult.Failure("x")), credentialStore(null), { profile() })
+            val vm = viewModel(FakeShellClient(SshShellResult.Failure("x")), null) { profile() }
             vm.connect()
             assertNotNull(vm.state.value.error)
             assertFalse(vm.state.value.isOpen)
@@ -134,7 +140,7 @@ class RemoteTerminalViewModelTest {
     @Test
     fun `failed shell surfaces the failure`() =
         runTest {
-            val vm = RemoteTerminalViewModel(FakeShellClient(SshShellResult.Failure("connection refused")), credentialStore(SshCredential.Password("s")), { profile() })
+            val vm = viewModel(FakeShellClient(SshShellResult.Failure("connection refused")), SshCredential.Password("s")) { profile() }
             vm.connect()
             assertEquals("connection refused", vm.state.value.error)
             assertFalse(vm.state.value.isOpen)
@@ -144,11 +150,10 @@ class RemoteTerminalViewModelTest {
     fun `untrusted host key surfaces an error`() =
         runTest {
             val vm =
-                RemoteTerminalViewModel(
+                viewModel(
                     FakeShellClient(SshShellResult.HostKeyUntrusted(SshHostKey("ssh-ed25519", "ab".repeat(32)))),
-                    credentialStore(SshCredential.Password("s")),
-                    { profile() },
-                )
+                    SshCredential.Password("s"),
+                ) { profile() }
             vm.connect()
             assertTrue(vm.state.value.error.orEmpty().contains("host key"))
             assertFalse(vm.state.value.isOpen)
@@ -160,7 +165,7 @@ class RemoteTerminalViewModelTest {
             val first = FakeSession()
             val second = FakeSession()
             val client = FakeShellClient(SshShellResult.Opened(first))
-            val vm = RemoteTerminalViewModel(client, credentialStore(SshCredential.Password("s")), { profile() })
+            val vm = viewModel(client, SshCredential.Password("s")) { profile() }
 
             vm.connect()
             assertTrue(vm.state.value.isOpen)

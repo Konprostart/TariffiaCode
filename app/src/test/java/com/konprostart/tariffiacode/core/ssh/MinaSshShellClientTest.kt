@@ -1,7 +1,7 @@
 package com.konprostart.tariffiacode.core.ssh
 
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.apache.sshd.server.SshServer
 import org.apache.sshd.server.auth.password.PasswordAuthenticator
@@ -50,7 +50,7 @@ class MinaSshShellClientTest {
 
     @Test
     fun `opens a shell that echoes input back`() =
-        runTest {
+        runBlocking {
             val s = startServer()
             val result =
                 MinaSshShellClient().openShell(
@@ -73,7 +73,7 @@ class MinaSshShellClientTest {
 
     @Test
     fun `closing the session is idempotent and reports not open`() =
-        runTest {
+        runBlocking {
             val s = startServer()
             val opened =
                 MinaSshShellClient().openShell("127.0.0.1", s.port, SshAuth.Password("tester", "secret"), trustAll())
@@ -89,7 +89,7 @@ class MinaSshShellClientTest {
 
     @Test
     fun `reconnect opens a fresh shell after a close`() =
-        runTest {
+        runBlocking {
             val s = startServer()
             val client = MinaSshShellClient()
             val opened =
@@ -103,7 +103,7 @@ class MinaSshShellClientTest {
 
     @Test
     fun `a wrong password fails without leaking`() =
-        runTest {
+        runBlocking {
             val s = startServer(password = "secret")
             val result =
                 MinaSshShellClient().openShell("127.0.0.1", s.port, SshAuth.Password("tester", "wrong"), trustAll())
@@ -112,7 +112,7 @@ class MinaSshShellClientTest {
 
     @Test
     fun `an untrusted host key is surfaced and no shell opens`() =
-        runTest {
+        runBlocking {
             val s = startServer()
             val result =
                 MinaSshShellClient().openShell(
