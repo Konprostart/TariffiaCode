@@ -150,8 +150,8 @@ android {
         applicationId = "com.konprostart.tariffiacode"
         minSdk = 26
         targetSdk = 35
-        versionCode = 68
-        versionName = "1.2.29"
+        versionCode = 69
+        versionName = "1.2.30"
         buildConfigField("String", "GITHUB_CLIENT_ID", "\"$githubClientId\"")
 
         // The on-device runtime (see ANDROID_ABIS in scripts/prepare_android_runtime_native_libs.py)
