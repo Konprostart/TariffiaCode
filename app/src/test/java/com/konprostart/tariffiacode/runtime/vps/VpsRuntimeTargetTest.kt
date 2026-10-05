@@ -7,7 +7,6 @@ import com.konprostart.tariffiacode.data.ssh.SshCredentialCodec
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.runtime.RuntimeState
-import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.test.runTest
 import org.apache.sshd.server.SshServer
 import org.apache.sshd.server.auth.password.PasswordAuthenticator
@@ -18,9 +17,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.BufferedReader
 import java.io.File
+import java.io.InputStreamReader
 import java.net.InetSocketAddress
 import java.net.ServerSocket
+import java.net.Socket
 
 /**
  * End-to-end tests for [VpsRuntimeTarget] using an in-process SSH server and a real loopback HTTP
@@ -29,11 +31,11 @@ import java.net.ServerSocket
  */
 class VpsRuntimeTargetTest {
     private var sshServer: SshServer? = null
-    private var httpServer: HttpServer? = null
+    private var openCodeService: TestOpenCodeService? = null
 
     @After
     fun tearDown() {
-        runCatching { httpServer?.stop(0) }
+        runCatching { openCodeService?.close() }
         runCatching { sshServer?.stop(true) }
     }
 
@@ -53,17 +55,10 @@ class VpsRuntimeTargetTest {
     }
 
     /** A minimal OpenCode HTTP server answering the one endpoint the runtime checks: `global/health`. */
-    private fun startOpenCodeService(version: String = "9.9.9"): HttpServer {
-        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/global/health") { exchange ->
-            val body = """{"healthy":true,"version":"$version"}""".toByteArray()
-            exchange.responseHeaders.add("Content-Type", "application/json")
-            exchange.sendResponseHeaders(200, body.size.toLong())
-            exchange.responseBody.use { it.write(body) }
-        }
-        server.start()
-        httpServer = server
-        return server
+    private fun startOpenCodeService(version: String = "9.9.9"): TestOpenCodeService {
+        val service = TestOpenCodeService(version)
+        openCodeService = service
+        return service
     }
 
     private fun credentialStore(password: String = "secret"): SshCredentialStore {
@@ -178,5 +173,64 @@ class VpsRuntimeTargetTest {
 
         // The profile model carries no secret at all.
         assertFalse(profile(22).toString().contains(secret))
+    }
+
+    /**
+     * A tiny HTTP/1.1 server on loopback answering `GET /global/health`. Implemented on a raw
+     * [ServerSocket] because `com.sun.net.httpserver` is not available on the Android test runtime.
+     */
+    private class TestOpenCodeService(version: String) : AutoCloseable {
+        private val server = ServerSocket().apply { bind(InetSocketAddress("127.0.0.1", 0)) }
+        private val accepting = Thread {
+            while (!server.isClosed) {
+                val client =
+                    try {
+                        server.accept()
+                    } catch (_: Exception) {
+                        return@Thread
+                    }
+                Thread { handle(client, version) }.apply { isDaemon = true }.start()
+            }
+        }.apply {
+            isDaemon = true
+            start()
+        }
+
+        val port: Int get() = server.localPort
+
+        private fun handle(
+            client: Socket,
+            version: String,
+        ) {
+            client.use { socket ->
+                val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+                val requestLine = reader.readLine() ?: return
+                // Drain headers up to the blank line.
+                while (true) {
+                    val line = reader.readLine() ?: break
+                    if (line.isEmpty()) break
+                }
+                val body = """{"healthy":true,"version":"$version"}""".toByteArray()
+                val response =
+                    if (requestLine.contains("/global/health")) {
+                        "HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: application/json\r\n" +
+                            "Content-Length: ${body.size}\r\n" +
+                            "Connection: close\r\n\r\n"
+                    } else {
+                        "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    }
+                socket.getOutputStream().apply {
+                    write(response.toByteArray())
+                    if (requestLine.contains("/global/health")) write(body)
+                    flush()
+                }
+            }
+        }
+
+        override fun close() {
+            runCatching { server.close() }
+            runCatching { accepting.interrupt() }
+        }
     }
 }

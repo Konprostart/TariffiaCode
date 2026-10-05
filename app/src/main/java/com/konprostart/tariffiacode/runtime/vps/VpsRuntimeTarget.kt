@@ -117,8 +117,9 @@ class VpsRuntimeTarget(
     }
 
     override suspend fun connect(): Result<OpenCodeHealth> {
-        val profile = mutableSelectedProfile.value
-            ?: return fail(RuntimeState.Unavailable("No SSH connection selected"), "No SSH connection selected")
+        val profile =
+            mutableSelectedProfile.value
+                ?: return fail(RuntimeState.Unavailable("No SSH connection selected"), "No SSH connection selected")
 
         // Re-checking an already connected runtime must not tear down the forward / event stream.
         if (isConnected()) return healthResult()
@@ -394,8 +395,7 @@ class VpsRuntimeTarget(
         return Result.failure(IllegalStateException(message))
     }
 
-    private fun requireBackend(): RemoteOpenCodeBackend =
-        backend ?: error("VPS runtime is not connected")
+    private fun requireBackend(): RemoteOpenCodeBackend = backend ?: error("VPS runtime is not connected")
 
     companion object {
         const val DEFAULT_ID = "vps"
