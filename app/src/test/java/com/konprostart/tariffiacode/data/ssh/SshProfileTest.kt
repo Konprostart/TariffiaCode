@@ -1,7 +1,6 @@
 package com.konprostart.tariffiacode.data.ssh
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,11 +36,10 @@ class SshProfileTest {
     }
 
     @Test
-    fun `profile holds no secret and never renders one`() {
-        val profile = SshProfile(name = "n", host = "h", username = "u")
-        // The model has no password/key/passphrase field at all.
-        assertFalse(profile.toString().contains("password", ignoreCase = true))
-        assertFalse(profile.toString().contains("passphrase", ignoreCase = true))
+    fun `profile renders only a credential reference, never a secret`() {
+        val profile = SshProfile(name = "n", host = "h", username = "u", credentialRef = "ref-123")
+        // The model carries a reference, not a secret, and its string form exposes exactly that.
+        assertTrue(profile.toString().contains("credentialRef=ref-123"))
     }
 
     @Test

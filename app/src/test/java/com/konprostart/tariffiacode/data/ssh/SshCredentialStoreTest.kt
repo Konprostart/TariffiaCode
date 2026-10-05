@@ -60,8 +60,8 @@ class SshCredentialStoreTest {
 
     @Test
     fun `toString on credentials never reveals material`() {
-        assertFalse(SshCredential.Password("s3cr3t").toString().contains("s3cr3t"))
-        assertFalse(SshCredential.PrivateKey("KEYDATA", "phrase").toString().contains("KEYDATA"))
-        assertFalse(SshCredential.PrivateKey("KEYDATA", "phrase").toString().contains("phrase"))
+        assertFalse(SshCredential.Password("hunter2-secret").toString().contains("hunter2-secret"))
+        assertFalse(SshCredential.PrivateKey("PEM-SECRET-DATA", "PASSPHRASE-SECRET").toString().contains("PEM-SECRET-DATA"))
+        assertFalse(SshCredential.PrivateKey("PEM-SECRET-DATA", "PASSPHRASE-SECRET").toString().contains("PASSPHRASE-SECRET"))
     }
 }
