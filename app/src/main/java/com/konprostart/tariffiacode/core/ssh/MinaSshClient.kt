@@ -11,9 +11,6 @@ import org.apache.sshd.client.keyverifier.ServerKeyVerifier
 import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.common.config.keys.KeyUtils
 import org.apache.sshd.common.config.keys.PublicKeyEntry
-import org.apache.sshd.common.config.keys.loader.KeyPairResourceParser
-import org.apache.sshd.common.util.security.SecurityUtils
-import java.io.IOException
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.net.SocketAddress
@@ -92,15 +89,7 @@ class MinaSshClient(
             }
         }
 
-    private fun loadKeyPair(auth: SshAuth.PrivateKey): KeyPair {
-        val parser: KeyPairResourceParser = SecurityUtils.getKeyPairResourceParser()
-        val provider =
-            auth.passphrase
-                ?.let { org.apache.sshd.common.config.keys.FilePasswordProvider.of(it) }
-                ?: org.apache.sshd.common.config.keys.FilePasswordProvider.EMPTY
-        val pairs = parser.loadKeyPairs(null, null, provider, auth.keyPem.lineSequence().toList())
-        return pairs.firstOrNull() ?: throw IOException("No private key found in the provided key material")
-    }
+    private fun loadKeyPair(auth: SshAuth.PrivateKey): KeyPair = SshKeyPairs.load(auth)
 
     private companion object {
         const val AUTH_TIMEOUT_MILLIS = 30_000L
