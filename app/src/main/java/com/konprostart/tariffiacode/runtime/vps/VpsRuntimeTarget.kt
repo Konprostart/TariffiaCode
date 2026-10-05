@@ -20,6 +20,8 @@ import com.konprostart.tariffiacode.core.api.ProviderCatalog
 import com.konprostart.tariffiacode.core.api.QuestionRequest
 import com.konprostart.tariffiacode.core.ssh.SshHostKey
 import com.konprostart.tariffiacode.core.ssh.SshPortForward
+import com.konprostart.tariffiacode.data.remote.RemoteProject
+import com.konprostart.tariffiacode.data.remote.RemoteProjectResolver
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.runtime.BackendKind
 import com.konprostart.tariffiacode.runtime.PermissionResponse
@@ -79,6 +81,11 @@ class VpsRuntimeTarget(
     /** The SSH connection currently selected for this target, if any. */
     val selectedProfile: StateFlow<SshProfile?> = mutableSelectedProfile.asStateFlow()
 
+    private val mutableSelectedRemoteProject = MutableStateFlow<RemoteProject?>(null)
+
+    /** The Remote Project mapping currently applied to this runtime, if any. */
+    val selectedRemoteProject: StateFlow<RemoteProject?> = mutableSelectedRemoteProject.asStateFlow()
+
     private val mutablePendingHostKey = MutableStateFlow<SshHostKey?>(null)
 
     /** A host key awaiting explicit user trust, surfaced when the connection was refused for it. */
@@ -105,6 +112,15 @@ class VpsRuntimeTarget(
                     RuntimeState.Disconnected
                 }
         }
+    }
+
+    /**
+     * Apply (or clear, with null) the Remote Project mapping whose remote path this runtime should use as
+     * its OpenCode workspace. Only the mapping's path is used; its SSH profile must match the selected
+     * profile at resolution time, see [RemoteProjectResolver].
+     */
+    fun selectRemoteProject(project: RemoteProject?) {
+        mutableSelectedRemoteProject.value = project
     }
 
     /** Persist a host key the user confirmed, so the next connect trusts it. Returns the new profile. */
@@ -174,13 +190,20 @@ class VpsRuntimeTarget(
         val current = runCatching { requireBackend().pathInfo().directory }.getOrNull()
         val sessions = requireBackend().listSessions()
         val projects = runCatching { requireBackend().listProjects() }.getOrDefault(emptyList())
-        return mergeWorkspaceRefs(current, sessions, projects)
+        val reported = mergeWorkspaceRefs(current, sessions, projects)
+        // Surface the mapped remote path as a workspace even before OpenCode has seen it, so the user can
+        // pick the project they mapped and have it become the session directory.
+        val mapped =
+            effectiveDirectory(null)?.let { path ->
+                WorkspaceRef(id = path, name = mappingLabel() ?: path, path = path)
+            }
+        return (listOfNotNull(mapped) + reported).distinctBy { it.path }
     }
 
     override suspend fun health(): OpenCodeHealth = requireBackend().health()
 
     override suspend fun listSessions(directory: String?): List<OpenCodeSession> {
-        if (directory != null) return requireBackend().listSessions(directory)
+        effectiveDirectory(directory)?.let { return requireBackend().listSessions(it) }
         val projects = runCatching { requireBackend().listProjects() }.getOrDefault(emptyList())
         val directories =
             buildList<String?> {
@@ -202,7 +225,7 @@ class VpsRuntimeTarget(
     override suspend fun createSession(
         title: String?,
         directory: String?,
-    ): OpenCodeSession = requireBackend().createSession(title, directory)
+    ): OpenCodeSession = requireBackend().createSession(title, effectiveDirectory(directory))
 
     override suspend fun session(sessionId: String): OpenCodeSession = requireBackend().session(sessionId)
 
@@ -396,6 +419,19 @@ class VpsRuntimeTarget(
     }
 
     private fun requireBackend(): RemoteOpenCodeBackend = backend ?: error("VPS runtime is not connected")
+
+    /**
+     * The OpenCode directory to use: an explicit request wins, otherwise the selected Remote Project's
+     * path when its SSH profile matches the one this runtime is connected with.
+     */
+    private fun effectiveDirectory(requested: String?): String? =
+        RemoteProjectResolver.resolveDirectory(
+            mapping = mutableSelectedRemoteProject.value,
+            selectedSshProfileId = mutableSelectedProfile.value?.id,
+            requestedDirectory = requested,
+        )
+
+    private fun mappingLabel(): String? = mutableSelectedRemoteProject.value?.label
 
     companion object {
         const val DEFAULT_ID = "vps"

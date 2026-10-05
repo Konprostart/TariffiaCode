@@ -353,6 +353,24 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
         }
 
     /**
+     * Remote Project mappings (project ↔ SSH profile ↔ remote path), JSON-encoded. Never contains a
+     * secret: a mapping only references an SSH profile by id, whose credential lives in [sshCredentials].
+     */
+    var remoteProjects: List<com.konprostart.tariffiacode.data.remote.RemoteProject>
+        get() =
+            com.konprostart.tariffiacode.data.remote.RemoteProjectCodec.decode(
+                preferences.getString(KEY_REMOTE_PROJECTS, null).orEmpty(),
+            )
+        set(value) {
+            preferences.edit()
+                .putString(
+                    KEY_REMOTE_PROJECTS,
+                    com.konprostart.tariffiacode.data.remote.RemoteProjectCodec.encode(value),
+                )
+                .apply()
+        }
+
+    /**
      * SSH secrets keyed by the profile's credential reference, each a JSON-encoded
      * [com.konprostart.tariffiacode.data.ssh.SshCredential]. Encrypted with the same MasterKey as
      * every other stored secret; never written to plaintext.
@@ -612,6 +630,7 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
         private const val KEY_UNREAD_SESSIONS = "unread_sessions"
         private const val KEY_SSH_PROFILES = "ssh_profiles"
         private const val KEY_SSH_CREDENTIALS = "ssh_credentials"
+        private const val KEY_REMOTE_PROJECTS = "remote_projects"
         private const val KEY_GITHUB_TOKEN = "github_token"
         private const val KEY_GITHUB_LOGIN = "github_login"
         private const val KEY_GITHUB_STAR_PROMPT_SHOWN = "github_star_prompt_shown"

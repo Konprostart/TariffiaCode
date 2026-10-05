@@ -87,6 +87,7 @@ fun SettingsScreenV2(
     onOpenGuestBrowser: () -> Unit = {},
     onOpenRemoteConnection: () -> Unit,
     onOpenSshSettings: () -> Unit = {},
+    onOpenRemoteProjects: () -> Unit = {},
     onOpenWorkspaces: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenSupport: () -> Unit = {},
@@ -337,6 +338,12 @@ fun SettingsScreenV2(
                     icon = Icons.Default.Terminal,
                     title = stringResource(R.string.settings_ssh_row),
                     onClick = onOpenSshSettings,
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Folder,
+                    title = stringResource(R.string.settings_remote_project_row),
+                    onClick = onOpenRemoteProjects,
                 )
                 SettingsDivider()
                 SettingsRow(
