@@ -28,7 +28,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-class RemoteGitViewModelPullTest {
+class RemoteGitViewModelPushTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -119,46 +119,45 @@ class RemoteGitViewModelPullTest {
     )
 
     @Test
-    fun `pull success sets the success flag and output`() =
+    fun `push success sets the success flag and output`() =
         runTest {
-            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("Already up to date.\n__TC_EXIT__0\n")), "/root/app")
+            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("Everything up-to-date\n__TC_EXIT__0\n")), "/root/app")
 
-            vm.pull()
+            vm.push()
 
-            assertTrue(vm.state.value.pullSuccess)
-            assertTrue(vm.state.value.pullOutput.contains("Already up to date"))
-            assertFalse(vm.state.value.isPulling)
+            assertTrue(vm.state.value.pushSuccess)
+            assertTrue(vm.state.value.pushOutput.contains("Everything up-to-date"))
+            assertFalse(vm.state.value.isPushing)
         }
 
     @Test
-    fun `pull failure surfaces a message`() =
+    fun `push failure surfaces a message`() =
         runTest {
             val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("boom\n__TC_EXIT__1\n")), "/root/app")
 
-            vm.pull()
+            vm.push()
 
-            assertNotNull(vm.state.value.pullMessage)
-            assertFalse(vm.state.value.pullSuccess)
+            assertNotNull(vm.state.value.pushMessage)
+            assertFalse(vm.state.value.pushSuccess)
         }
 
     @Test
-    fun `pull without a mapped path reports an error and does not run`() =
+    fun `push without a mapped path reports an error and does not run`() =
         runTest {
-            val executor = FakeExecutor(RemoteCommandOutcome.Completed("__TC_EXIT__0"))
-            val vm = viewModel(executor, directory = null)
+            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("__TC_EXIT__0")), directory = null)
 
-            vm.pull()
+            vm.push()
 
-            assertNotNull(vm.state.value.pullMessage)
-            assertFalse(vm.state.value.pullSuccess)
+            assertNotNull(vm.state.value.pushMessage)
+            assertFalse(vm.state.value.pushSuccess)
         }
 
     @Test
-    fun `pull state carries no credential material`() =
+    fun `push state carries no credential material`() =
         runTest {
             val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("__TC_EXIT__0")), "/root/app")
 
-            vm.pull()
+            vm.push()
 
             val text = vm.state.value.toString()
             assertTrue(!text.contains("password", ignoreCase = true))

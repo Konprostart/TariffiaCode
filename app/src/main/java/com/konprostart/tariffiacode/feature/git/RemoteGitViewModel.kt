@@ -22,6 +22,10 @@ data class RemoteGitUiState(
     val pullSuccess: Boolean = false,
     val pullMessage: String? = null,
     val pullOutput: String = "",
+    val isPushing: Boolean = false,
+    val pushSuccess: Boolean = false,
+    val pushMessage: String? = null,
+    val pushOutput: String = "",
 )
 
 /**
@@ -36,6 +40,7 @@ class RemoteGitViewModel(
     private val backend: OpenCodeBackend,
     private val directoryProvider: () -> String?,
     private val puller: RemoteGitPuller,
+    private val pusher: RemoteGitPusher,
     private val profileProvider: () -> SshProfile?,
 ) : ViewModel() {
     private val _state = MutableStateFlow(RemoteGitUiState())
@@ -93,6 +98,37 @@ class RemoteGitViewModel(
                     }
                 is RemoteGitPullResult.Failed ->
                     _state.update { it.copy(isPulling = false, pullMessage = result.message, pullOutput = result.output) }
+            }
+        }
+    }
+
+    fun push() {
+        if (_state.value.isPushing) return
+        val directory = directoryProvider()?.trim()
+        if (directory.isNullOrEmpty()) {
+            _state.update { it.copy(pushMessage = "Apply a remote project before pushing") }
+            return
+        }
+        val profile = profileProvider()
+        if (profile == null) {
+            _state.update { it.copy(pushMessage = "Select an SSH connection first") }
+            return
+        }
+        _state.update { it.copy(isPushing = true, pushSuccess = false, pushOutput = "", pushMessage = null) }
+        viewModelScope.launch {
+            when (val result = pusher.push(profile, directory)) {
+                is RemoteGitPushResult.Success ->
+                    _state.update { it.copy(isPushing = false, pushSuccess = true, pushOutput = result.output) }
+                is RemoteGitPushResult.Invalid ->
+                    _state.update { it.copy(isPushing = false, pushMessage = "Invalid remote path") }
+                RemoteGitPushResult.MissingCredential ->
+                    _state.update { it.copy(isPushing = false, pushMessage = "No stored SSH credential for this connection") }
+                is RemoteGitPushResult.HostKeyUntrusted ->
+                    _state.update {
+                        it.copy(isPushing = false, pushMessage = "SSH host key is not trusted (${result.hostKey.sha256Fingerprint})")
+                    }
+                is RemoteGitPushResult.Failed ->
+                    _state.update { it.copy(isPushing = false, pushMessage = result.message, pushOutput = result.output) }
             }
         }
     }

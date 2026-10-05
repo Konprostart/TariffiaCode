@@ -43,6 +43,7 @@ fun RemoteGitScreen(
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     onPull: () -> Unit,
+    onPush: () -> Unit,
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -82,6 +83,7 @@ fun RemoteGitScreen(
                 Text(directory, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             PullSection(state = state, onPull = onPull)
+            PushSection(state = state, onPush = onPush)
             if (state.isLoading) {
                 CircularProgressIndicator()
             }
@@ -113,6 +115,49 @@ fun RemoteGitScreen(
                 )
                 state.diffs.forEach { diff -> DiffBlock(diff) }
             }
+        }
+    }
+}
+
+@Composable
+private fun PushSection(
+    state: RemoteGitUiState,
+    onPush: () -> Unit,
+) {
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Button(onClick = onPush, enabled = !state.isPushing) {
+            if (state.isPushing) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(stringResource(R.string.remote_git_push))
+        }
+        state.pushMessage?.let { message ->
+            Spacer(Modifier.width(10.dp))
+            Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+        if (state.pushSuccess) {
+            Spacer(Modifier.width(10.dp))
+            Text(
+                stringResource(R.string.remote_git_push_success),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+    if (state.pushOutput.isNotBlank()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ) {
+            Text(
+                state.pushOutput,
+                modifier = Modifier.padding(12.dp),
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
