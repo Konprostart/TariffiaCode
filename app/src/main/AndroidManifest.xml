@@ -11,7 +11,9 @@
         repository under Download, notes in Documents, a folder synced from a PC. Scoped storage
         offers no way to hand a whole tree to a Linux process as ordinary paths, so all-files
         access is what lets the sandbox open those folders in place instead of copying them into
-        app storage. Nothing is read until the user grants it from system settings.
+        app storage. Nothing is read until the user grants it from system settings, and the sandbox
+        is only given the specific folders the user registered as projects - never all of shared
+        storage (see DeviceStorage.bindArguments and docs/SECURITY_MODEL.md).
     -->
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"

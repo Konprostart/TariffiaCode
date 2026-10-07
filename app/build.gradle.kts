@@ -19,20 +19,29 @@ val githubClientId =
     ).trim()
 val generatedRuntimeAssets = rootProject.layout.buildDirectory.dir("generated/runtime-assets")
 val generatedRuntimeJni = rootProject.layout.buildDirectory.dir("generated/runtime-jni")
+val generatedRuntimeNativeWork = rootProject.layout.buildDirectory.dir("native-source-work")
 
+// Builds the embedded PRoot runtime from pinned first-party sources with the pinned Android NDK
+// (see runtime_tools/native_sources.lock.json). This replaces the former build-time .deb fetch
+// (scripts/prepare_android_runtime_assets.py + runtime_tools/termux_assets.lock.json), which is kept
+// in the repository as provenance only. The output prefix layout is unchanged, so the JNI mapping
+// step below and all runtime Kotlin/Java behaviour are untouched.
 val prepareOpenCodeRuntimeAssets =
     tasks.register<Exec>("prepareOpenCodeRuntimeAssets") {
         inputs.file(repoRoot.resolve("runtime_tools/termux_assets.py"))
-        inputs.file(repoRoot.resolve("runtime_tools/termux_assets.lock.json"))
-        inputs.file(repoRoot.resolve("scripts/prepare_android_runtime_assets.py"))
+        inputs.file(repoRoot.resolve("runtime_tools/native_sources.lock.json"))
+        inputs.file(repoRoot.resolve("scripts/build_android_runtime_from_source.py"))
         outputs.dir(generatedRuntimeAssets)
         commandLine(
             "python3",
-            repoRoot.resolve("scripts/prepare_android_runtime_assets.py").absolutePath,
+            repoRoot.resolve("scripts/build_android_runtime_from_source.py").absolutePath,
             "--output-dir",
             generatedRuntimeAssets.get().asFile.absolutePath,
             "--lock-file",
-            repoRoot.resolve("runtime_tools/termux_assets.lock.json").absolutePath,
+            repoRoot.resolve("runtime_tools/native_sources.lock.json").absolutePath,
+            "--work-dir",
+            generatedRuntimeNativeWork.get().asFile.absolutePath,
+            "--download-ndk",
         )
     }
 
@@ -153,6 +162,10 @@ android {
         versionCode = 69
         versionName = "1.2.30"
         buildConfigField("String", "GITHUB_CLIENT_ID", "\"$githubClientId\"")
+        // Proprietary agent CLIs (Claude Code, Antigravity, Codex) are downloaded at runtime only when
+        // the user opts in. The official F-Droid catalog forbids that, so the `fdroid` flavor turns
+        // the whole feature off; every other distribution keeps it. See ProprietaryAgents.kt.
+        buildConfigField("boolean", "PROPRIETARY_AGENTS_ENABLED", "true")
 
         // The on-device runtime (see ANDROID_ABIS in scripts/prepare_android_runtime_native_libs.py)
         // only exists for these two ABIs. Without the filter JNA and Vosk drag in libraries for
@@ -175,9 +188,13 @@ android {
             dimension = "distribution"
         }
         // Built from source by F-Droid's own build server for the official F-Droid catalog.
-        // Contains no proprietary analytics or crash-reporting code.
+        // Contains no proprietary analytics or crash-reporting code, and no proprietary agent CLIs:
+        // Claude Code, Antigravity and Codex are disabled here (see ProprietaryAgents.kt) so the
+        // build can never download non-free binaries at runtime. OpenCode, SSH/VPS and the remote
+        // workflow are unaffected.
         create("fdroid") {
             dimension = "distribution"
+            buildConfigField("boolean", "PROPRIETARY_AGENTS_ENABLED", "false")
         }
     }
 
@@ -293,9 +310,6 @@ android {
             useLegacyPackaging = true
         }
     }
-    androidResources {
-        noCompress += "tflite"
-    }
 }
 
 tasks.named("preBuild").configure {
@@ -370,6 +384,8 @@ dependencies {
     // Real org.json implementation for unit tests that exercise the schedule bridge protocol.
     testImplementation("org.json:json:20231013")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    // Self-signed TLS for MockWebServer, so the update flow's HTTPS-only transport is tested for real.
+    testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")

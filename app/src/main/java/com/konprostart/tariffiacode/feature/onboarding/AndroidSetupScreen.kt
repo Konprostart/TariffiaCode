@@ -71,6 +71,7 @@ import com.konprostart.tariffiacode.feature.workspace.ClaudeCodeCard
 import com.konprostart.tariffiacode.feature.workspace.CodexCard
 import com.konprostart.tariffiacode.runtime.LocalAgent
 import com.konprostart.tariffiacode.runtime.LocalRuntimeStatus
+import com.konprostart.tariffiacode.runtime.ProprietaryAgents
 import com.konprostart.tariffiacode.runtime.local.AntigravityControllerState
 import com.konprostart.tariffiacode.runtime.local.ClaudeCodeUiState
 import com.konprostart.tariffiacode.runtime.local.ClaudeInstallStatus
@@ -261,7 +262,9 @@ fun AndroidSetupScreen(
                         )
                     ) {
                         if (installFullDevelopmentTools) fullToolsInstallPending = true
-                        onStartSetup(selectedAgents, installFullDevelopmentTools)
+                        // Defensive: a selection restored from a build that had proprietary agents
+                        // (e.g. upgrading from the github flavor) is stripped here too.
+                        onStartSetup(ProprietaryAgents.filter(selectedAgents), installFullDevelopmentTools)
                         if (!installFullDevelopmentTools) currentStep = 3
                     } else {
                         currentStep = 3
@@ -283,7 +286,9 @@ fun AndroidSetupScreen(
                             // failure may have discarded the other agents with it, and
                             // CodexController.install already installs Codex alone when the rest are
                             // there.
-                            if (antigravity.error != null) setOf(LocalAgent.ANTIGRAVITY) else selectedAgents,
+                            ProprietaryAgents.filter(
+                                if (antigravity.error != null) setOf(LocalAgent.ANTIGRAVITY) else selectedAgents,
+                            ),
                             installFullDevelopmentTools,
                         )
                     }
@@ -592,24 +597,28 @@ private fun AgentSelectionStep(
             selected = LocalAgent.OPEN_CODE in selectedAgents,
             onToggle = { onToggle(LocalAgent.OPEN_CODE) },
         )
-        AgentOption(
-            title = stringResource(R.string.agent_claude_code_name),
-            description = stringResource(R.string.setup_agent_claude_code_desc),
-            selected = LocalAgent.CLAUDE_CODE in selectedAgents,
-            onToggle = { onToggle(LocalAgent.CLAUDE_CODE) },
-        )
-        AgentOption(
-            title = stringResource(R.string.agent_antigravity_name),
-            description = stringResource(R.string.setup_agent_antigravity_desc),
-            selected = LocalAgent.ANTIGRAVITY in selectedAgents,
-            onToggle = { onToggle(LocalAgent.ANTIGRAVITY) },
-        )
-        AgentOption(
-            title = stringResource(R.string.agent_codex_name),
-            description = stringResource(R.string.setup_agent_codex_desc),
-            selected = LocalAgent.CODEX in selectedAgents,
-            onToggle = { onToggle(LocalAgent.CODEX) },
-        )
+        // Proprietary agents are hidden entirely in builds that disable them (F-Droid), so they can
+        // never be selected and no install/update/download for them can be started from here.
+        if (ProprietaryAgents.enabled) {
+            AgentOption(
+                title = stringResource(R.string.agent_claude_code_name),
+                description = stringResource(R.string.setup_agent_claude_code_desc),
+                selected = LocalAgent.CLAUDE_CODE in selectedAgents,
+                onToggle = { onToggle(LocalAgent.CLAUDE_CODE) },
+            )
+            AgentOption(
+                title = stringResource(R.string.agent_antigravity_name),
+                description = stringResource(R.string.setup_agent_antigravity_desc),
+                selected = LocalAgent.ANTIGRAVITY in selectedAgents,
+                onToggle = { onToggle(LocalAgent.ANTIGRAVITY) },
+            )
+            AgentOption(
+                title = stringResource(R.string.agent_codex_name),
+                description = stringResource(R.string.setup_agent_codex_desc),
+                selected = LocalAgent.CODEX in selectedAgents,
+                onToggle = { onToggle(LocalAgent.CODEX) },
+            )
+        }
         if (selectedAgents.size >= 2) {
             Text(
                 text = stringResource(R.string.setup_runtime_shared_note),

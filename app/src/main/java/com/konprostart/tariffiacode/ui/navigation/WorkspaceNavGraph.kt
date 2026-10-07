@@ -110,6 +110,8 @@ fun NavGraphBuilder.workspaceNavGraph(
                             adbConnectAction = app.adbConnectionManager::connect,
                             adbDisconnectAction = app.adbConnectionManager::disconnect,
                             adbStartDiscovery = app.adbConnectionManager::startDiscovery,
+                            adbAgentEnabled = app.settings.agentAdbEnabled,
+                            adbSetAgentEnabledAction = app.adbConnectionManager::setAgentAdbEnabled,
                         )
                     },
             )
@@ -135,6 +137,7 @@ fun NavGraphBuilder.workspaceNavGraph(
             onAdbPair = managementViewModel::adbPair,
             onAdbConnect = managementViewModel::adbConnect,
             onAdbDisconnect = managementViewModel::adbDisconnect,
+            onAgentAdbChange = managementViewModel::setAgentAdbEnabled,
         )
     }
 
@@ -186,7 +189,10 @@ fun NavGraphBuilder.workspaceNavGraph(
                 key = "terminal",
                 factory =
                     ViewModelFactory {
-                        TerminalViewModel(app.commandRunner, app.runtimeWork)
+                        TerminalViewModel(
+                            runShell = { command, timeoutSeconds -> app.commandRunner.runShell(command, timeoutSeconds) },
+                            runtimeWork = app.runtimeWork,
+                        )
                     },
             )
         val terminalState by terminalViewModel.state.collectAsState()

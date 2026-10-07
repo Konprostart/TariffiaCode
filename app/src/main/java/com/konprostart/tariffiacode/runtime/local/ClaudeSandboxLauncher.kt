@@ -96,8 +96,10 @@ object ClaudeSandboxLauncher {
                 "USE_BUILTIN_RIPGREP" to "0",
                 "CLAUDE_CODE_DISABLE_AUTOUPDATER" to "1",
                 // PRoot presents a fake uid 0, and Claude Code refuses bypassPermissions as root
-                // unless it is told it is sandboxed. The rootfs is exactly that: app-private
-                // storage reachable only through the bind mounts declared above.
+                // unless it is told it is sandboxed. IS_SANDBOX is only a marker for the CLI: the
+                // PRoot rootfs is NOT a security boundary - the real uid is still the app's uid, so
+                // it cannot confine a same-uid agent (see docs/SECURITY_MODEL.md). The actual
+                // containment is Android's per-app sandbox plus the bind allow-list declared above.
                 "IS_SANDBOX" to "1",
                 "BUN_OPTIONS" to "--preload ${ClaudeCodeInstaller.DNS_PRELOAD}",
                 "TERM" to "xterm-256color",

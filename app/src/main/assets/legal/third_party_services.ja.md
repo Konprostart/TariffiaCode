@@ -14,8 +14,6 @@ TariffiaCodeは以下の第三者サービスと連携します。TariffiaCode�
 | **Alpine Linux**（`dl-cdn.alpinelinux.org`） | 端末内ランタイムが動作する最小Linuxルートファイルシステム | 該当なし（認証不要のダウンロード） | アプリが公式Alpine minirootfsアーカイブをHTTPS経由でダウンロード | 該当なし | いいえ | [Alpine Linuxのライセンス条件](https://alpinelinux.org/)（パッケージごと） | ローカルランタイムを削除 | 独立したオープンソースプロジェクト |
 | **Debian**（`deb.debian.org`、`security.debian.org`） | glibcに依存するAntigravity CLI専用のBookworm rootfs | 該当なし（認証不要の`apt`ミラー） | Debian rootfs内の`apt`が、設定されたミラーからパッケージを取得 | 該当なし | いいえ | [Debianのライセンス](https://www.debian.org/legal/)（パッケージごと） | ローカルランタイムを削除 | 独立したオープンソースプロジェクト |
 | **Termuxパッケージミラー**（`packages.termux.dev`） | ビルド時にAPKへ同梱される`proot`、`libandroid-shmem`、`libtalloc`バイナリの取得元 | 該当なし（ビルド時のダウンロードで、ハッシュにより固定） | ビルドマシンのみ。実行時にエンドユーザーの端末が通信するわけではない | 該当なし | いいえ | 配布元のライセンスは各種 — [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を参照 | 該当なし（ビルド時に同梱） | 独立したオープンソースプロジェクト |
-| **Firebase Crashlytics**（Google） | リリースビルドにおけるクラッシュおよび非致命的エラーの報告 | 該当なし（アプリレベルのFirebaseプロジェクトで、エンドユーザーのログインはなし） | アプリがクラッシュレポートと小さな診断情報をFirebaseへ直接送信。TariffiaCode自身のコードが追加するカスタムログ行／キーはベストエフォートでマスキングされる（PRIVACY.md §7参照）が、Crashlytics SDK自身による致命的クラッシュの自動収集はこのマスキング処理を経由しない | 該当なし（利用者の資格情報はなし。アプリレベルのFirebase設定のみ） | これはGoogleが運用する収集サービス**そのもの**であり、TariffiaCodeのサーバーではありません | [Firebaseの利用規約](https://firebase.google.com/terms) / [Googleのプライバシーポリシー](https://policies.google.com/privacy) | デバッグビルドでは自動的に無効。現時点でリリースビルドにおいて利用者ごとの切り替えはできません | 独立したGoogleのサービス。上記のAIエージェント連携とは無関係 |
-
 ## OpenCodeの資格情報経路
 
 上表の「OpenCode」は、実際には利用方法によって異なる3つの資格情報フローをまとめたものです。
@@ -26,6 +24,6 @@ TariffiaCodeは以下の第三者サービスと連携します。TariffiaCode�
 
 ## 補足
 
-- 「TariffiaCode独自サーバーを経由するか」は、Crashlyticsを除くすべての行で「いいえ」です。Crashlyticsはテレメトリの収集経路であり、プロンプト・ファイル・資格情報を中継するプロキシではありません。
+- 「TariffiaCode独自サーバーを経由するか」は、すべての行で「いいえ」です。TariffiaCodeはこれらのいずれの経路にもサーバーを運用していません。
 - Claude Code、Antigravity、OpenCodeの各行は、TariffiaCodeが再実装したものではなく、*公式*CLI自身のネットワークおよび資格情報の挙動を説明したものです。詳細は[docs/AUTHENTICATION_AND_DATA_FLOW.md](docs/AUTHENTICATION_AND_DATA_FLOW.md)を参照してください。
 - TariffiaCodeとともに利用しているサービスがここに記載されていない場合（例：OpenCode経由で接続した別のMCPサーバーやモデルプロバイダー）でも、そのサービスにはTariffiaCodeの規約ではなく、そのサービス自身の規約が適用されます。

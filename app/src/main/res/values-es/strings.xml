@@ -77,6 +77,7 @@
     <string name="workspace_clone_url_tab">URL</string>
     <string name="workspace_clone_search">Buscar repositorios</string>
     <string name="workspace_clone_loading_repos">Cargando repositorios…</string>
+    <string name="workspace_clone_repos_failed">Could not load your repositories</string>
     <string name="workspace_clone_failed">Error al clonar (código de salida %1$d)</string>
     <string name="workspace_more_options">Más opciones</string>
     <string name="workspace_remove_from_list">Quitar de la lista</string>
@@ -587,7 +588,6 @@
     <string name="legal_license_lgpl3">LGPL-3.0</string>
     <string name="legal_license_bsd3">BSD-3-Clause (libandroid-shmem)</string>
     <string name="legal_license_apache2">Licencia Apache 2.0</string>
-    <string name="legal_license_ccbyncsa4">CC BY-NC-SA 4.0 (modelos de palabra de activación)</string>
     <string name="section_appearance_settings">Apariencia</string>
     <string name="theme_row">Tema</string>
     <string name="theme_dialog_title">Seleccionar tema</string>
@@ -1263,4 +1263,10 @@
     <string name="remote_git_pull_success">Pulled.</string>
     <string name="remote_git_push">Push</string>
     <string name="remote_git_push_success">Pushed.</string>
+    <string name="adb_agent_access_title">Allow agents to use ADB</string>
+    <string name="adb_agent_access_description">Off by default. When on, TariffiaCode keeps the wireless-ADB link connected so agents can install, launch or inspect apps on this device. Enable only on a device you trust.</string>
+    <string name="github_share_token_title">Let agents use your GitHub token</string>
+    <string name="github_share_token_description">Off by default. When on, the token is written into the local runtime sandbox so agents can push or fetch from GitHub. Cloning from the app always works without this.</string>
+    <string name="codex_full_access_title">Allow Codex full access</string>
+    <string name="codex_full_access_description">Off by default. When on, Codex runs without its own sandbox (danger-full-access), so it can reach the whole device filesystem, network and processes. Enable only if the sandboxed mode cannot run your commands.</string>
 </resources>

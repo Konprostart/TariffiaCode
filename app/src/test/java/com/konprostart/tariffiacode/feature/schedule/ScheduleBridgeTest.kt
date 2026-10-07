@@ -110,84 +110,16 @@ class ScheduleBridgeTest {
             if (cron != null) put("cron", cron) else put("oneTimeAt", oneTimeAt)
         }
 
-    @Test
-    fun `create writes the new schedule back to the guest`() {
-        val store = FakeStore()
-        val bridge = bridgeWith(store)
-        val id = requestId()
-        writeRequest(bridge, id, "create", createArgs())
-
-        bridge.pollOnce()
-
-        assertFalse(File(responsesDir(bridge), "$id.json.tmp").exists())
-        val response = readResponse(bridge, id)
-        assertTrue(response.getBoolean("ok"))
-        val schedule = response.getJSONObject("data").getJSONObject("schedule")
-        assertEquals("local", schedule.getString("runtimeId"))
-        assertEquals("整理のリマインダー", schedule.getString("prompt"))
-        assertEquals("0 9 * * *", schedule.getString("cron"))
-        assertTrue(schedule.isNull("oneTimeAt"))
-        assertTrue(schedule.isNull("nextFireAt"))
-        assertEquals("整理のリマインダー", schedule.getString("displayName"))
-        assertTrue(schedule.getBoolean("isRecurring"))
-        assertTrue(schedule.getBoolean("enabled"))
-        assertEquals(1, store.schedules.size)
-        assertTrue(store.reschedules == 1)
-        assertTrue(!File(pendingDir(bridge), "$id.json").exists())
+    private fun assertRefused(
+        response: JSONObject,
+        op: String,
+    ) {
+        assertFalse(response.getBoolean("ok"))
+        assertTrue(response.getString("error").contains(op))
+        assertTrue(response.getString("error").contains("TariffiaCode app"))
     }
 
-    @Test
-    fun `create requires a prompt`() {
-        val store = FakeStore()
-        val bridge = bridgeWith(store)
-        val id = requestId()
-        writeRequest(bridge, id, "create", createArgs(prompt = "   "))
-
-        bridge.pollOnce()
-
-        val response = readResponse(bridge, id)
-        assertTrue(!response.getBoolean("ok"))
-        assertTrue(response.getString("error").contains("prompt"))
-        assertTrue(store.schedules.isEmpty())
-    }
-
-    @Test
-    fun `create requires exactly one trigger`() {
-        val store = FakeStore()
-        val bridge = bridgeWith(store)
-        val id = requestId()
-        writeRequest(
-            bridge,
-            id,
-            "create",
-            JSONObject().apply {
-                put("runtimeId", "local")
-                put("prompt", "x")
-                put("cron", "0 9 * * *")
-                put("oneTimeAt", 1L)
-            },
-        )
-
-        bridge.pollOnce()
-
-        val response = readResponse(bridge, id)
-        assertTrue(!response.getBoolean("ok"))
-        assertTrue(response.getString("error").contains("exactly one"))
-    }
-
-    @Test
-    fun `create validates the cron expression`() {
-        val store = FakeStore()
-        val bridge = bridgeWith(store)
-        val id = requestId()
-        writeRequest(bridge, id, "create", createArgs(cron = "not a cron"))
-
-        bridge.pollOnce()
-
-        val response = readResponse(bridge, id)
-        assertTrue(!response.getBoolean("ok"))
-        assertTrue(response.getString("error").contains("cron"))
-    }
+    // ---- reads still work ----
 
     @Test
     fun `list returns stored schedules with computed fields`() {
@@ -280,8 +212,25 @@ class ScheduleBridgeTest {
         assertTrue(runs.getJSONObject(0).isNull("error"))
     }
 
+    // ---- agent-initiated mutations are refused (AGT-1) ----
+
     @Test
-    fun `update keeps the id and timestamps and can switch to a one-time trigger`() {
+    fun `create is refused and stores nothing`() {
+        val store = FakeStore()
+        val bridge = bridgeWith(store)
+        val id = requestId()
+        writeRequest(bridge, id, "create", createArgs())
+
+        bridge.pollOnce()
+
+        assertRefused(readResponse(bridge, id), "create")
+        assertTrue(store.schedules.isEmpty())
+        assertEquals(0, store.reschedules)
+        assertTrue(!File(pendingDir(bridge), "$id.json").exists())
+    }
+
+    @Test
+    fun `update is refused and leaves the schedule unchanged`() {
         val store = FakeStore()
         store.schedules.add(Schedule(id = "s1", name = "old", runtimeId = "local", prompt = "p", cron = "0 9 * * *"))
         val bridge = bridgeWith(store)
@@ -294,97 +243,46 @@ class ScheduleBridgeTest {
                 put("scheduleId", "s1")
                 put("name", "new name")
                 put("enabled", false)
-                put("oneTimeAt", 123456789L)
             },
         )
 
         bridge.pollOnce()
 
-        val response = readResponse(bridge, id)
-        assertTrue(response.getBoolean("ok"))
-        val schedule = response.getJSONObject("data").getJSONObject("schedule")
-        assertEquals("s1", schedule.getString("id"))
-        assertEquals("new name", schedule.getString("name"))
-        assertTrue(!schedule.getBoolean("enabled"))
-        assertTrue(schedule.isNull("cron"))
-        assertEquals(123456789L, schedule.getLong("oneTimeAt"))
-        assertTrue(store.schedules.single().displayName == "new name")
+        assertRefused(readResponse(bridge, id), "update")
+        assertEquals("old", store.schedules.single().name)
+        assertTrue(store.schedules.single().enabled)
     }
 
     @Test
-    fun `update validates cron before applying`() {
+    fun `delete is refused and keeps the schedule`() {
         val store = FakeStore()
         store.schedules.add(Schedule(id = "s1", runtimeId = "local", prompt = "p", cron = "0 9 * * *"))
-        val bridge = bridgeWith(store)
-        val id = requestId()
-        writeRequest(
-            bridge,
-            id,
-            "update",
-            JSONObject().apply {
-                put("scheduleId", "s1")
-                put("cron", "broken")
-            },
-        )
-
-        bridge.pollOnce()
-
-        val response = readResponse(bridge, id)
-        assertTrue(!response.getBoolean("ok"))
-        assertTrue(response.getString("error").contains("cron"))
-        assertEquals("0 9 * * *", store.schedules.single().cron)
-    }
-
-    @Test
-    fun `update on a missing schedule errors`() {
-        val store = FakeStore()
-        val bridge = bridgeWith(store)
-        val id = requestId()
-        writeRequest(bridge, id, "update", JSONObject().put("scheduleId", "nope").put("name", "x"))
-
-        bridge.pollOnce()
-
-        val response = readResponse(bridge, id)
-        assertTrue(!response.getBoolean("ok"))
-        assertTrue(response.getString("error").contains("not found"))
-    }
-
-    @Test
-    fun `delete removes the schedule and its runs`() {
-        val store = FakeStore()
-        store.schedules.add(Schedule(id = "s1", runtimeId = "local", prompt = "p", cron = "0 9 * * *"))
-        store.runs.add(ScheduleRun(id = "r1", scheduleId = "s1", sessionId = "", runtimeId = "local"))
         val bridge = bridgeWith(store)
         val id = requestId()
         writeRequest(bridge, id, "delete", JSONObject().put("scheduleId", "s1"))
 
         bridge.pollOnce()
 
-        val data = readResponse(bridge, id).getJSONObject("data")
-        assertEquals("s1", data.getString("id"))
-        assertTrue(data.getBoolean("deleted"))
-        assertTrue(store.schedules.isEmpty())
-        assertTrue(store.runs.isEmpty())
+        assertRefused(readResponse(bridge, id), "delete")
+        assertEquals(1, store.schedules.size)
     }
 
     @Test
-    fun `setEnabled toggles the schedule without touching timing`() {
+    fun `setEnabled is refused and keeps the schedule state`() {
         val store = FakeStore()
-        store.schedules.add(Schedule(id = "s1", runtimeId = "local", prompt = "p", cron = "0 9 * * *"))
+        store.schedules.add(Schedule(id = "s1", runtimeId = "local", prompt = "p", cron = "0 9 * * *", enabled = true))
         val bridge = bridgeWith(store)
         val id = requestId()
         writeRequest(bridge, id, "setEnabled", JSONObject().put("scheduleId", "s1").put("enabled", false))
 
         bridge.pollOnce()
 
-        val data = readResponse(bridge, id).getJSONObject("data")
-        assertTrue(!data.getBoolean("enabled"))
-        assertTrue(!store.schedules.single().enabled)
-        assertEquals("0 9 * * *", store.schedules.single().cron)
+        assertRefused(readResponse(bridge, id), "setEnabled")
+        assertTrue(store.schedules.single().enabled)
     }
 
     @Test
-    fun `runNow starts the run immediately`() {
+    fun `runNow is refused and never starts a run`() {
         val store = FakeStore()
         store.schedules.add(Schedule(id = "s1", runtimeId = "local", prompt = "p", cron = "0 9 * * *"))
         val bridge = bridgeWith(store)
@@ -393,11 +291,49 @@ class ScheduleBridgeTest {
 
         bridge.pollOnce()
 
-        val data = readResponse(bridge, id).getJSONObject("data")
-        assertEquals("s1", data.getString("id"))
-        assertTrue(data.getBoolean("started"))
-        assertEquals(listOf("s1"), store.runNowCalls)
+        assertRefused(readResponse(bridge, id), "runNow")
+        assertTrue(store.runNowCalls.isEmpty())
     }
+
+    @Test
+    fun `autoAcceptPermissions cannot be enabled through the bridge`() {
+        val store = FakeStore()
+        val bridge = bridgeWith(store)
+        val createId = requestId()
+        writeRequest(
+            bridge,
+            createId,
+            "create",
+            createArgs().put("autoAcceptPermissions", true),
+        )
+
+        bridge.pollOnce()
+
+        assertRefused(readResponse(bridge, createId), "create")
+        assertTrue(store.schedules.isEmpty())
+        assertTrue(store.schedules.none { it.autoAcceptPermissions == true })
+    }
+
+    // ---- the manual workflow is unaffected (block is only at the guest bridge) ----
+
+    @Test
+    fun `manual store changes still work after the bridge block`() {
+        val store = FakeStore()
+        val bridge = bridgeWith(store)
+
+        // The UI path talks to the store directly, not through the bridge.
+        val schedule = Schedule(id = "s1", runtimeId = "local", prompt = "p", cron = "0 9 * * *", enabled = true)
+        store.upsert(schedule)
+        store.setEnabled("s1", false)
+
+        assertEquals(1, store.schedules.size)
+        assertFalse(store.schedules.single().enabled)
+        // The bridge did not interfere.
+        assertEquals(0, store.runNowCalls.size)
+        assertTrue(bridge.bridgeDir.parentFile != null)
+    }
+
+    // ---- protocol robustness ----
 
     @Test
     fun `unknown operation is reported as an error`() {
@@ -409,7 +345,7 @@ class ScheduleBridgeTest {
         bridge.pollOnce()
 
         val response = readResponse(bridge, id)
-        assertTrue(!response.getBoolean("ok"))
+        assertFalse(response.getBoolean("ok"))
         assertTrue(response.getString("error").contains("unknown operation"))
     }
 
@@ -426,7 +362,7 @@ class ScheduleBridgeTest {
         bridge.pollOnce()
 
         val response = readResponse(bridge, id)
-        assertTrue(!response.getBoolean("ok"))
+        assertFalse(response.getBoolean("ok"))
         assertTrue(!File(pendingDir(bridge), "$id.json").exists())
     }
 

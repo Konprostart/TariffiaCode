@@ -62,14 +62,14 @@ fun AppUpdateSectionCard(
 
 /**
  * Minimal "TariffiaCode update" card: checks GitHub Releases for a newer published APK and, when one
- * exists, offers the official download. It never installs anything - [onDownload] is expected to open
- * the APK URL and let the user start the download/install explicitly.
+ * exists, offers the official download. [onDownload] downloads the APK, verifies its SHA-256 against
+ * the release digest, and hands it to the system installer, which the user still confirms.
  */
 @Composable
 fun AppUpdateCard(
     state: AppUpdateUiState,
     onCheck: () -> Unit,
-    onDownload: (String) -> Unit,
+    onDownload: (AppUpdateRelease) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -148,7 +148,7 @@ fun AppUpdateCard(
             )
             Spacer(Modifier.padding(vertical = 6.dp))
             Button(
-                onClick = { onDownload(check.release.apkUrl) },
+                onClick = { onDownload(check.release) },
                 enabled = !state.isChecking && !state.isDownloading,
                 modifier = Modifier.fillMaxWidth(),
             ) {

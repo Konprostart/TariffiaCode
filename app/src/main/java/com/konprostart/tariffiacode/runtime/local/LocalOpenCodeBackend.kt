@@ -39,9 +39,16 @@ class LocalOpenCodeBackend(
     private val backendFactory: (ConnectionProfile) -> RemoteOpenCodeBackend = { profile ->
         RemoteOpenCodeBackend(profile)
     },
+    /**
+     * The Basic-auth password the local server was started with (see [LocalRuntimeServerSecret]).
+     * Null means no credentials are sent, which is only correct for a server started before loopback
+     * auth existed.
+     */
+    private val passwordProvider: () -> String? = { null },
 ) : OpenCodeBackend {
     constructor(runtimeManager: LocalRuntimeManager) : this(
         portProvider = runtimeManager::installedPort,
+        passwordProvider = runtimeManager::serverPassword,
     )
 
     override val id: String = "local-android"
@@ -56,21 +63,23 @@ class LocalOpenCodeBackend(
         val port =
             portProvider()
                 ?: error("Android local OpenCode runtime is not installed")
-        cached?.takeIf { it.port == port }?.let { return it.backend }
+        val password = passwordProvider()?.takeIf { it.isNotBlank() }
+        cached?.takeIf { it.port == port && it.password == password }?.let { return it.backend }
 
         synchronized(lock) {
-            cached?.takeIf { it.port == port }?.let { return it.backend }
+            cached?.takeIf { it.port == port && it.password == password }?.let { return it.backend }
             val backend =
                 backendFactory(
                     ConnectionProfile(
                         id = id,
                         name = displayName,
                         baseUrl = "http://127.0.0.1:$port/",
-                        username = "opencode",
+                        username = LocalRuntimeServerSecret.USERNAME,
+                        password = password,
                         allowInsecureLan = true,
                     ),
                 )
-            cached = CachedDelegate(port, backend)
+            cached = CachedDelegate(port, password, backend)
             return backend
         }
     }
@@ -254,6 +263,7 @@ class LocalOpenCodeBackend(
 
     private data class CachedDelegate(
         val port: Int,
+        val password: String?,
         val backend: RemoteOpenCodeBackend,
     )
 }

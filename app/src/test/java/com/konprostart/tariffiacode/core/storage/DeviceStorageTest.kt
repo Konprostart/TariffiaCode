@@ -22,23 +22,30 @@ class DeviceStorageTest {
     @Test
     fun `an ungranted device contributes no mounts, so the sandbox is unchanged`() {
         assertTrue(DeviceStorage.Mounts.None.isEmpty)
-        assertEquals(emptyList<String>(), DeviceStorage.bindArguments(DeviceStorage.Mounts.None))
+        assertEquals(emptyList<String>(), DeviceStorage.bindArguments(DeviceStorage.Mounts.None, emptyList()))
         assertEquals(emptyList<String>(), DeviceStorage.guestRoots(DeviceStorage.Mounts.None))
     }
 
     @Test
-    fun `shared storage is bound at the alias Android itself uses`() {
+    fun `only a registered project folder is bound, never the whole storage tree`() {
         val mounts = mounts()
+        val project = File(mounts.sharedStorage, "Download/repo").apply { mkdirs() }
 
         assertEquals(
-            listOf(
-                "-b",
-                "${mounts.volumes!!.absolutePath}:/storage",
-                "-b",
-                "${mounts.sharedStorage!!.absolutePath}:/sdcard",
-            ),
-            DeviceStorage.bindArguments(mounts),
+            listOf("-b", "${project.absolutePath}:/sdcard/Download/repo"),
+            DeviceStorage.bindArguments(mounts, listOf("/sdcard/Download/repo")),
         )
+    }
+
+    @Test
+    fun `a storage root cannot be registered to reopen broad access`() {
+        assertEquals(emptyList<String>(), DeviceStorage.bindArguments(mounts(), listOf("/sdcard", "/storage")))
+    }
+
+    @Test
+    fun `a path that is not a registered device project is not bound`() {
+        assertEquals(emptyList<String>(), DeviceStorage.bindArguments(mounts(), listOf("/workspace/app")))
+        assertEquals(emptyList<String>(), DeviceStorage.bindArguments(DeviceStorage.Mounts.None, listOf("/sdcard/Download/repo")))
     }
 
     @Test
@@ -95,14 +102,19 @@ class DeviceStorageTest {
     fun `the installed provider is read on each call`() {
         val granted = mounts()
         var current = DeviceStorage.Mounts.None
+        var projects = emptyList<String>()
         DeviceStorage.install { current }
+        DeviceStorage.installProjectPaths { projects }
         try {
             assertEquals(emptyList<String>(), DeviceStorage.bindArguments())
 
             current = granted
-            assertEquals(DeviceStorage.bindArguments(granted), DeviceStorage.bindArguments())
+            projects = listOf("/sdcard/Download/repo")
+            File(granted.sharedStorage, "Download/repo").mkdirs()
+            assertEquals(DeviceStorage.bindArguments(granted, projects), DeviceStorage.bindArguments())
         } finally {
             DeviceStorage.install { DeviceStorage.Mounts.None }
+            DeviceStorage.installProjectPaths { emptyList() }
         }
     }
 }

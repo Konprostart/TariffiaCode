@@ -30,6 +30,8 @@ data class LocalRuntimeManagementUiState(
     val showAdbPairDialog: Boolean = false,
     val isAdbPairing: Boolean = false,
     val isAdbConnecting: Boolean = false,
+    /** Explicit user opt-in that lets agents keep and use the wireless-ADB link. Default off. */
+    val agentAdbEnabled: Boolean = false,
 )
 
 class LocalRuntimeManagementViewModel(
@@ -48,6 +50,8 @@ class LocalRuntimeManagementViewModel(
     private val adbConnectAction: (suspend (Int) -> Result<Unit>)? = null,
     private val adbDisconnectAction: (suspend () -> Result<Unit>)? = null,
     private val adbStartDiscovery: (() -> Unit)? = null,
+    adbAgentEnabled: Boolean = false,
+    private val adbSetAgentEnabledAction: (suspend (Boolean) -> Unit)? = null,
 ) : ViewModel() {
     init {
         require(deleteTimeoutMillis > 0L)
@@ -58,6 +62,7 @@ class LocalRuntimeManagementViewModel(
             LocalRuntimeManagementUiState(
                 runtimeStatus = runtimeState.value,
                 lastOperation = lastOperationState.value,
+                agentAdbEnabled = adbAgentEnabled,
             ),
         )
     val state: StateFlow<LocalRuntimeManagementUiState> = mutableState.asStateFlow()
@@ -245,6 +250,13 @@ class LocalRuntimeManagementViewModel(
     fun adbDisconnect() {
         val action = adbDisconnectAction ?: return
         viewModelScope.launch { action() }
+    }
+
+    /** Explicit user opt-in/out for agent use of the wireless-ADB link. */
+    fun setAgentAdbEnabled(enabled: Boolean) {
+        val action = adbSetAgentEnabledAction ?: return
+        mutableState.update { it.copy(agentAdbEnabled = enabled) }
+        viewModelScope.launch { action(enabled) }
     }
 
     private fun refreshAfterRuntimeOperation() {

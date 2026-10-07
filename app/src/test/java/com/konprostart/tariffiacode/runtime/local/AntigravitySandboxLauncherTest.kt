@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -69,6 +70,22 @@ class AntigravitySandboxLauncherTest {
             assertEquals("keep", healed["custom"]?.jsonPrimitive?.content)
         } finally {
             rootfs.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `environment injects GH_TOKEN only when a token is provided`() {
+        val root = Files.createTempDirectory("agy-env").toFile()
+        try {
+            val runtime = mockRuntime(root)
+
+            val withoutToken = AntigravitySandboxLauncher.environment(runtime, root, githubToken = null)
+            assertFalse("no token must mean no GH_TOKEN", withoutToken.containsKey("GH_TOKEN"))
+
+            val withToken = AntigravitySandboxLauncher.environment(runtime, root, githubToken = "t")
+            assertEquals("t", withToken["GH_TOKEN"])
+        } finally {
+            root.deleteRecursively()
         }
     }
 

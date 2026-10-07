@@ -15,6 +15,8 @@ import org.junit.Test
 import java.io.File
 
 class AppUpdateViewModelTest {
+    private val sha = "a".repeat(64)
+
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -28,14 +30,16 @@ class AppUpdateViewModelTest {
     private class FakeDownloader(
         var fail: Boolean = false,
     ) : AppUpdateApkDownloader {
-        val downloads = mutableListOf<Pair<String, File>>()
+        val downloads = mutableListOf<Triple<String, File, String>>()
 
         override suspend fun download(
             apkUrl: String,
             destination: File,
+            expectedSha256: String,
+            expectedSizeBytes: Long?,
         ) {
             if (fail) error("download failed")
-            downloads += apkUrl to destination
+            downloads += Triple(apkUrl, destination, expectedSha256)
         }
     }
 
@@ -66,12 +70,19 @@ class AppUpdateViewModelTest {
             "assets": [
               {
                 "name": "tariffiacode-$tag-release.apk",
-                "browser_download_url": "https://github.com/Konprostart/TariffiaCode/releases/download/$tag/tariffiacode-$tag-release.apk"
+                "browser_download_url": "https://github.com/Konprostart/TariffiaCode/releases/download/$tag/tariffiacode-$tag-release.apk",
+                "digest": "sha256:$sha",
+                "size": 12345
               }
             ]
           }
         ]
         """.trimIndent()
+
+    private fun release(
+        url: String = "https://example.com/update.apk",
+        sha: String = this.sha,
+    ) = AppUpdateRelease(version = "9.9.9", apkUrl = url, sha256 = sha)
 
     private fun viewModel(
         json: String,
@@ -117,9 +128,10 @@ class AppUpdateViewModelTest {
             val apkFile = File.createTempFile("apk", ".apk")
             val vm = viewModel(releaseJson(), downloader, installer, apkFile)
 
-            vm.downloadAndInstall("https://example.com/update.apk")
+            vm.downloadAndInstall(release("https://example.com/update.apk", sha))
 
-            assertEquals(listOf("https://example.com/update.apk" to apkFile), downloader.downloads)
+            // The expected hash from the release is what the downloader verifies against.
+            assertEquals(listOf(Triple("https://example.com/update.apk", apkFile, sha)), downloader.downloads)
             assertEquals(listOf(apkFile), installer.installed)
             assertFalse(vm.state.value.isDownloading)
             assertNotNull(vm.state.value.installMessage)
@@ -131,7 +143,7 @@ class AppUpdateViewModelTest {
             val installer = FakeInstaller()
             val vm = viewModel(releaseJson(), FakeDownloader(fail = true), installer, File.createTempFile("apk", ".apk"))
 
-            vm.downloadAndInstall("https://example.com/update.apk")
+            vm.downloadAndInstall(release())
 
             assertNotNull(vm.state.value.error)
             assertTrue(installer.installed.isEmpty())
@@ -145,7 +157,7 @@ class AppUpdateViewModelTest {
             val installer = FakeInstaller(canInstall = false)
             val vm = viewModel(releaseJson(), downloader, installer, File.createTempFile("apk", ".apk"))
 
-            vm.downloadAndInstall("https://example.com/update.apk")
+            vm.downloadAndInstall(release())
 
             assertTrue(installer.permissionRequested)
             assertTrue(downloader.downloads.isEmpty())

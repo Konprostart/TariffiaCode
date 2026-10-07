@@ -2,6 +2,7 @@ package com.konprostart.tariffiacode.feature.remote
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.konprostart.tariffiacode.core.ssh.SshHostKey
 import com.konprostart.tariffiacode.data.remote.RemoteProject
 import com.konprostart.tariffiacode.data.remote.RemoteProjectStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
@@ -32,6 +33,12 @@ data class RemoteProjectUiState(
     val danglingIds: Set<String> = emptySet(),
     val appliedId: String? = null,
     val connectionState: RuntimeState = RuntimeState.Disconnected,
+    /**
+     * A server key the VPS connection is waiting on: the profile has no trusted fingerprint yet, so
+     * the user must confirm the fingerprint before the connection proceeds. Null on a key mismatch,
+     * which is refused outright and never offered for trust.
+     */
+    val pendingHostKey: SshHostKey? = null,
     val form: RemoteProjectForm? = null,
     val message: String? = null,
 )
@@ -58,6 +65,16 @@ class RemoteProjectViewModel(
                 _state.update { it.copy(connectionState = runtimeState) }
             }
         }
+        viewModelScope.launch {
+            controller.pendingHostKey.collect { hostKey ->
+                _state.update { it.copy(pendingHostKey = hostKey) }
+            }
+        }
+        viewModelScope.launch {
+            controller.selectedRemoteProject.collect { project ->
+                _state.update { it.copy(appliedId = project?.id) }
+            }
+        }
     }
 
     private fun loadState(): RemoteProjectUiState {
@@ -66,6 +83,8 @@ class RemoteProjectViewModel(
             projects = projects,
             sshProfiles = sshProfiles.profiles(),
             danglingIds = store.danglingProjects().map { it.id }.toSet(),
+            // Restored from the persisted selection, so the applied mapping is still marked after a restart.
+            appliedId = controller.selectedRemoteProject.value?.id,
         )
     }
 
@@ -139,6 +158,10 @@ class RemoteProjectViewModel(
 
     fun deleteProject(id: String) {
         store.delete(id)
+        if (_state.value.appliedId == id) {
+            // Stop using the deleted mapping and clear the persisted selection, not just the marker.
+            controller.selectRemoteProject(null)
+        }
         _state.update { if (it.appliedId == id) it.copy(appliedId = null) else it }
         refresh()
     }
@@ -154,6 +177,26 @@ class RemoteProjectViewModel(
         }
         onApply(project, profile)
         _state.update { it.copy(appliedId = id, message = null) }
+    }
+
+    /** The user confirmed the presented key: persist it on the profile, then retry the connection. */
+    fun trustPendingHostKey() {
+        val pending = _state.value.pendingHostKey ?: return
+        val updated = controller.trustHostKey(pending) ?: return
+        sshProfiles.upsert(updated)
+        _state.update {
+            it.copy(
+                sshProfiles = sshProfiles.profiles(),
+                pendingHostKey = null,
+            )
+        }
+        connect()
+    }
+
+    /** The user declined the presented key: drop it and stay disconnected. */
+    fun dismissPendingHostKey() {
+        controller.dismissHostKey()
+        _state.update { it.copy(pendingHostKey = null) }
     }
 
     fun connect() {

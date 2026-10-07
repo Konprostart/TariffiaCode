@@ -3,7 +3,9 @@ package com.konprostart.tariffiacode.feature.workspace
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.konprostart.tariffiacode.core.runtime.RuntimeWorkTracker
-import com.konprostart.tariffiacode.runtime.local.LocalRuntimeCommandRunner
+import com.konprostart.tariffiacode.runtime.local.LocalRuntimeCommandResult
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +29,12 @@ data class TerminalUiState(
 )
 
 class TerminalViewModel(
-    private val commandRunner: LocalRuntimeCommandRunner,
+    /**
+     * Runs one command in the sandbox. A function rather than the concrete runner so the failure
+     * path is testable; [com.konprostart.tariffiacode.runtime.local.LocalRuntimeCommandRunner.runShell]
+     * is wired in by the navigation graph.
+     */
+    private val runShell: suspend (command: String, timeoutSeconds: Long) -> LocalRuntimeCommandResult,
     /**
      * A shell command run here is real work on the runtime's proot process just like a chat turn,
      * but the terminal never touches
@@ -35,6 +42,8 @@ class TerminalViewModel(
      * already tracks that as work - so without a lease the device could suspend mid-command.
      */
     private val runtimeWork: RuntimeWorkTracker,
+    /** Where the blocking sandbox command runs; injectable so the failure path is testable. */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     private val _state =
         MutableStateFlow(
@@ -61,16 +70,35 @@ class TerminalViewModel(
 
         viewModelScope.launch {
             val result =
-                runtimeWork.withLease(TERMINAL_LEASE_TAG) {
-                    withContext(Dispatchers.IO) {
-                        val fullCommand =
-                            if (_state.value.workingDirectory != "/root") {
-                                "cd ${_state.value.workingDirectory} && $trimmed"
-                            } else {
-                                trimmed
-                            }
-                        commandRunner.runShell(fullCommand, timeoutSeconds = 30L)
+                try {
+                    runtimeWork.withLease(TERMINAL_LEASE_TAG) {
+                        withContext(ioDispatcher) {
+                            val fullCommand =
+                                if (_state.value.workingDirectory != "/root") {
+                                    "cd ${_state.value.workingDirectory} && $trimmed"
+                                } else {
+                                    trimmed
+                                }
+                            runShell(fullCommand, 30L)
+                        }
                     }
+                } catch (cancellation: CancellationException) {
+                    // The ViewModel is going away; do not report it as a command failure.
+                    throw cancellation
+                } catch (error: Exception) {
+                    // Launching or reading the sandbox process failed (I/O, runtime missing). Keep the
+                    // terminal usable and show it as an error line instead of crashing the scope.
+                    _state.update { s ->
+                        s.copy(
+                            lines =
+                                appendLine(
+                                    s.lines,
+                                    TerminalLine(error.message ?: "Command failed to run", TerminalLineType.ERROR),
+                                ),
+                            isRunning = false,
+                        )
+                    }
+                    return@launch
                 }
 
             _state.update { s ->

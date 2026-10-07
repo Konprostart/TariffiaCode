@@ -43,14 +43,7 @@ TariffiaCodeは**全ファイルアクセス**（`MANAGE_EXTERNAL_STORAGE`）を
 
 ## 7. 診断とクラッシュレポート
 
-TariffiaCodeは、リリースビルドにおけるクラッシュおよび非致命的エラーの報告に**Firebase Crashlytics**（Googleのサービス）を使用しています（`core/diagnostics`内の`CrashReporter`）。これは以下を行います。
-
-- `CrashReporter.install()`が明示的に設定する、アプリバージョン、ビルド種別、OSバージョンをカスタムキーとして送信します。
-- クラッシュのスタックトレースと短い診断ログ行を送信します。TariffiaCode自身のコードが`CrashReporter.log()`／`recordException()`を通して渡すカスタムログ行およびカスタムキーの値は、APIキー・トークン・`Authorization`／`Cookie`ヘッダー・パスワードに**似たパターン**を除去し長さを切り詰めるマスキング処理（`SecretRedaction`、`CrashReportSanitizer`）を経由します。**これはベストエフォートのパターンマッチングであり、あらゆる形式の資格情報を確実に検出することを保証するものではありません**（例：現在のパターンに含まれないプロバイダーキーの形式や、ラベルのない鍵などは、万一ログ行に含まれてしまった場合に検出をすり抜ける可能性があります）。Crashlytics自身のSDKが自動的に収集する致命的クラッシュの例外メッセージ／スタックトレースは、`CrashReporter`を経由しないため、このマスキング処理を**通りません**。これらはTariffiaCode側のコードが実行される前にCrashlytics自身によって捕捉されるためです。
-- Crashlytics SDKは、TariffiaCode側のコードが明示的に送信する内容とは別に、標準的な端末／アプリ／インストール診断情報も自動的に収集します（例：端末モデル、OSバージョン、アプリバージョン、Firebaseインストールの識別子、クラッシュ時点での空き／総ストレージ容量とRAM）。これはTariffiaCode側のコードが制御している範囲ではないため、最新かつ完全な一覧はFirebase自身のドキュメントを参照してください。
-- デバッグビルドでは無効化されています（`setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)`）。
-
-Crashlyticsのデータは、GoogleおよびFirebase自身のプライバシー条件に従います。詳細は[THIRD_PARTY_SERVICES.md](THIRD_PARTY_SERVICES.md)を参照してください。
+TariffiaCodeは、クラッシュレポート・アナリティクス・その他の診断情報を**端末外へ一切送信しません**。`core/diagnostics`内の`CrashReporter`と`AnalyticsReporter`は何もしない実装（no-op）で、クラッシュは端末上のローカルログファイル（`CrashLog`）にのみ記録され、利用状況の指標は収集も送信もされません。リリースビルドにFirebase・Crashlytics・Play Servicesその他のクラッシュレポート／アナリティクスSDKは含まれておらず、デバッグビルドとF-Droidビルドもこの点は同一です。何も送信しないため、診断データが第三者サービスの規約に服することはありません。
 
 ## 8. スケジュールタスクとバックグラウンド処理
 

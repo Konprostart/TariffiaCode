@@ -50,7 +50,7 @@ class RemoteGitCloner(
             RemoteCommandOutcome.MissingCredential -> RemoteGitCloneResult.MissingCredential
             is RemoteCommandOutcome.HostKeyUntrusted -> RemoteGitCloneResult.HostKeyUntrusted(outcome.hostKey)
             is RemoteCommandOutcome.Failed -> RemoteGitCloneResult.Failed(outcome.message)
-            is RemoteCommandOutcome.Completed -> parse(outcome.output)
+            is RemoteCommandOutcome.Completed -> parse(outcome)
         }
     }
 
@@ -58,26 +58,23 @@ class RemoteGitCloner(
         val url = RemoteGitCloneValidator.shellQuote(request.repositoryUrl.trim())
         val path = RemoteGitCloneValidator.shellQuote(request.remotePath.trim())
         val dollar = "$"
-        return "if [ -e $path ] && [ -n \"$dollar(ls -A $path 2>/dev/null)\" ]; then " +
-            "echo ${SshShellCommandExecutor.NONEMPTY_MARKER}; " +
-            "else git clone --depth 1 $url $path 2>&1; " +
-            "echo \"${SshShellCommandExecutor.EXIT_MARKER}$dollar?\"; fi"
+        // Exit 3 is this script's own signal for "target exists and is not empty"; any other status is
+        // git's. The status travels on the SSH control channel, never in the command's output.
+        return "if [ -e $path ] && [ -n \"$dollar(ls -A $path 2>/dev/null)\" ]; then exit $TARGET_NOT_EMPTY_EXIT; " +
+            "else git clone --depth 1 $url $path 2>&1; fi"
     }
 
-    private fun parse(output: String): RemoteGitCloneResult {
-        if (output.contains(SshShellCommandExecutor.NONEMPTY_MARKER)) return RemoteGitCloneResult.TargetNotEmpty
-        val match =
-            Regex(Regex.escape(SshShellCommandExecutor.EXIT_MARKER) + "(\\d+)").find(output)
-                ?: return RemoteGitCloneResult.Failed("No result from the VPS", output)
-        val exit = match.groupValues[1].toInt()
-        return if (exit == 0) {
-            RemoteGitCloneResult.Success(output.substringBefore(match.value).trim())
-        } else {
-            RemoteGitCloneResult.Failed("git clone failed (exit $exit)", output)
+    private fun parse(outcome: RemoteCommandOutcome.Completed): RemoteGitCloneResult =
+        when (outcome.exitCode) {
+            TARGET_NOT_EMPTY_EXIT -> RemoteGitCloneResult.TargetNotEmpty
+            0 -> RemoteGitCloneResult.Success(outcome.output.trim())
+            else -> RemoteGitCloneResult.Failed("git clone failed (exit ${outcome.exitCode})", outcome.output)
         }
-    }
 
     companion object {
         const val DEFAULT_TIMEOUT_MILLIS = 300_000L
+
+        /** Script exit status meaning "target exists and is not empty". */
+        const val TARGET_NOT_EMPTY_EXIT = 3
     }
 }

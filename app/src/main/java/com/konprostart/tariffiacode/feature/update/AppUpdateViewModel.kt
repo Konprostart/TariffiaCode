@@ -53,8 +53,8 @@ class AppUpdateViewModel(
         }
     }
 
-    /** Download the release APK and start the system install/update prompt. */
-    fun downloadAndInstall(apkUrl: String) {
+    /** Download the release APK (verifying its SHA-256) and start the system install/update prompt. */
+    fun downloadAndInstall(release: AppUpdateRelease) {
         if (mutableState.value.isDownloading) return
         if (!installer.canInstall()) {
             installer.requestInstallPermission()
@@ -65,7 +65,7 @@ class AppUpdateViewModel(
         viewModelScope.launch {
             runCatching {
                 val destination = apkFileProvider()
-                downloader.download(apkUrl, destination)
+                downloader.download(release.apkUrl, destination, release.sha256, release.sizeBytes)
                 destination
             }
                 .onSuccess { apk ->

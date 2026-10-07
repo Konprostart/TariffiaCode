@@ -121,7 +121,7 @@ class RemoteGitViewModelPullTest {
     @Test
     fun `pull success sets the success flag and output`() =
         runTest {
-            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("Already up to date.\n__TC_EXIT__0\n")), "/root/app")
+            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed(0, "Already up to date.\n")), "/root/app")
 
             vm.pull()
 
@@ -133,7 +133,7 @@ class RemoteGitViewModelPullTest {
     @Test
     fun `pull failure surfaces a message`() =
         runTest {
-            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("boom\n__TC_EXIT__1\n")), "/root/app")
+            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed(1, "boom\n")), "/root/app")
 
             vm.pull()
 
@@ -144,7 +144,7 @@ class RemoteGitViewModelPullTest {
     @Test
     fun `pull without a mapped path reports an error and does not run`() =
         runTest {
-            val executor = FakeExecutor(RemoteCommandOutcome.Completed("__TC_EXIT__0"))
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(0, ""))
             val vm = viewModel(executor, directory = null)
 
             vm.pull()
@@ -156,7 +156,7 @@ class RemoteGitViewModelPullTest {
     @Test
     fun `pull state carries no credential material`() =
         runTest {
-            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("__TC_EXIT__0")), "/root/app")
+            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed(0, "")), "/root/app")
 
             vm.pull()
 

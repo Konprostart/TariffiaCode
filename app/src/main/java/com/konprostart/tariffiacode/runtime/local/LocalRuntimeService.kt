@@ -316,14 +316,14 @@ class LocalRuntimeService : Service() {
         runtimeWork = app.runtimeWork
         appForeground = app.appForeground
         createChannel()
-        // The platform can refuse the foreground promotion for a service the app started while it
-        // was in the background. Giving up beats being killed for never calling startForeground.
-        inForeground =
-            runCatching { startForeground(NOTIFICATION_ID, notification(manager.status())) }
-                .onFailure { error -> Log.w(TAG, "Could not enter the foreground", error) }
-                .isSuccess
+        // Android starts a short deadline when Context.startForegroundService() is called and throws
+        // ForegroundServiceDidNotStartInTimeException if startForeground() has not been called by
+        // then. Do it first, with the cached status flow value: a fresh computation (manager.status())
+        // does file I/O and a blocking loopback port probe on the main thread, which could push the
+        // call past that deadline. The collector below keeps the notification in step afterwards.
+        inForeground = promoteToForeground()
         if (!inForeground) return
-        syncWakeLock(manager.status(), runtimeWork.active.value)
+        syncWakeLock(manager.state.value, runtimeWork.active.value)
         scope.launch {
             manager.state.collectLatest { status ->
                 getSystemService(NotificationManager::class.java)
@@ -370,6 +370,13 @@ class LocalRuntimeService : Service() {
         // flag set would strand the very next foreground return's restore attempt on it.
         if (clearsUserStoppedFlag(command)) app.settings.localRuntimeStoppedByUser = false
         if (!inForeground) {
+            // Retry the promotion: onCreate's attempt can be refused transiently (the main thread was
+            // still finishing Application.onCreate, or an exemption race). The obligation created by
+            // startForegroundService() is only discharged by a successful startForeground(); a plain
+            // stopSelf() here would still trip ForegroundServiceDidNotStartInTimeException.
+            inForeground = promoteToForeground()
+        }
+        if (!inForeground) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -381,7 +388,8 @@ class LocalRuntimeService : Service() {
                 launchOperation { manager.installAndStart(agents, installFullDevelopmentTools) }
             }
             LocalRuntimeServiceCommand.InstallFullDevelopmentTools -> {
-                val runtimeWasRunning = manager.status() is LocalRuntimeStatus.Ready
+                // onStartCommand runs on the main thread; the cached flow avoids a blocking probe.
+                val runtimeWasRunning = manager.state.value is LocalRuntimeStatus.Ready
                 launchOperation {
                     manager.installFullDevelopmentTools()
                     if (!runtimeWasRunning) {
@@ -435,7 +443,8 @@ class LocalRuntimeService : Service() {
             }
             LocalRuntimeServiceCommand.Restore -> {
                 autoRestartEnabled = true
-                if (manager.status() is LocalRuntimeStatus.Stopped) {
+                // onStartCommand runs on the main thread; the cached flow avoids a blocking probe.
+                if (manager.state.value is LocalRuntimeStatus.Stopped) {
                     launchOperation { manager.ensureRunning() }
                 }
             }
@@ -691,6 +700,20 @@ class LocalRuntimeService : Service() {
             }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
+
+    /**
+     * Enters the foreground with the cached runtime status.
+     *
+     * `startForeground()` is what discharges the obligation `Context.startForegroundService()` creates;
+     * missing it throws `ForegroundServiceDidNotStartInTimeException`.
+     * Uses `manager.state.value` rather than a fresh `manager.status()` so the call is never delayed by
+     * file I/O or a port probe on the main thread, and is retried from [onStartCommand] if it was
+     * refused transiently here.
+     */
+    private fun promoteToForeground(): Boolean =
+        runCatching { startForeground(NOTIFICATION_ID, notification(manager.state.value)) }
+            .onFailure { error -> Log.w(TAG, "Could not enter the foreground", error) }
+            .isSuccess
 
     private data class NotificationState(
         val title: String,

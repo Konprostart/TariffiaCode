@@ -11,10 +11,15 @@ import java.io.File
  * The only way in was the SAF importer, which *copies* a tree into app storage, so the agent then
  * worked on a detached duplicate while the original sat untouched.
  *
- * Binding shared storage into every sandbox makes those paths first-class instead: the folder
- * picker walks them, a workspace can point straight at one, and the agent reads and writes the real
- * files. Reaching them at all needs the user to grant all-files access, which is why every accessor
- * here answers null until [install] is handed a provider that says the permission is held.
+ * The folder picker walks the device's own files, a workspace can point straight at one, and the
+ * agent reads and writes the real files. Reaching them at all needs the user to grant all-files
+ * access, which is why every accessor here answers null until [install] is handed a provider that
+ * says the permission is held.
+ *
+ * The sandbox is NOT handed all of shared storage. [bindArguments] binds only the folders the user
+ * registered as projects ([installProjectPaths]), so a prompt-injected agent cannot read or write
+ * the rest of `/sdcard`/`/storage`. The app's own browser still sees everything the permission
+ * grants; only the agent's view is narrowed.
  */
 object DeviceStorage {
     /** Guest path for the primary shared volume, matching the alias Android itself uses. */
@@ -51,25 +56,46 @@ object DeviceStorage {
     @Volatile
     private var provider: () -> Mounts = { Mounts.None }
 
+    /**
+     * The specific device-storage folders the user registered as projects. Read at sandbox start,
+     * this is what the sandbox may bind - never the whole `/sdcard`/`/storage` tree. The app itself
+     * still browses all granted storage (that is what the folder picker uses); only the agent's view
+     * is narrowed to the folders the user actually pointed it at.
+     */
+    @Volatile
+    private var projectPathsProvider: () -> List<String> = { emptyList() }
+
     fun install(provider: () -> Mounts) {
         this.provider = provider
     }
 
+    fun installProjectPaths(provider: () -> List<String>) {
+        this.projectPathsProvider = provider
+    }
+
     fun mounts(): Mounts = provider()
 
-    /** PRoot `-b` arguments for whatever storage is reachable right now. */
-    fun bindArguments(): List<String> = bindArguments(mounts())
+    /**
+     * PRoot `-b` arguments for the sandbox: one bind per registered project folder, and nothing else.
+     * Binding a storage root itself is refused, so a project cannot re-open broad access.
+     */
+    fun bindArguments(): List<String> = bindArguments(mounts(), projectPathsProvider())
 
-    fun bindArguments(mounts: Mounts): List<String> =
+    fun bindArguments(
+        mounts: Mounts,
+        projectPaths: List<String>,
+    ): List<String> =
         buildList {
-            mounts.volumes?.let {
-                add("-b")
-                add("${it.absolutePath}:$GUEST_VOLUMES_ROOT")
-            }
-            mounts.sharedStorage?.let {
-                add("-b")
-                add("${it.absolutePath}:$GUEST_SHARED_ROOT")
-            }
+            projectPaths
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .distinct()
+                .forEach { guest ->
+                    if (guest == GUEST_SHARED_ROOT || guest == GUEST_VOLUMES_ROOT) return@forEach
+                    val host = hostDirectory(mounts, guest) ?: return@forEach
+                    add("-b")
+                    add("${host.absolutePath}:$guest")
+                }
         }
 
     /** The guest roots to offer as browsable entries, ordered as they should be shown. */

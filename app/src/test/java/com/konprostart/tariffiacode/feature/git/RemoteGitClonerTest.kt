@@ -44,7 +44,7 @@ class RemoteGitClonerTest {
     @Test
     fun `a successful clone returns the git output`() =
         runTest {
-            val executor = FakeExecutor(RemoteCommandOutcome.Completed("Cloning into 'TariffiaCode'...\n__TC_EXIT__0\n"))
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(0, "Cloning into 'TariffiaCode'...\n"))
             val result = RemoteGitCloner(executor).clone(profile(), request())
 
             assertTrue(result is RemoteGitCloneResult.Success)
@@ -55,7 +55,7 @@ class RemoteGitClonerTest {
     @Test
     fun `an existing non-empty target is refused`() =
         runTest {
-            val executor = FakeExecutor(RemoteCommandOutcome.Completed("__TC_NONEMPTY__\n"))
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(RemoteGitCloner.TARGET_NOT_EMPTY_EXIT, ""))
             val result = RemoteGitCloner(executor).clone(profile(), request())
             assertEquals(RemoteGitCloneResult.TargetNotEmpty, result)
         }
@@ -63,10 +63,27 @@ class RemoteGitClonerTest {
     @Test
     fun `a non-zero exit is a clone failure`() =
         runTest {
-            val executor = FakeExecutor(RemoteCommandOutcome.Completed("fatal: repository not found\n__TC_EXIT__128\n"))
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(128, "fatal: repository not found\n"))
             val result = RemoteGitCloner(executor).clone(profile(), request())
             assertTrue(result is RemoteGitCloneResult.Failed)
             assertEquals("git clone failed (exit 128)", (result as RemoteGitCloneResult.Failed).message)
+        }
+
+    @Test
+    fun `a sentinel-like success line in the output does not turn a failure into a success`() =
+        runTest {
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(128, "__TC_EXIT__0\nfatal: repository not found\n"))
+            val result = RemoteGitCloner(executor).clone(profile(), request())
+            assertTrue(result is RemoteGitCloneResult.Failed)
+            assertEquals("git clone failed (exit 128)", (result as RemoteGitCloneResult.Failed).message)
+        }
+
+    @Test
+    fun `a sentinel-like failure line in the output does not turn a success into a failure`() =
+        runTest {
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(0, "__TC_EXIT__128\nCloning into 'TariffiaCode'...\n"))
+            val result = RemoteGitCloner(executor).clone(profile(), request())
+            assertTrue(result is RemoteGitCloneResult.Success)
         }
 
     @Test
@@ -87,7 +104,7 @@ class RemoteGitClonerTest {
     @Test
     fun `an invalid request is rejected before any execution`() =
         runTest {
-            val executor = FakeExecutor(RemoteCommandOutcome.Completed("__TC_EXIT__0"))
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(0, ""))
             val result = RemoteGitCloner(executor).clone(profile(), request(path = "not-absolute"))
 
             assertTrue(result is RemoteGitCloneResult.Invalid)
@@ -96,13 +113,17 @@ class RemoteGitClonerTest {
         }
 
     @Test
-    fun `the built script quotes the url and path and carries the markers`() =
+    fun `the built script quotes the url and path and carries no spoofable marker`() =
         runTest {
-            val executor = FakeExecutor(RemoteCommandOutcome.Completed("__TC_EXIT__0"))
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(0, ""))
             RemoteGitCloner(executor).clone(profile(), request())
             val script = executor.lastScript.orEmpty()
             assertTrue(script.contains("'/root/projects/TariffiaCode'"))
-            assertTrue(script.contains(SshShellCommandExecutor.EXIT_MARKER))
-            assertTrue(script.contains(SshShellCommandExecutor.NONEMPTY_MARKER))
+            assertTrue(
+                "non-empty target is signalled by an exit code, not a marker",
+                script.contains("exit ${RemoteGitCloner.TARGET_NOT_EMPTY_EXIT}"),
+            )
+            assertTrue("no fixed exit marker", !script.contains("__TC_EXIT__"))
+            assertTrue("no fixed non-empty marker", !script.contains("__TC_NONEMPTY__"))
         }
 }

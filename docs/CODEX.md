@@ -152,12 +152,15 @@ container (which also lacks a working bubblewrap setup) reproduced exactly the f
 Codex logs `Codex could not find bubblewrap on PATH` and falls back to a bundled one; that fallback's
 actual sandboxing was not verified to succeed under nested confinement.
 
-`CodexSandboxLauncher` passes `-c sandbox_mode="danger-full-access"` **before** the `app-server`
-subcommand (verified: after the subcommand, `codex` does not error but the flag's actual effect
-there was not re-verified) to disable Codex's own inner sandbox and rely solely on the outer PRoot
-jail - the same posture Claude Code and Antigravity already run under in this app. This does not
-reduce containment versus the status quo; it removes a redundant, and inside PRoot likely
-non-functional, second sandboxing layer.
+`CodexSandboxLauncher` passes `-c sandbox_mode=...` **before** the `app-server` subcommand (verified:
+after the subcommand, `codex` does not error but the flag's actual effect there was not re-verified).
+The mode comes from `CodexSandboxPolicy`: `workspace-write` by default, so Codex's own sandbox stays
+in place and the agent can edit `/workspace` without unrestricted filesystem, network or process
+access. The user can opt into `danger-full-access` from Settings > Agents > Codex, which disables
+Codex's inner sandbox entirely and relies solely on the outer PRoot jail. That opt-in is off by
+default because the PRoot jail is a compatibility layer, not a security boundary against a same-UID
+agent; `danger-full-access` is reserved for setups where Codex's inner sandbox cannot run commands
+under nested confinement.
 
 ## Protocol notes (verified against a live, unauthenticated process)
 

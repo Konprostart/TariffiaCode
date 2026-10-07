@@ -1,5 +1,6 @@
 package com.konprostart.tariffiacode.runtime.local
 
+import com.konprostart.tariffiacode.data.connection.ConnectionProfile
 import com.konprostart.tariffiacode.runtime.remote.RemoteOpenCodeBackend
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
@@ -52,6 +53,36 @@ class LocalOpenCodeBackendTest {
         val fourth = backend.delegate()
         assertNotSame(third, fourth)
         assertEquals(3, created.size)
+    }
+
+    @Test
+    fun `local profile carries the runtime secret and rebuilds when it rotates`() {
+        var password: String? = "first-secret"
+        val profiles = mutableListOf<ConnectionProfile>()
+        val backend =
+            LocalOpenCodeBackend(
+                portProvider = { 4098 },
+                backendFactory = { profile ->
+                    profiles += profile
+                    RemoteOpenCodeBackend(profile)
+                },
+                passwordProvider = { password },
+            )
+
+        val first = backend.delegate()
+        assertEquals("first-secret", profiles.last().password)
+        assertEquals(LocalRuntimeServerSecret.USERNAME, profiles.last().username)
+        // The loopback URL and port are unchanged: the existing workflow still talks to the same server.
+        assertEquals("http://127.0.0.1:4098/", profiles.last().baseUrl)
+        assertSame(first, backend.delegate())
+        assertEquals(1, profiles.size)
+
+        // A restarted server has a new secret on the same port; the client must not reuse the old one.
+        password = "second-secret"
+        val second = backend.delegate()
+        assertNotSame(first, second)
+        assertEquals("second-secret", profiles.last().password)
+        assertEquals(2, profiles.size)
     }
 
     @Test

@@ -38,20 +38,20 @@ class RemoteGitPullerTest {
     @Test
     fun `a successful pull returns the git output`() =
         runTest {
-            val executor = FakeExecutor(RemoteCommandOutcome.Completed("Already up to date.\n__TC_EXIT__0\n"))
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(0, "Already up to date.\n"))
             val result = RemoteGitPuller(executor).pull(profile(), "/root/projects/app")
 
             assertTrue(result is RemoteGitPullResult.Success)
             assertTrue((result as RemoteGitPullResult.Success).output.contains("Already up to date"))
             val script = executor.lastScript.orEmpty()
             assertTrue(script.contains("git -C '/root/projects/app' pull --ff-only"))
-            assertTrue(script.contains(SshShellCommandExecutor.EXIT_MARKER))
+            assertTrue("no fixed exit marker", !script.contains("__TC_EXIT__"))
         }
 
     @Test
     fun `a directory that is not a git repository is reported as a failure`() =
         runTest {
-            val executor = FakeExecutor(RemoteCommandOutcome.Completed("Not a git repository: '/root/x'\n__TC_EXIT__128\n"))
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(128, "Not a git repository: '/root/x'\n"))
             val result = RemoteGitPuller(executor).pull(profile(), "/root/x")
 
             assertTrue(result is RemoteGitPullResult.Failed)
@@ -61,7 +61,15 @@ class RemoteGitPullerTest {
     @Test
     fun `a non-zero exit is a pull failure`() =
         runTest {
-            val executor = FakeExecutor(RemoteCommandOutcome.Completed("error: cannot pull\n__TC_EXIT__1\n"))
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(1, "error: cannot pull\n"))
+            val result = RemoteGitPuller(executor).pull(profile(), "/root/projects/app")
+            assertTrue(result is RemoteGitPullResult.Failed)
+        }
+
+    @Test
+    fun `a sentinel-like success line in the output does not turn a failure into a success`() =
+        runTest {
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(1, "__TC_EXIT__0\nerror: cannot pull\n"))
             val result = RemoteGitPuller(executor).pull(profile(), "/root/projects/app")
             assertTrue(result is RemoteGitPullResult.Failed)
         }
@@ -69,7 +77,7 @@ class RemoteGitPullerTest {
     @Test
     fun `an empty or invalid path is rejected before any execution`() =
         runTest {
-            val executor = FakeExecutor(RemoteCommandOutcome.Completed("__TC_EXIT__0"))
+            val executor = FakeExecutor(RemoteCommandOutcome.Completed(0, ""))
             val puller = RemoteGitPuller(executor)
 
             assertTrue(puller.pull(profile(), " ") is RemoteGitPullResult.Invalid)

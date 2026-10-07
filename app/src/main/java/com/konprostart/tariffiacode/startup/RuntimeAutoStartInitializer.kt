@@ -90,7 +90,10 @@ class RuntimeAutoStartInitializer : Initializer<RuntimeAutoStartInitializer.Resu
          * flag itself did not survive.
          */
         internal fun syncOnboardingCompleted(app: TariffiaCodeApplication) {
-            val localRuntimeStatus = app.localRuntimeManager.status()
+            // state.value, not status(): create() runs synchronously on the main thread before the
+            // first frame, and status() probes the port (a blocking socket connect). The cached
+            // status distinguishes "configured" (Stopped/Ready) from NotInstalled just the same.
+            val localRuntimeStatus = app.localRuntimeManager.state.value
             val hasRemoteConnection = app.settings.connections().isNotEmpty()
             val setupConfigured =
                 hasUsableRuntimeSetup(localRuntimeStatus, hasRemoteConnection) ||
@@ -132,7 +135,9 @@ class RuntimeAutoStartInitializer : Initializer<RuntimeAutoStartInitializer.Resu
             if (
                 !shouldAutoStartLocalRuntime(
                     onboardingCompleted = app.settings.onboardingCompleted,
-                    localRuntimeStatus = app.localRuntimeManager.status(),
+                    // Cached status: the boot receiver calls this on the main thread, and the policy
+                    // only needs NotInstalled vs. not, which the cached value already answers.
+                    localRuntimeStatus = app.localRuntimeManager.state.value,
                     selectedRuntimeId = app.settings.selectedRuntimeId,
                     trigger = trigger,
                     localRuntimeIdleStopEnabled = app.settings.localRuntimeIdleStopEnabled,

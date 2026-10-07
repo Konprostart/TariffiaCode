@@ -12,12 +12,24 @@ interface AdbConnectionStore {
     fun loadConnectedPort(): Int?
 
     fun clearConnectedPort()
+
+    /**
+     * Whether the user has explicitly allowed the app to keep a wireless-ADB link to this device for
+     * agents to use. Defaults to false: an agent must not be able to control the device over adb
+     * unless the user opted in. The manual pair/connect workflow is unaffected — it is driven by an
+     * explicit user action — but the unattended auto-reconnect that keeps the link alive for agents is
+     * gated on this.
+     */
+    var agentAdbEnabled: Boolean
 }
 
 /** Volatile in-memory store used as a safe default and by unit tests. */
 class InMemoryAdbConnectionStore : AdbConnectionStore {
     @Volatile
     private var port: Int? = null
+
+    @Volatile
+    override var agentAdbEnabled: Boolean = false
 
     override fun saveConnectedPort(port: Int) {
         this.port = port

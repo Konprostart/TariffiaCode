@@ -14,10 +14,15 @@ that implement each flow, not from how the feature is expected to behave.
   (`openCodeUrl`, `sha256`).
 - **Install location:** extracted into the app's private on-device Alpine rootfs by
   `LocalRuntimeInstaller`/`LocalOpenCodeBackend`, after SHA-256 verification.
-- **Launch:** started as a local HTTP server bound to `127.0.0.1:4097` inside the Alpine PRoot
-  sandbox (`LocalOpenCodeBackend`); TariffiaCode talks to it over `OpenCodeApiClient` like any OpenCode
-  client would. For **remote OpenCode**, TariffiaCode instead connects to an OpenCode server you already
-  run on your own PC/Mac/Linux (`RemoteOpenCodeBackend`), given a URL/username/password you supply.
+- **Launch:** started as a local HTTP server bound to `127.0.0.1:<manifest port>` (4098 in the current
+  bundle) inside the Alpine PRoot sandbox (`LocalRuntimeProcessLauncher`); TariffiaCode talks to it over
+  `OpenCodeApiClient` like any OpenCode client would. Because Android apps share the loopback interface,
+  the server is protected with HTTP Basic auth: `LocalRuntimeServerSecret` generates a random password
+  on every start, the launcher passes it to `opencode serve` as `OPENCODE_SERVER_PASSWORD`/
+  `OPENCODE_SERVER_USERNAME`, and `LocalOpenCodeBackend` sends the same secret in the local
+  `ConnectionProfile`. For **remote OpenCode**, TariffiaCode instead connects to an OpenCode server you
+  already run on your own PC/Mac/Linux (`RemoteOpenCodeBackend`), given a URL/username/password you
+  supply; remote auth is unchanged.
 - **Authentication:** OpenCode's own provider authentication (for example, an Anthropic or OpenAI
   API key, or a provider's own OAuth flow) is handled by the OpenCode server itself. TariffiaCode's
   `ProviderAuthDialog`/`SettingsViewModel` call the OpenCode API's `providerAuthMethods` /

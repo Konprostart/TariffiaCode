@@ -22,7 +22,10 @@ import com.konprostart.tariffiacode.core.ssh.SshHostKey
 import com.konprostart.tariffiacode.core.ssh.SshPortForward
 import com.konprostart.tariffiacode.data.remote.RemoteProject
 import com.konprostart.tariffiacode.data.remote.RemoteProjectResolver
+import com.konprostart.tariffiacode.data.remote.RemoteProjectStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
+import com.konprostart.tariffiacode.data.ssh.SshProfileStore
+import com.konprostart.tariffiacode.data.vps.VpsSelectionStore
 import com.konprostart.tariffiacode.runtime.BackendKind
 import com.konprostart.tariffiacode.runtime.PermissionResponse
 import com.konprostart.tariffiacode.runtime.RuntimeCapabilities
@@ -60,6 +63,18 @@ class VpsRuntimeTarget(
     private val remoteHost: String = VpsRuntimeConnector.DEFAULT_REMOTE_HOST,
     private val remotePort: Int = VpsRuntimeConnector.DEFAULT_REMOTE_PORT,
     override val id: String = DEFAULT_ID,
+    /** Resolves the persisted selected-profile id back to a profile on startup. */
+    private val profiles: SshProfileStore? = null,
+    /** Resolves the persisted applied-mapping id back to a Remote Project on startup. */
+    private val projects: RemoteProjectStore? = null,
+    /** Persists the selected profile / applied mapping so they survive restarts. */
+    private val selection: VpsSelectionStore =
+        VpsSelectionStore(
+            loadProfileId = { null },
+            saveProfileId = {},
+            loadProjectId = { null },
+            saveProjectId = {},
+        ),
 ) : RuntimeTarget,
     VpsConnectionController {
     override val displayName: String = "OpenCode VPS"
@@ -85,12 +100,12 @@ class VpsRuntimeTarget(
     private val mutableSelectedRemoteProject = MutableStateFlow<RemoteProject?>(null)
 
     /** The Remote Project mapping currently applied to this runtime, if any. */
-    val selectedRemoteProject: StateFlow<RemoteProject?> = mutableSelectedRemoteProject.asStateFlow()
+    override val selectedRemoteProject: StateFlow<RemoteProject?> = mutableSelectedRemoteProject.asStateFlow()
 
     private val mutablePendingHostKey = MutableStateFlow<SshHostKey?>(null)
 
     /** A host key awaiting explicit user trust, surfaced when the connection was refused for it. */
-    val pendingHostKey: StateFlow<SshHostKey?> = mutablePendingHostKey.asStateFlow()
+    override val pendingHostKey: StateFlow<SshHostKey?> = mutablePendingHostKey.asStateFlow()
 
     @Volatile
     private var backend: RemoteOpenCodeBackend? = null
@@ -102,9 +117,25 @@ class VpsRuntimeTarget(
     override val isForwardOpen: Boolean
         get() = forward?.isOpen == true
 
+    init {
+        // Restore the persisted selection before anything can read it, so reopening the app or coming
+        // back from process death re-points the VPS runtime at the same server and folder. A
+        // profile/mapping deleted since is cleared rather than resurrected.
+        selection.selectedProfileId()?.let { id ->
+            val restored = profiles?.profile(id)
+            if (restored != null) selectProfile(restored) else selection.selectProfile(null)
+        }
+        selection.selectedProjectId()?.let { id ->
+            val restored = projects?.project(id)
+            if (restored != null) selectRemoteProject(restored) else selection.selectProject(null)
+        }
+    }
+
     /** Choose which stored SSH connection this target uses. Does not connect. */
     fun selectProfile(profile: SshProfile?) {
         mutableSelectedProfile.value = profile
+        // Persist the choice so it survives a restart / process death.
+        selection.selectProfile(profile?.id)
         if (!isConnected()) {
             mutableState.value =
                 if (profile == null) {
@@ -120,8 +151,10 @@ class VpsRuntimeTarget(
      * its OpenCode workspace. Only the mapping's path is used; its SSH profile must match the selected
      * profile at resolution time, see [RemoteProjectResolver].
      */
-    fun selectRemoteProject(project: RemoteProject?) {
+    override fun selectRemoteProject(project: RemoteProject?) {
         mutableSelectedRemoteProject.value = project
+        // Persist the mapping so it survives a restart / process death.
+        selection.selectProject(project?.id)
     }
 
     /** Persist a host key the user confirmed, so the next connect trusts it. Returns the new profile. */
@@ -131,6 +164,17 @@ class VpsRuntimeTarget(
     ): SshProfile {
         mutablePendingHostKey.value = null
         return profile.trusting(hostKey.sha256Fingerprint)
+    }
+
+    /** The UI confirms the pending key: trust it for the selected profile, returning it to persist. */
+    override fun trustHostKey(hostKey: SshHostKey): SshProfile? {
+        val profile = mutableSelectedProfile.value ?: return null
+        return trustHostKey(profile, hostKey)
+    }
+
+    /** The UI declined the pending key: drop it without trusting. */
+    override fun dismissHostKey() {
+        mutablePendingHostKey.value = null
     }
 
     override suspend fun connect(): Result<OpenCodeHealth> {

@@ -58,7 +58,8 @@ jobs:
           path: |
             build/generated/runtime-assets
             build/generated/runtime-jni
-          key: and-code-runtime-${{ runner.os }}-${{ hashFiles('runtime_tools/termux_assets.lock.json', 'runtime_tools/termux_assets.py', 'scripts/prepare_android_runtime_*.py') }}
+            build/native-source-work/ndk/*.zip
+          key: and-code-runtime-${{ runner.os }}-${{ hashFiles('runtime_tools/native_sources.lock.json', 'runtime_tools/ndk-patches/**', 'runtime_tools/termux_assets.lock.json', 'runtime_tools/termux_assets.py', 'scripts/build_android_runtime_from_source.py', 'scripts/prepare_android_runtime_*.py') }}
 
       - name: Lint
         run: ./gradlew :app:lintGithubDebug
@@ -91,22 +92,31 @@ jobs:
           path: |
             build/generated/runtime-assets
             build/generated/runtime-jni
-          key: and-code-runtime-${{ runner.os }}-${{ hashFiles('runtime_tools/termux_assets.lock.json', 'runtime_tools/termux_assets.py', 'scripts/prepare_android_runtime_*.py') }}
+            build/native-source-work/ndk/*.zip
+          key: and-code-runtime-${{ runner.os }}-${{ hashFiles('runtime_tools/native_sources.lock.json', 'runtime_tools/ndk-patches/**', 'runtime_tools/termux_assets.lock.json', 'runtime_tools/termux_assets.py', 'scripts/build_android_runtime_from_source.py', 'scripts/prepare_android_runtime_*.py') }}
 
       - name: Validate runtime build scripts
         run: |
           python -m py_compile \
             runtime_tools/termux_assets.py \
+            scripts/build_android_runtime_from_source.py \
             scripts/prepare_android_runtime_assets.py \
-            scripts/prepare_android_runtime_native_libs.py
+            scripts/prepare_android_runtime_native_libs.py \
+            scripts/test_android_runtime_source_build.py
+          python scripts/build_android_runtime_from_source.py --self-test
           python scripts/prepare_android_runtime_assets.py --help >/dev/null
+          python -m unittest scripts.test_android_runtime_source_build
           python - <<'PY'
           import json
           from pathlib import Path
-          lock = json.loads(Path('runtime_tools/termux_assets.lock.json').read_text())
+          lock = json.loads(Path('runtime_tools/native_sources.lock.json').read_text())
           assert lock['version'] == 1
-          assert {'arm64-v8a', 'x86_64'} == set(lock['architectures'])
-          assert all(item['packages'] for item in lock['architectures'].values())
+          assert {'arm64-v8a', 'x86_64'} == set(lock['abis'])
+          assert lock['ndk']['sha256'] and lock['ndk']['version']
+          assert all(item['sha256'] for item in lock['sources'].values())
+          legacy = json.loads(Path('runtime_tools/termux_assets.lock.json').read_text())
+          assert legacy['version'] == 1
+          assert {'arm64-v8a', 'x86_64'} == set(legacy['architectures'])
           PY
 
       - name: Test and build debug APK
@@ -119,6 +129,17 @@ jobs:
         env:
           GITHUB_CLIENT_ID: ${{ vars.AND_CODE_GITHUB_CLIENT_ID }}
         run: ./gradlew :app:testGithubDebugUnitTest :app:assembleGithubDebug :app:assembleGithubDebugAndroidTest
+
+      # The build above produced the embedded runtime from pinned sources with the pinned NDK.
+      # Re-check the ABI/SONAME/loader contract on the generated prefixes (both ABIs, incl. the
+      # 32-bit loaders) so a source-build regression fails the build even if Gradle cached outputs.
+      - name: Verify native runtime ABI/SONAME contract
+        run: |
+          python scripts/build_android_runtime_from_source.py \
+            --verify-only \
+            --output-dir build/generated/runtime-assets \
+            --report build/native-source-report.json
+          cat build/native-source-report.json
 
       # assembleRelease runs R8 with minification and resource shrinking, which is the single
       # most expensive task in this workflow. The published artifact is built by release.yml,

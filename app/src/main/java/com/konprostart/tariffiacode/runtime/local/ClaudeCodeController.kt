@@ -3,6 +3,7 @@ package com.konprostart.tariffiacode.runtime.local
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.core.runtime.RuntimeWorkTracker
 import com.konprostart.tariffiacode.runtime.LocalAgent
+import com.konprostart.tariffiacode.runtime.ProprietaryAgents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -146,6 +147,8 @@ class ClaudeCodeController(
      * rather than reinstalling everything.
      */
     fun install(installFullDevelopmentTools: Boolean = false) {
+        // Proprietary agent: never provision it in a build that disables it (F-Droid).
+        if (!ProprietaryAgents.enabled) return
         if (installJob?.isActive == true) return
         installJob =
             scope.launch(Dispatchers.IO) {
@@ -188,6 +191,7 @@ class ClaudeCodeController(
     }
 
     fun update() {
+        if (!ProprietaryAgents.enabled) return
         if (installJob?.isActive == true) return
         installJob =
             scope.launch(Dispatchers.IO) {

@@ -123,6 +123,7 @@ import com.konprostart.tariffiacode.ui.navigation.settingsNavGraph
 import com.konprostart.tariffiacode.ui.navigation.workspaceNavGraph
 import com.konprostart.tariffiacode.ui.theme.AppTheme
 import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -1448,6 +1449,30 @@ fun TariffiaCodeApp(
 
 private enum class CloneSource { REPOS, URL }
 
+/** Outcome of the clone dialog's one-shot repository listing, so a failure never escapes its coroutine. */
+internal sealed interface ReposLoadResult {
+    data class Loaded(
+        val repos: List<GitHubRepo>,
+    ) : ReposLoadResult
+
+    data object Failed : ReposLoadResult
+}
+
+/**
+ * Lists the user's repositories for [GithubCloneDialog] without letting a network or parse failure
+ * escape the `LaunchedEffect` coroutine - an uncaught exception there crashes the whole app, not just
+ * the dialog. Cancellation is rethrown so structured concurrency still works; any other exception
+ * becomes [ReposLoadResult.Failed], which the dialog shows as an error while staying usable.
+ */
+internal suspend fun loadReposForDialog(listRepos: suspend () -> List<GitHubRepo>): ReposLoadResult =
+    try {
+        ReposLoadResult.Loaded(listRepos())
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (_: Exception) {
+        ReposLoadResult.Failed
+    }
+
 @Composable
 private fun GithubCloneDialog(
     githubConfigured: Boolean,
@@ -1465,11 +1490,16 @@ private fun GithubCloneDialog(
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val cloneFailedMessage = stringResource(R.string.workspace_clone_failed)
+    val reposFailedMessage = stringResource(R.string.workspace_clone_repos_failed)
 
     LaunchedEffect(githubConfigured) {
         if (githubConfigured) {
             isLoadingRepos = true
-            repos = onListRepos()
+            error = null
+            when (val result = loadReposForDialog(onListRepos)) {
+                is ReposLoadResult.Loaded -> repos = result.repos
+                ReposLoadResult.Failed -> error = reposFailedMessage
+            }
             isLoadingRepos = false
         }
     }

@@ -1,5 +1,6 @@
 # Mirrored verbatim from https://github.com/termux/termux-packages/blob/master/packages/libtalloc/build.sh
-# Retrieved: 2026-08-02. Mirrored here (rather than only linked) because the upstream
+# Retrieved: 2026-08-02, at commit fbc049451e7fc59cdf510732aad49bd45590b0bb ("bump(main/libtalloc):
+# 2.4.3"). Mirrored here (rather than only linked) because the upstream
 # 'master' branch is mutable and would otherwise be an unstable reference for the exact
 # packaging recipe used to build the binaries pinned by SHA-256 in
 # runtime_tools/termux_assets.lock.json.

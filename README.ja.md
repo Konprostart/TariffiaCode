@@ -9,7 +9,7 @@
 
 **AIコーディングエージェントをAndroidのネイティブGUIでローカル実行 — ターミナル不要です。**
 
-TariffiaCodeはAIコーディングエージェントをスマートフォンで使えるようにするネイティブAndroid GUIアプリです。[OpenCode](https://github.com/sst/opencode)、[Claude Code](https://github.com/anthropics/claude-code)、[Google Antigravity](https://github.com/google-antigravity/antigravity-cli)、[OpenAI Codex](https://github.com/openai/codex)とタッチ操作中心のインターフェースで対話できます — 端末エミュレータもSSHもPCも、オンデバイス実行には一切不要です。PRootによるオンデバイスランタイムか、PC/Mac/Linux上の既存OpenCodeサーバーへのリモート接続で動作します。
+TariffiaCodeはAIコーディングエージェントをスマートフォンで使えるようにするネイティブAndroid GUIアプリです。[OpenCode](https://github.com/anomalyco/opencode)、[Claude Code](https://github.com/anthropics/claude-code)、[Google Antigravity](https://github.com/google-antigravity/antigravity-cli)、[OpenAI Codex](https://github.com/openai/codex)とタッチ操作中心のインターフェースで対話できます — 端末エミュレータもSSHもPCも、オンデバイス実行には一切不要です。PRootによるオンデバイスランタイムか、PC/Mac/Linux上の既存OpenCodeサーバーへのリモート接続で動作します。
 
 [Releases](https://github.com/Konprostart/TariffiaCode/releases/latest) · [English README](README.md)
 
@@ -65,7 +65,7 @@ TariffiaCodeは[AndCode](https://github.com/yuga-hashimoto/and-code)プロジェ
 
 | エージェント | オンデバイス | PCリモート | 状態 |
 |-------------|:---------:|:---------:|------|
-| [OpenCode](https://github.com/sst/opencode) | ✓ | ✓ | 安定版 |
+| [OpenCode](https://github.com/anomalyco/opencode) | ✓ | ✓ | 安定版 |
 | [Claude Code](https://github.com/anthropics/claude-code) | ✓ | — | ベータ |
 | [Google Antigravity](https://github.com/google-antigravity/antigravity-cli) | ✓ | — | ベータ |
 | [OpenAI Codex](https://github.com/openai/codex) | ✓ | — | ベータ |

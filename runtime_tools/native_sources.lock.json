@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "comment": "Pinned inputs for the first-party Android native runtime source build. Replaces the build-time .deb dependency (see runtime_tools/termux_assets.lock.json and runtime_tools/termux-packaging-recipes/, kept as provenance).",
+  "ndk": {
+    "release": "r29",
+    "version": "29.0.14206865",
+    "url": "https://dl.google.com/android/repository/android-ndk-r29-linux.zip",
+    "sha256": "4abbbcdc842f3d4879206e9695d52709603e52dd68d3c1fff04b3b5e7a308ecf",
+    "sha1": "87e2bb7e9be5d6a1c6cdf5ec40dd4e0c6d07c30b",
+    "size": 783549481,
+    "api_level": 24,
+    "host_tags": {
+      "linux": "linux-x86_64",
+      "darwin": "darwin-x86_64",
+      "windows": "windows-x86_64"
+    },
+    "sysroot_patches": [
+      {
+        "path": "runtime_tools/ndk-patches/29/paths.h.patch",
+        "sha256": "137921d80d6dfd169ba530aecab57b11a00ef9d83bb09e339cf887e7d35cdef1",
+        "termux_prefix": "/data/data/com.termux/files/usr",
+        "comment": "Termux ndk-patches/29/paths.h.patch (commit 08b49b3c): adds _PATH_TMP et al. required by libandroid-shmem."
+      }
+    ]
+  },
+  "abis": {
+    "arm64-v8a": {
+      "triple": "aarch64-linux-android",
+      "elf_machine": 183,
+      "loader32_triple": "armv7a-linux-androideabi",
+      "loader32_elf_machine": 40
+    },
+    "x86_64": {
+      "triple": "x86_64-linux-android",
+      "elf_machine": 62,
+      "loader32_triple": "i686-linux-android",
+      "loader32_elf_machine": 3
+    }
+  },
+  "sources": {
+    "proot": {
+      "name": "proot",
+      "version": "5.1.107.92",
+      "url": "https://github.com/termux/proot/archive/v5.1.107.92.zip",
+      "sha256": "29385d1ddb619a9c4449ab512bfd55032034b22f724ddf98fc95ff300ea32135",
+      "archive": "zip",
+      "strip_components": 1,
+      "build_system": "make",
+      "recipe": "runtime_tools/termux-packaging-recipes/proot.build.sh"
+    },
+    "libtalloc": {
+      "name": "libtalloc",
+      "version": "2.4.3",
+      "url": "https://www.samba.org/ftp/talloc/talloc-2.4.3.tar.gz",
+      "sha256": "dc46c40b9f46bb34dd97fe41f548b0e8b247b77a918576733c528e83abd854dd",
+      "archive": "tar.gz",
+      "strip_components": 1,
+      "build_system": "waf",
+      "recipe": "runtime_tools/termux-packaging-recipes/libtalloc.build.sh"
+    },
+    "libandroid-shmem": {
+      "name": "libandroid-shmem",
+      "version": "0.7",
+      "url": "https://github.com/termux/libandroid-shmem/archive/refs/tags/v0.7.tar.gz",
+      "sha256": "1e5ff8459bc0a8c229dd8a94b27d119987e09ef3414331c2b5ebfff20b98e867",
+      "archive": "tar.gz",
+      "strip_components": 1,
+      "build_system": "make",
+      "recipe": "runtime_tools/termux-packaging-recipes/libandroid-shmem.build.sh"
+    }
+  }
+}

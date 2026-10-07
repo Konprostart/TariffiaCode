@@ -55,6 +55,8 @@ class CodexRuntime(
     private val accessCoordinator: LocalRuntimeAccessCoordinator = LocalRuntimeAccessCoordinator(),
     private val messages: CodexMessages = CodexMessages.Default,
     private val githubToken: () -> String? = { null },
+    /** Whether Codex may run without its own sandbox. Default off; see [CodexSandboxPolicy]. */
+    private val fullAccessEnabled: () -> Boolean = { false },
 ) {
     private val json = defaultCodexJson
     private val events = MutableSharedFlow<OpenCodeEvent>(extraBufferCapacity = 256)
@@ -140,6 +142,7 @@ class CodexRuntime(
                 runtime = runtime,
                 workspaceHostDir = File(runtimeDirectory, "workspace").apply { mkdirs() }.absolutePath,
                 arguments = arguments,
+                fullAccess = fullAccessEnabled(),
             ),
         ).directory(runtimeDirectory)
             .apply {

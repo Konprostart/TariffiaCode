@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -73,6 +74,7 @@ fun LocalRuntimeManagementScreen(
     onAdbPair: (Int, String) -> Unit = { _, _ -> },
     onAdbConnect: (Int) -> Unit = {},
     onAdbDisconnect: () -> Unit = {},
+    onAgentAdbChange: (Boolean) -> Unit = {},
 ) {
     val busy = state.runtimeStatus.isBusy() || state.isDeleting
     Scaffold(
@@ -130,9 +132,11 @@ fun LocalRuntimeManagementScreen(
                     adbState = state.adbState,
                     isPairing = state.isAdbPairing,
                     isConnecting = state.isAdbConnecting,
+                    agentAdbEnabled = state.agentAdbEnabled,
                     onShowPairDialog = onShowAdbPairDialog,
                     onConnect = onAdbConnect,
                     onDisconnect = onAdbDisconnect,
+                    onAgentAdbChange = onAgentAdbChange,
                 )
                 RuntimeLogsCard(diagnostics.logTail)
 
@@ -432,9 +436,11 @@ private fun AdbSetupCard(
     adbState: AdbConnectionState,
     isPairing: Boolean,
     isConnecting: Boolean,
+    agentAdbEnabled: Boolean,
     onShowPairDialog: () -> Unit,
     onConnect: (Int) -> Unit,
     onDisconnect: () -> Unit,
+    onAgentAdbChange: (Boolean) -> Unit,
 ) {
     SectionCard {
         Text(
@@ -442,6 +448,28 @@ private fun AdbSetupCard(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
         )
+        Spacer(Modifier.height(10.dp))
+        // Explicit, default-off approval: without it the app does not keep an adb link for agents.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.adb_agent_access_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    stringResource(R.string.adb_agent_access_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = agentAdbEnabled, onCheckedChange = onAgentAdbChange)
+        }
+        Spacer(Modifier.height(10.dp))
         Spacer(Modifier.height(4.dp))
         Text(
             stringResource(R.string.adb_setup_description),

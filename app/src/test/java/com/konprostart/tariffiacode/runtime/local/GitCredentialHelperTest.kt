@@ -35,6 +35,20 @@ class GitCredentialHelperTest {
     }
 
     @Test
+    fun `install with no shared token leaves no credential store`() {
+        val root = createTempDirectory("git-helper-null").toFile()
+        try {
+            // This is the default: the runtime token is withheld (opt-in off), so no GitHub
+            // credential must be written into the sandbox.
+            GitCredentialHelper(root) { null }.install()
+
+            assertFalse("no token means no stored credential", root.resolve("root/.git-credentials").exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `install repairs malformed gitconfig`() {
         val root = createTempDirectory("git-helper").toFile()
         try {

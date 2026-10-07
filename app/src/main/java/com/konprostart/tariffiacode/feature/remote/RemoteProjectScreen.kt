@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.dp
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.data.remote.RemoteProject
 import com.konprostart.tariffiacode.data.remote.RemoteProjectStore
+import com.konprostart.tariffiacode.feature.ssh.HostKeyDialog
+import com.konprostart.tariffiacode.feature.ssh.PendingHostKey
 import com.konprostart.tariffiacode.runtime.RuntimeState
 
 /** Settings screen that lists Remote Project mappings and edits/applies them. */
@@ -66,6 +68,8 @@ fun RemoteProjectScreen(
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onReconnect: () -> Unit,
+    onTrustHostKey: () -> Unit,
+    onDismissHostKey: () -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenGit: () -> Unit,
     onOpenClone: () -> Unit,
@@ -172,6 +176,16 @@ fun RemoteProjectScreen(
                 }) { Text(stringResource(R.string.delete)) }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+
+    // First connect to a VPS whose profile has no trusted fingerprint: show the key and let the user
+    // confirm or decline. A changed key never reaches here - the connector refuses it outright.
+    state.pendingHostKey?.let { hostKey ->
+        HostKeyDialog(
+            pending = PendingHostKey(profileId = state.appliedId.orEmpty(), hostKey = hostKey, mismatch = false),
+            onTrust = onTrustHostKey,
+            onDismiss = onDismissHostKey,
         )
     }
 }

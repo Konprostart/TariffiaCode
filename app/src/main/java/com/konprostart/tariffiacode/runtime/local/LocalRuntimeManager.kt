@@ -3,11 +3,14 @@ package com.konprostart.tariffiacode.runtime.local
 import com.konprostart.tariffiacode.runtime.LocalAgent
 import com.konprostart.tariffiacode.runtime.LocalRuntimeStatus
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -73,6 +76,13 @@ class LocalRuntimeManager(
      * runs before any probe/start, and so it stays a no-op when the installer is absent.
      */
     private val reconcilePersistedPort: () -> Unit = {},
+    /**
+     * Runs the startup port probe off the constructing thread. The manager is built in
+     * `Application.onCreate` (and by Koin during composition), both on the main thread, and a probe
+     * is a blocking TCP connect that can take the full socket timeout. Injectable so a JVM test can
+     * prove construction never probes synchronously.
+     */
+    private val statusScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
     private val json: Json =
         Json {
@@ -81,8 +91,33 @@ class LocalRuntimeManager(
             encodeDefaults = true
         }
     private val operationMutex = Mutex()
-    private val mutableState = MutableStateFlow(computeStatus())
+
+    // Cheap initial status: the file checks and our own child-process check, but NOT the port probe,
+    // which would block the main thread here. The probe runs on [statusScope] in [init] below.
+    private val mutableState = MutableStateFlow(computeStatus(probe = false))
     val state: StateFlow<LocalRuntimeStatus> = mutableState.asStateFlow()
+
+    init {
+        statusScope.launch { publishProbedStatus() }
+    }
+
+    /**
+     * Runs the blocking port probe on [statusScope] and publishes the result, unless an operation the
+     * user just started has already taken over the state.
+     */
+    private fun publishProbedStatus() {
+        // Runs on [statusScope] (IO by default), so the blocking probe is off the main thread.
+        val probed = computeStatus(probe = true)
+        val current = mutableState.value
+        if (
+            current is LocalRuntimeStatus.Installing ||
+            current is LocalRuntimeStatus.Starting ||
+            current is LocalRuntimeStatus.Updating
+        ) {
+            return
+        }
+        mutableState.value = probed
+    }
 
     private val mutableLastOperation = MutableStateFlow<LocalRuntimeOperationResult?>(null)
     val lastOperation: StateFlow<LocalRuntimeOperationResult?> = mutableLastOperation.asStateFlow()
@@ -100,6 +135,13 @@ class LocalRuntimeManager(
     }
 
     fun installedPort(): Int? = readMetadata()?.port
+
+    /**
+     * The Basic-auth password the local OpenCode server was last started with, read from the
+     * app-private runtime directory. Null before the first start (and for a server started by an
+     * older build that predates loopback auth), in which case the client sends no credentials.
+     */
+    fun serverPassword(): String? = LocalRuntimeServerSecret.read(runtimeDirectory)
 
     fun isHealthy(): Boolean = installedPort()?.let(portProbe) == true
 
@@ -610,7 +652,7 @@ class LocalRuntimeManager(
             ready
         }
 
-    private fun computeStatus(): LocalRuntimeStatus {
+    private fun computeStatus(probe: Boolean = true): LocalRuntimeStatus {
         if (abi !in SUPPORTED_ABIS) return LocalRuntimeStatus.UnsupportedAbi(abi)
         val metadataFile = File(runtimeDirectory, METADATA_FILE)
         if (!metadataFile.isFile) return LocalRuntimeStatus.NotInstalled
@@ -631,7 +673,9 @@ class LocalRuntimeManager(
         if (metadata.version.isBlank() || metadata.port !in 1..65535) {
             return LocalRuntimeStatus.Broken("Runtime metadata contains invalid values")
         }
-        if (portProbe(metadata.port)) return LocalRuntimeStatus.Ready(metadata.version, metadata.port)
+        // The probe is a blocking TCP connect; callers on the main thread pass probe = false and let
+        // publishProbedStatus() do it off-thread.
+        if (probe && portProbe(metadata.port)) return LocalRuntimeStatus.Ready(metadata.version, metadata.port)
         // A missed probe is not proof of death. Our own child process is: if it is still running,
         // the server exists and is merely too busy to answer, and restarting it would destroy work
         // in progress rather than recover anything.
