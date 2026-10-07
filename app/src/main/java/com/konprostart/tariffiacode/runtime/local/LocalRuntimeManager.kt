@@ -91,6 +91,7 @@ class LocalRuntimeManager(
             encodeDefaults = true
         }
     private val operationMutex = Mutex()
+
     // Cheap initial status: the file checks and our own child-process check, but NOT the port probe,
     // which would block the main thread here. The probe runs on [statusScope] in [init] below.
     private val mutableState = MutableStateFlow(computeStatus(probe = false))

@@ -27,8 +27,7 @@ object ProprietaryAgents {
     fun isAvailable(agent: LocalAgent): Boolean = enabled || !isProprietary(agent)
 
     /** Drops proprietary agents from [agents] when they are disabled in this build. */
-    fun filter(agents: Collection<LocalAgent>): Set<LocalAgent> =
-        agents.filterTo(LinkedHashSet()) { isAvailable(it) }
+    fun filter(agents: Collection<LocalAgent>): Set<LocalAgent> = agents.filterTo(LinkedHashSet()) { isAvailable(it) }
 
     /** The agents the setup guide may offer, in declaration order. */
     fun selectable(): List<LocalAgent> = LocalAgent.entries.filter { isAvailable(it) }

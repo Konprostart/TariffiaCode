@@ -14,6 +14,5 @@ object CodexSandboxPolicy {
     const val DANGER_FULL_ACCESS = "danger-full-access"
 
     /** The `sandbox_mode` to pass to Codex for the user's current preference. */
-    fun sandboxMode(fullAccessEnabled: Boolean): String =
-        if (fullAccessEnabled) DANGER_FULL_ACCESS else WORKSPACE_WRITE
+    fun sandboxMode(fullAccessEnabled: Boolean): String = if (fullAccessEnabled) DANGER_FULL_ACCESS else WORKSPACE_WRITE
 }

@@ -28,7 +28,10 @@ class LocalRuntimeStartupProbeTest {
             installMetadata(port = 4096)
             var probes = 0
 
-            manager(portProbe = { probes++; false }, statusScope = this)
+            manager(portProbe = {
+                probes++
+                false
+            }, statusScope = this)
 
             assertEquals("construction must not run the blocking probe", 0, probes)
 
@@ -55,7 +58,11 @@ class LocalRuntimeStartupProbeTest {
         runTest {
             installMetadata(port = 4096)
             var probes = 0
-            val manager = manager(portProbe = { probes++; false }, statusScope = this)
+            val manager =
+                manager(portProbe = {
+                    probes++
+                    false
+                }, statusScope = this)
 
             LocalRuntimeTarget(manager)
 
@@ -67,7 +74,10 @@ class LocalRuntimeStartupProbeTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO).apply { cancel() }
         var probes = 0
 
-        manager(portProbe = { probes++; false }, statusScope = scope)
+        manager(portProbe = {
+            probes++
+            false
+        }, statusScope = scope)
 
         assertEquals(0, probes)
     }

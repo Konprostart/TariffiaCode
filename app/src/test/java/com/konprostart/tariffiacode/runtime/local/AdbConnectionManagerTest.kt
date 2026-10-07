@@ -84,7 +84,11 @@ class AdbConnectionManagerTest {
     @Test
     fun `restoreAndReconnect reconnects to persisted port when the user approved agent adb`() =
         runTest {
-            val store = InMemoryAdbConnectionStore().apply { saveConnectedPort(5555); agentAdbEnabled = true }
+            val store =
+                InMemoryAdbConnectionStore().apply {
+                    saveConnectedPort(5555)
+                    agentAdbEnabled = true
+                }
             val runner = FakeShellRunner()
             val manager = AdbConnectionManager(runner, store, nsdManagerProvider = { null }, runtimeWork = RuntimeWorkTracker())
 
@@ -111,7 +115,11 @@ class AdbConnectionManagerTest {
     @Test
     fun `setAgentAdbEnabled false disconnects and drops the link`() =
         runTest {
-            val store = InMemoryAdbConnectionStore().apply { saveConnectedPort(5555); agentAdbEnabled = true }
+            val store =
+                InMemoryAdbConnectionStore().apply {
+                    saveConnectedPort(5555)
+                    agentAdbEnabled = true
+                }
             val runner = FakeShellRunner()
             val manager = AdbConnectionManager(runner, store, nsdManagerProvider = { null }, runtimeWork = RuntimeWorkTracker())
             manager.connect(5555)
@@ -242,7 +250,11 @@ class AdbConnectionManagerTest {
     @Test
     fun `auto reconnect restores a dropped connection when the user approved agent adb`() =
         runBlocking {
-            val store = InMemoryAdbConnectionStore().apply { saveConnectedPort(5555); agentAdbEnabled = true }
+            val store =
+                InMemoryAdbConnectionStore().apply {
+                    saveConnectedPort(5555)
+                    agentAdbEnabled = true
+                }
             val runner =
                 FakeShellRunner().apply {
                     deviceConnected = false

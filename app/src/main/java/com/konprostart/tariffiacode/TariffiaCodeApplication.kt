@@ -23,11 +23,11 @@ import com.konprostart.tariffiacode.core.storage.DeviceStorage
 import com.konprostart.tariffiacode.core.storage.DeviceStorageAccess
 import com.konprostart.tariffiacode.core.util.debounceFalseEdge
 import com.konprostart.tariffiacode.data.connection.SecureSettingsRepository
+import com.konprostart.tariffiacode.data.remote.RemoteProjectStore
 import com.konprostart.tariffiacode.data.repository.AndroidRuntimeActivityMessages
 import com.konprostart.tariffiacode.data.repository.AndroidRuntimeCatalogMessages
 import com.konprostart.tariffiacode.data.repository.ProviderCatalogCache
 import com.konprostart.tariffiacode.data.repository.PullRequestStatusRepository
-import com.konprostart.tariffiacode.data.remote.RemoteProjectStore
 import com.konprostart.tariffiacode.data.repository.RuntimeActivityRepository
 import com.konprostart.tariffiacode.data.repository.RuntimeCatalogRepository
 import com.konprostart.tariffiacode.data.repository.SessionAutoArchiver

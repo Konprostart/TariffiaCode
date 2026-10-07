@@ -44,7 +44,11 @@ class AppUpdateHostValidationTest {
         AppUpdateHttp.assetClient()
             .newBuilder()
             .sslSocketFactory(clientCertificates.sslSocketFactory(), clientCertificates.trustManager)
-            .dns(Dns { listOf(InetAddress.getByName("127.0.0.1")) })
+            .dns(
+                object : Dns {
+                    override fun lookup(hostname: String): List<InetAddress> = listOf(InetAddress.getByName("127.0.0.1"))
+                },
+            )
             .build()
 
     // 1. valid API host -> allowed
