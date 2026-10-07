@@ -15,7 +15,7 @@ import org.junit.Test
 import java.io.File
 
 class AppUpdateViewModelTest {
-    private val SHA = "a".repeat(64)
+    private val sha = "a".repeat(64)
 
     @Before
     fun setUp() {
@@ -71,7 +71,7 @@ class AppUpdateViewModelTest {
               {
                 "name": "tariffiacode-$tag-release.apk",
                 "browser_download_url": "https://github.com/Konprostart/TariffiaCode/releases/download/$tag/tariffiacode-$tag-release.apk",
-                "digest": "sha256:$SHA",
+                "digest": "sha256:$sha",
                 "size": 12345
               }
             ]
@@ -81,7 +81,7 @@ class AppUpdateViewModelTest {
 
     private fun release(
         url: String = "https://example.com/update.apk",
-        sha: String = SHA,
+        sha: String = this.sha,
     ) = AppUpdateRelease(version = "9.9.9", apkUrl = url, sha256 = sha)
 
     private fun viewModel(
@@ -128,10 +128,10 @@ class AppUpdateViewModelTest {
             val apkFile = File.createTempFile("apk", ".apk")
             val vm = viewModel(releaseJson(), downloader, installer, apkFile)
 
-            vm.downloadAndInstall(release("https://example.com/update.apk", SHA))
+            vm.downloadAndInstall(release("https://example.com/update.apk", sha))
 
             // The expected hash from the release is what the downloader verifies against.
-            assertEquals(listOf(Triple("https://example.com/update.apk", apkFile, SHA)), downloader.downloads)
+            assertEquals(listOf(Triple("https://example.com/update.apk", apkFile, sha)), downloader.downloads)
             assertEquals(listOf(apkFile), installer.installed)
             assertFalse(vm.state.value.isDownloading)
             assertNotNull(vm.state.value.installMessage)

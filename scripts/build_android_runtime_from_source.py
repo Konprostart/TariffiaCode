@@ -530,7 +530,40 @@ def resolve_ndk(args: argparse.Namespace, lock: dict, work_dir: Path) -> Ndk:
 # --------------------------------------------------------------------------------------------------
 
 
+def ensure_include(path: Path, include: str, anchor: str) -> None:
+    """Idempotently insert ``include`` right after ``anchor`` in a pinned-source file."""
+    text = path.read_text(encoding="utf-8")
+    if include in text:
+        return
+    if anchor not in text:
+        raise BuildError(f"{path.name} layout changed; cannot add {include}")
+    path.write_text(text.replace(anchor, anchor + include + "\n", 1), encoding="utf-8")
+
+
+def apply_libandroid_shmem_source_fix(source_dir: Path) -> None:
+    """Add ``<fcntl.h>`` to ``shmem.c`` so ``open()``/``O_RDWR`` are declared.
+
+    libandroid-shmem 0.7 calls ``open("/dev/ashmem", ...)`` on API < 26 but never includes
+    ``<fcntl.h>``; clang rejects the resulting implicit declaration.
+    """
+    ensure_include(source_dir / "shmem.c", "#include <fcntl.h>", "#include <errno.h>\n")
+
+
+def apply_proot_source_fix(source_dir: Path) -> None:
+    """Add ``<string.h>`` to proot's ``ashmem_memfd.c`` so ``strcmp``/``memset`` are declared.
+
+    The pinned termux/proot source uses both without including ``<string.h>``; clang rejects the
+    resulting implicit declarations.
+    """
+    ensure_include(
+        source_dir / "src" / "extension" / "ashmem_memfd" / "ashmem_memfd.c",
+        "#include <string.h>",
+        "#include <stdlib.h>\n",
+    )
+
+
 def build_libandroid_shmem(source_dir: Path, stage: Path, ndk: Ndk, triple: str) -> None:
+    apply_libandroid_shmem_source_fix(source_dir)
     clang = ndk.clang(triple)
     env = os.environ.copy()
     env.update(
@@ -687,6 +720,7 @@ def build_proot(
     abi: str,
     rosegment: bool,
 ) -> None:
+    apply_proot_source_fix(source_dir)
     clang = ndk.clang(triple)
     strip = ndk.tool("llvm-strip")
 

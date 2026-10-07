@@ -231,6 +231,58 @@ class NdksysrootPatchTest(unittest.TestCase):
         self.assertEqual(BUILD._patch_target_relative(diff_text), "usr/include/paths.h")
 
 
+class ShmemSourceFixTest(unittest.TestCase):
+    def _shmem(self) -> str:
+        return "\n".join(
+            [
+                "#include <android/log.h>",
+                "#if __ANDROID_API__ >= 26",
+                "#include <android/sharedmem.h>",
+                "#endif",
+                "#include <errno.h>",
+                "#include <pthread.h>",
+                "",
+                'int f(void) { return open("/dev/ashmem", O_RDWR); }',
+                "",
+            ]
+        )
+
+    def test_adds_fcntl_include_after_errno_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "shmem.c"
+            source.write_text(self._shmem(), encoding="utf-8")
+            BUILD.apply_libandroid_shmem_source_fix(Path(tmp))
+            text = source.read_text(encoding="utf-8")
+            self.assertIn("#include <errno.h>\n#include <fcntl.h>\n", text)
+            BUILD.apply_libandroid_shmem_source_fix(Path(tmp))
+            self.assertEqual(1, source.read_text(encoding="utf-8").count("#include <fcntl.h>"))
+
+    def test_missing_anchor_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "shmem.c").write_text("#include <stdio.h>\n", encoding="utf-8")
+            with self.assertRaises(BUILD.BuildError):
+                BUILD.apply_libandroid_shmem_source_fix(Path(tmp))
+
+    def test_proot_ashmem_memfd_gets_string_h_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "src" / "extension" / "ashmem_memfd" / "ashmem_memfd.c"
+            path.parent.mkdir(parents=True)
+            path.write_text("#include <stdlib.h>\n#include <signal.h>\n", encoding="utf-8")
+            BUILD.apply_proot_source_fix(Path(tmp))
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("#include <stdlib.h>\n#include <string.h>\n", text)
+            BUILD.apply_proot_source_fix(Path(tmp))
+            self.assertEqual(1, path.read_text(encoding="utf-8").count("#include <string.h>"))
+
+    def test_proot_missing_anchor_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "src" / "extension" / "ashmem_memfd" / "ashmem_memfd.c"
+            path.parent.mkdir(parents=True)
+            path.write_text("#include <stdio.h>\n", encoding="utf-8")
+            with self.assertRaises(BUILD.BuildError):
+                BUILD.apply_proot_source_fix(Path(tmp))
+
+
 class SelfTestTest(unittest.TestCase):
     def test_build_script_self_test(self) -> None:
         BUILD.self_test(LOCK_PATH)
