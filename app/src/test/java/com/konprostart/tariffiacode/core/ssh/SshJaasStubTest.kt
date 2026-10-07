@@ -1,6 +1,7 @@
 package com.konprostart.tariffiacode.core.ssh
 
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -72,6 +73,7 @@ class SshJaasStubTest {
         val failedLogin = loader.loadClass("javax.security.auth.login.FailedLoginException")
         val credential = loader.loadClass("javax.security.auth.login.CredentialException")
         val loginException = loader.loadClass("javax.security.auth.login.LoginException")
+        assertNotSame("MINA's two JAAS failure types must retain distinct identities", failedLogin, credential)
         assertTrue(loginException.isAssignableFrom(failedLogin))
         assertTrue(loginException.isAssignableFrom(credential))
     }

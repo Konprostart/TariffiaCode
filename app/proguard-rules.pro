@@ -64,6 +64,12 @@
 -dontwarn com.sun.jna.**
 -dontwarn java.awt.**
 
+# These Android-side replacements must remain separate and keep their binary names: MINA SSHD uses
+# FailedLoginException and CredentialException for different key-loading failure paths. Without these
+# keeps R8 can merge/rename the two classes and rewrite SSHD's references to a single obfuscated type.
+-keep class javax.security.auth.login.FailedLoginException { *; }
+-keep class javax.security.auth.login.CredentialException { *; }
+
 # Apache MINA SSHD + BouncyCastle (SSH/VPS transport). They reference optional JDK/OSGi/slf4j classes
 # that do not exist on Android; warn-only is enough to let R8 finish, and keeping their classes intact
 # preserves the reflection-based key/cipher loading the SSH client relies on.
