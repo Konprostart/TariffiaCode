@@ -9,13 +9,16 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 
 /** A published TariffiaCode APK update found on GitHub Releases. */
 data class AppUpdateRelease(
     val version: String,
     val apkUrl: String,
+    /** Expected SHA-256 (lowercase hex) of the APK, from GitHub's own release-asset `digest`. */
+    val sha256: String,
+    /** Expected APK size in bytes when GitHub reports it; a cheap pre-hash truncation check. */
+    val sizeBytes: Long? = null,
 )
 
 /**
@@ -89,12 +92,14 @@ private suspend fun defaultFetchRelease(endpoint: String): String =
     withContext(Dispatchers.IO) {
         val request =
             Request.Builder()
-                .url(endpoint)
+                // Metadata comes only from the GitHub API host over HTTPS.
+                .url(requireGitHubApiEndpoint(endpoint))
                 .header("Accept", "application/vnd.github+json")
                 .header("User-Agent", "TariffiaCode")
                 .get()
                 .build()
-        OkHttpClient().newCall(request).execute().use { response ->
+        // HTTPS + GitHub-API-host only, enforced again per redirect hop by the client.
+        AppUpdateHttp.apiClient().newCall(request).execute().use { response ->
             require(response.isSuccessful) { "TariffiaCode release check failed with HTTP ${response.code}" }
             requireNotNull(response.body) { "TariffiaCode release response had no body" }.string()
         }
@@ -164,11 +169,34 @@ class AppUpdateReleaseClient(
                 "TariffiaCode release ${dto.tagName} does not contain $assetName"
             }
         val downloadUrl = asset.downloadUrl.toHttpUrl()
-        require(downloadUrl.isHttps) { "TariffiaCode APK download URL must use HTTPS" }
+        // The asset URL must be HTTPS on the GitHub asset host the Releases API actually returns
+        // (`github.com`); the CDN redirect it points at is enforced by the download client.
+        require(downloadUrl.isHttps && downloadUrl.host == AppUpdateHttp.ASSET_HOST) {
+            "TariffiaCode APK download URL must be HTTPS on ${AppUpdateHttp.ASSET_HOST}"
+        }
+        // The expected hash must come from a trusted source: GitHub's own release-asset digest,
+        // delivered over the same HTTPS API call as the download URL. Without it the update cannot
+        // be verified, so refuse rather than accept whatever a download returns.
+        val sha256 =
+            sha256FromDigest(asset.digest)
+                ?: error("TariffiaCode release ${dto.tagName} asset $assetName has no sha256 digest to verify against")
         return AppUpdateCheck.Available(
             normalizedCurrent,
-            AppUpdateRelease(version = latestVersion, apkUrl = withDownloadParam(downloadUrl)),
+            AppUpdateRelease(
+                version = latestVersion,
+                apkUrl = withDownloadParam(downloadUrl),
+                sha256 = sha256,
+                sizeBytes = asset.sizeBytes,
+            ),
         )
+    }
+
+    /** Extracts the lowercase hex of a GitHub `digest` (`sha256:<hex>`), or null when unusable. */
+    private fun sha256FromDigest(digest: String?): String? {
+        val value = digest?.trim()?.lowercase() ?: return null
+        val hex = value.removePrefix("sha256:")
+        if (hex == value) return null
+        return hex.takeIf { it.matches(SHA256_HEX) }
     }
 
     /**
@@ -190,6 +218,9 @@ class AppUpdateReleaseClient(
     private data class GitHubReleaseAssetDto(
         @SerialName("name") val name: String,
         @SerialName("browser_download_url") val downloadUrl: String,
+        /** GitHub's own `sha256:<hex>` asset digest, or null on releases that predate the field. */
+        @SerialName("digest") val digest: String? = null,
+        @SerialName("size") val sizeBytes: Long? = null,
     )
 
     private class ParsedVersion(private val version: String) : Comparable<ParsedVersion> {
@@ -199,5 +230,7 @@ class AppUpdateReleaseClient(
     companion object {
         /** Public Releases API for the TariffiaCode repository (server-side latest-first order). */
         val RELEASES_ENDPOINT: HttpUrl = AppUpdateChannel.Release.releasesEndpoint.toHttpUrl()
+
+        private val SHA256_HEX = Regex("[0-9a-f]{64}")
     }
 }

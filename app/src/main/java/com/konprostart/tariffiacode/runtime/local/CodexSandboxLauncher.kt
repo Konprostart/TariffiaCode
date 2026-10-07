@@ -19,6 +19,7 @@ object CodexSandboxLauncher {
         runtime: LocalRuntimeInstaller.InstalledRuntime,
         workspaceHostDir: String,
         arguments: List<String>,
+        fullAccess: Boolean,
     ): List<String> =
         buildList {
             add(runtime.commandSuite.proot.absolutePath)
@@ -45,13 +46,13 @@ object CodexSandboxLauncher {
             // Must precede the subcommand: `codex -c key=value app-server ...`, not the reverse -
             // verified against the real binary, which otherwise treats it as an app-server option.
             //
-            // Codex's own command-execution sandbox (bundled bubblewrap) needs unprivileged Linux
-            // user namespaces, which PRoot does not provide underneath - the outer PRoot jail is this
-            // app's actual containment boundary, matching how Claude Code and Antigravity run here.
-            // `danger-full-access` only turns off Codex's *own*, redundant, and (inside PRoot)
-            // non-functional inner sandbox; commands still cannot leave the PRoot rootfs.
+            // Codex's own sandbox is layered inside this app's PRoot jail. `workspace-write` is the
+            // default so the agent can edit /workspace without unrestricted filesystem, network or
+            // process access. `danger-full-access` disables Codex's sandbox entirely and is only used
+            // when the user explicitly opts in (see CodexSandboxPolicy): the outer PRoot jail alone
+            // is not a security boundary against a same-UID agent.
             add("-c")
-            add("sandbox_mode=\"danger-full-access\"")
+            add("sandbox_mode=\"${CodexSandboxPolicy.sandboxMode(fullAccess)}\"")
             addAll(arguments)
         }
 

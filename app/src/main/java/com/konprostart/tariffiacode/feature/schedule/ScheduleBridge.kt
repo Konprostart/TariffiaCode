@@ -1,6 +1,5 @@
 package com.konprostart.tariffiacode.feature.schedule
 
-import com.konprostart.tariffiacode.data.schedule.CronExpression
 import com.konprostart.tariffiacode.data.schedule.Schedule
 import com.konprostart.tariffiacode.data.schedule.ScheduleRepository
 import com.konprostart.tariffiacode.data.schedule.ScheduleRun
@@ -144,6 +143,14 @@ class ScheduleBridge(
     private fun execute(request: JSONObject): JSONObject {
         val op = request.optString("op", "")
         val args = request.optJSONObject("args") ?: JSONObject()
+        // The guest MCP server is agent-controlled and cannot obtain the user's explicit approval, so
+        // every mutating schedule operation is refused here. Creating, editing, enabling, running or
+        // deleting a schedule must be done by the user in the TariffiaCode app. Reads stay available so
+        // an agent can still report schedule state. This is the only place the guest can reach the
+        // schedule store, so it is the safe blocking point and does not affect the manual UI workflow.
+        if (op in AGENT_MUTATING_OPS) {
+            return errorResponse("$op is disabled: schedules must be created or enabled in the TariffiaCode app")
+        }
         return when (op) {
             "list" ->
                 ok("schedules", JSONArray().apply { store.schedules().forEach { put(scheduleJson(it)) } })
@@ -159,103 +166,8 @@ class ScheduleBridge(
                 val scheduleId = optionalString(args, "scheduleId")
                 ok("runs", runsJson(store.runs(scheduleId)))
             }
-            "create" -> {
-                val built = buildScheduleFromArgs(args)
-                store.upsert(built)
-                ok("schedule", scheduleJson(store.schedule(built.id) ?: built))
-            }
-            "update" -> {
-                val id = requiredString(args, "scheduleId")
-                val existing = store.schedule(id) ?: throw IllegalArgumentException("schedule not found: $id")
-                val updated = applyScheduleArgs(existing, args)
-                store.upsert(updated)
-                ok("schedule", scheduleJson(store.schedule(id) ?: updated))
-            }
-            "delete" -> {
-                val id = requiredString(args, "scheduleId")
-                if (store.schedule(id) == null) throw IllegalArgumentException("schedule not found: $id")
-                store.delete(id)
-                ok("id" to id, "deleted" to true)
-            }
-            "setEnabled" -> {
-                val id = requiredString(args, "scheduleId")
-                if (!args.has("enabled")) throw IllegalArgumentException("enabled is required")
-                val enabled = args.getBoolean("enabled")
-                if (store.schedule(id) == null) throw IllegalArgumentException("schedule not found: $id")
-                store.setEnabled(id, enabled)
-                ok("id" to id, "enabled" to enabled)
-            }
-            "runNow" -> {
-                val id = requiredString(args, "scheduleId")
-                if (store.schedule(id) == null) throw IllegalArgumentException("schedule not found: $id")
-                if (!store.runNow(id)) throw IllegalArgumentException("the system refused to start the run")
-                ok("id" to id, "started" to true)
-            }
             else -> throw IllegalArgumentException("unknown operation: $op")
         }
-    }
-
-    private fun buildScheduleFromArgs(args: JSONObject): Schedule {
-        val (oneTimeAt, cron) = resolveTrigger(args)
-        return Schedule(
-            name = args.optString("name", "").trim(),
-            runtimeId = requiredString(args, "runtimeId"),
-            workspacePath = optionalString(args, "workspacePath").orEmpty(),
-            providerId = optionalString(args, "providerId"),
-            modelId = optionalString(args, "modelId"),
-            agentId = optionalString(args, "agentId"),
-            prompt = requiredString(args, "prompt"),
-            oneTimeAt = oneTimeAt,
-            cron = cron,
-            enabled = args.optBoolean("enabled", true),
-            autoAcceptPermissions = optionalBoolean(args, "autoAcceptPermissions"),
-        )
-    }
-
-    private fun applyScheduleArgs(
-        existing: Schedule,
-        args: JSONObject,
-    ): Schedule {
-        var oneTimeAt = existing.oneTimeAt
-        var cron = existing.cron
-        if (hasValue(args, "cron") && hasValue(args, "oneTimeAt")) {
-            throw IllegalArgumentException("provide exactly one of oneTimeAt or cron")
-        }
-        if (hasValue(args, "cron")) {
-            val value = args.getString("cron")
-            if (CronExpression.parse(value) == null) throw IllegalArgumentException("invalid cron expression: $value")
-            cron = value
-            oneTimeAt = null
-        } else if (hasValue(args, "oneTimeAt")) {
-            oneTimeAt = args.getLong("oneTimeAt")
-            cron = null
-        }
-        if (oneTimeAt == null && cron == null) throw IllegalArgumentException("schedule needs a trigger: oneTimeAt or cron")
-        return existing.copy(
-            name = args.optString("name", existing.name).trim(),
-            runtimeId = if (hasValue(args, "runtimeId")) requiredString(args, "runtimeId") else existing.runtimeId,
-            workspacePath = if (hasValue(args, "workspacePath")) args.optString("workspacePath") else existing.workspacePath,
-            providerId = if (args.has("providerId")) optionalString(args, "providerId") else existing.providerId,
-            modelId = if (args.has("modelId")) optionalString(args, "modelId") else existing.modelId,
-            agentId = if (args.has("agentId")) optionalString(args, "agentId") else existing.agentId,
-            prompt = if (args.has("prompt")) requiredString(args, "prompt") else existing.prompt,
-            oneTimeAt = oneTimeAt,
-            cron = cron,
-            enabled = if (args.has("enabled")) args.getBoolean("enabled") else existing.enabled,
-            autoAcceptPermissions =
-                if (args.has("autoAcceptPermissions")) optionalBoolean(args, "autoAcceptPermissions") else existing.autoAcceptPermissions,
-        )
-    }
-
-    /** Resolves the trigger pair; exactly one of oneTimeAt/cron must be present. */
-    private fun resolveTrigger(args: JSONObject): Pair<Long?, String?> {
-        val hasOneTimeAt = hasValue(args, "oneTimeAt")
-        val hasCron = hasValue(args, "cron")
-        if (hasOneTimeAt == hasCron) throw IllegalArgumentException("provide exactly one of oneTimeAt or cron")
-        if (hasOneTimeAt) return args.getLong("oneTimeAt") to null
-        val cron = args.getString("cron")
-        if (CronExpression.parse(cron) == null) throw IllegalArgumentException("invalid cron expression: $cron")
-        return null to cron
     }
 
     private fun scheduleJson(schedule: Schedule): JSONObject =
@@ -351,11 +263,6 @@ class ScheduleBridge(
         key: String,
     ): String? = if (hasValue(args, key)) args.getString(key) else null
 
-    private fun optionalBoolean(
-        args: JSONObject,
-        key: String,
-    ): Boolean? = if (hasValue(args, key)) args.getBoolean(key) else null
-
     /** True when the argument carries a real value rather than JSON null. */
     private fun hasValue(
         args: JSONObject,
@@ -363,6 +270,12 @@ class ScheduleBridge(
     ): Boolean = args.has(key) && !args.isNull(key)
 
     companion object {
+        /**
+         * Agent-initiated operations that would create or enable unattended execution. They are
+         * refused by the bridge; the user performs them explicitly in the app.
+         */
+        val AGENT_MUTATING_OPS = setOf("create", "update", "delete", "setEnabled", "runNow")
+
         /** Path under the workspace (guest-visible at /workspace) where the MCP server writes. */
         const val BRIDGE_RELATIVE_PATH = ".tariffiacode/schedule-bridge"
         const val POLL_INTERVAL_MILLIS = 800L

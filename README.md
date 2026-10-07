@@ -9,7 +9,7 @@
 
 **Run coding agents locally on Android through a native GUI — no terminal required.**
 
-TariffiaCode is a native Android GUI app that brings AI coding agents to your phone. Chat with [OpenCode](https://github.com/sst/opencode), [Claude Code](https://github.com/anthropics/claude-code), [Google Antigravity](https://github.com/google-antigravity/antigravity-cli), and [OpenAI Codex](https://github.com/openai/codex) through a touch-first interface — no terminal, no SSH, no PC required for on-device use. It wraps agent runtimes via PRoot (on-device) or connects remotely to your existing OpenCode server on PC/Mac/Linux.
+TariffiaCode is a native Android GUI app that brings AI coding agents to your phone. Chat with [OpenCode](https://github.com/anomalyco/opencode), [Claude Code](https://github.com/anthropics/claude-code), [Google Antigravity](https://github.com/google-antigravity/antigravity-cli), and [OpenAI Codex](https://github.com/openai/codex) through a touch-first interface — no terminal, no SSH, no PC required for on-device use. It wraps agent runtimes via PRoot (on-device) or connects remotely to your existing OpenCode server on PC/Mac/Linux.
 
 [Releases](https://github.com/Konprostart/TariffiaCode/releases/latest) · [日本語のREADME](README.ja.md)
 
@@ -65,7 +65,7 @@ TariffiaCode is a fork of the [AndCode](https://github.com/yuga-hashimoto/and-co
 
 | Agent | On-Device | Remote PC | Status |
 |-------|:---------:|:---------:|--------|
-| [OpenCode](https://github.com/sst/opencode) | ✓ | ✓ | Stable |
+| [OpenCode](https://github.com/anomalyco/opencode) | ✓ | ✓ | Stable |
 | [Claude Code](https://github.com/anthropics/claude-code) | ✓ | — | Beta |
 | [Google Antigravity](https://github.com/google-antigravity/antigravity-cli) | ✓ | — | Beta |
 | [OpenAI Codex](https://github.com/openai/codex) | ✓ | — | Beta |

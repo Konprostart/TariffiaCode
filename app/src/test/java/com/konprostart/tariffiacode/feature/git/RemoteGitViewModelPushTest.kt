@@ -121,7 +121,7 @@ class RemoteGitViewModelPushTest {
     @Test
     fun `push success sets the success flag and output`() =
         runTest {
-            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("Everything up-to-date\n__TC_EXIT__0\n")), "/root/app")
+            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed(0, "Everything up-to-date\n")), "/root/app")
 
             vm.push()
 
@@ -133,7 +133,7 @@ class RemoteGitViewModelPushTest {
     @Test
     fun `push failure surfaces a message`() =
         runTest {
-            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("boom\n__TC_EXIT__1\n")), "/root/app")
+            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed(1, "boom\n")), "/root/app")
 
             vm.push()
 
@@ -144,7 +144,7 @@ class RemoteGitViewModelPushTest {
     @Test
     fun `push without a mapped path reports an error and does not run`() =
         runTest {
-            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("__TC_EXIT__0")), directory = null)
+            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed(0, "")), directory = null)
 
             vm.push()
 
@@ -155,7 +155,7 @@ class RemoteGitViewModelPushTest {
     @Test
     fun `push state carries no credential material`() =
         runTest {
-            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed("__TC_EXIT__0")), "/root/app")
+            val vm = viewModel(FakeExecutor(RemoteCommandOutcome.Completed(0, "")), "/root/app")
 
             vm.push()
 

@@ -285,6 +285,11 @@ class WorkspaceViewModel(
         addProject(path)
         refresh()
         dismissFolderPicker()
+        // A device-storage project is bound into the sandbox only when the runtime starts, so bind it
+        // now rather than leaving the running server unable to see the folder the user just picked.
+        if (DeviceStorage.isDeviceStoragePath(path) && state.value.localStatus is LocalRuntimeStatus.Ready) {
+            restartLocalRuntime()
+        }
         return path
     }
 

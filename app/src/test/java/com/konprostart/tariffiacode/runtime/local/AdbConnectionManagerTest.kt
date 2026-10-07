@@ -82,9 +82,9 @@ class AdbConnectionManagerTest {
         }
 
     @Test
-    fun `restoreAndReconnect reconnects to persisted port`() =
+    fun `restoreAndReconnect reconnects to persisted port when the user approved agent adb`() =
         runTest {
-            val store = InMemoryAdbConnectionStore().apply { saveConnectedPort(5555) }
+            val store = InMemoryAdbConnectionStore().apply { saveConnectedPort(5555); agentAdbEnabled = true }
             val runner = FakeShellRunner()
             val manager = AdbConnectionManager(runner, store, nsdManagerProvider = { null }, runtimeWork = RuntimeWorkTracker())
 
@@ -93,6 +93,81 @@ class AdbConnectionManagerTest {
             assertTrue(restored)
             assertEquals(AdbConnectionState.Connected(5555), manager.state.value)
         }
+
+    @Test
+    fun `restoreAndReconnect is refused without agent adb approval`() =
+        runTest {
+            val store = InMemoryAdbConnectionStore().apply { saveConnectedPort(5555) }
+            val runner = FakeShellRunner()
+            val manager = AdbConnectionManager(runner, store, nsdManagerProvider = { null }, runtimeWork = RuntimeWorkTracker())
+
+            val restored = manager.restoreAndReconnect()
+
+            assertFalse("agent adb must be denied by default", restored)
+            assertFalse(runner.commands.any { it.contains("adb connect") })
+            assertEquals(AdbConnectionState.Disconnected, manager.state.value)
+        }
+
+    @Test
+    fun `setAgentAdbEnabled false disconnects and drops the link`() =
+        runTest {
+            val store = InMemoryAdbConnectionStore().apply { saveConnectedPort(5555); agentAdbEnabled = true }
+            val runner = FakeShellRunner()
+            val manager = AdbConnectionManager(runner, store, nsdManagerProvider = { null }, runtimeWork = RuntimeWorkTracker())
+            manager.connect(5555)
+
+            manager.setAgentAdbEnabled(false)
+
+            assertFalse(store.agentAdbEnabled)
+            assertNull(store.loadConnectedPort())
+            assertEquals(AdbConnectionState.Disconnected, manager.state.value)
+            assertTrue(runner.commands.any { it.contains("adb disconnect") })
+        }
+
+    @Test
+    fun `manual connect works without agent adb approval`() =
+        runTest {
+            val store = InMemoryAdbConnectionStore()
+            val runner = FakeShellRunner()
+            val manager = AdbConnectionManager(runner, store, nsdManagerProvider = { null }, runtimeWork = RuntimeWorkTracker())
+            assertFalse("default must be off", store.agentAdbEnabled)
+
+            val result = manager.connect(5555)
+
+            assertTrue("the manual, user-initiated workflow must stay functional", result.isSuccess)
+            assertEquals(AdbConnectionState.Connected(5555), manager.state.value)
+        }
+
+    @Test
+    fun `auto reconnect does nothing without agent adb approval`() =
+        runBlocking {
+            val store = InMemoryAdbConnectionStore().apply { saveConnectedPort(5555) }
+            val runner = FakeShellRunner().apply { deviceConnected = false }
+            val manager = AdbConnectionManager(runner, store, nsdManagerProvider = { null }, runtimeWork = RuntimeWorkTracker())
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            try {
+                manager.startAutoReconnect(scope, intervalMs = 10)
+                delay(150)
+                assertFalse(runner.commands.any { it.contains("adb connect") })
+                assertTrue(manager.state.value !is AdbConnectionState.Connected)
+            } finally {
+                scope.cancel()
+            }
+        }
+
+    @Test
+    fun `adb state never carries credentials`() {
+        // The exposed state only ever holds ports and messages, never pairing codes or tokens.
+        val states =
+            listOf(
+                AdbConnectionState.Disconnected,
+                AdbConnectionState.Discovered(5555, "ADB"),
+                AdbConnectionState.Pairing(37123),
+                AdbConnectionState.Connected(5555),
+                AdbConnectionState.Error("failed"),
+            )
+        assertTrue(states.all { state -> !state.toString().contains("code", ignoreCase = true) })
+    }
 
     @Test
     fun `restoreAndReconnect returns false when no port saved`() =
@@ -165,9 +240,9 @@ class AdbConnectionManagerTest {
         }
 
     @Test
-    fun `auto reconnect restores a dropped connection`() =
+    fun `auto reconnect restores a dropped connection when the user approved agent adb`() =
         runBlocking {
-            val store = InMemoryAdbConnectionStore().apply { saveConnectedPort(5555) }
+            val store = InMemoryAdbConnectionStore().apply { saveConnectedPort(5555); agentAdbEnabled = true }
             val runner =
                 FakeShellRunner().apply {
                     deviceConnected = false

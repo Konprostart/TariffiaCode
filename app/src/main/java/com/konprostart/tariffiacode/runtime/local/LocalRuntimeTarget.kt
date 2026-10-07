@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class LocalRuntimeTarget(
     private val runtimeManager: LocalRuntimeManager,
@@ -58,7 +59,9 @@ class LocalRuntimeTarget(
             diffCapable = true,
         )
 
-    private val mutableState = MutableStateFlow(mapStatus(runtimeManager.status()))
+    // The cached flow value, not status(): this runs during composition (main thread) and status()
+    // probes the port, which is a blocking socket connect.
+    private val mutableState = MutableStateFlow(mapStatus(runtimeManager.state.value))
     override val state: StateFlow<RuntimeState> = mutableState.asStateFlow()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -74,12 +77,14 @@ class LocalRuntimeTarget(
     }
 
     fun refreshLocalState(): RuntimeState =
-        mapStatus(runtimeManager.status()).also {
+        mapStatus(runtimeManager.state.value).also {
             mutableState.value = it
         }
 
     override suspend fun connect(): Result<OpenCodeHealth> {
-        val localStatus = runtimeManager.status()
+        // connect() is polled by the connection-quality monitor on the caller's dispatcher, which is
+        // the main thread for an open chat; status() probes the port, so run it off that thread.
+        val localStatus = withContext(Dispatchers.IO) { runtimeManager.status() }
         if (localStatus !is LocalRuntimeStatus.Ready) {
             val state = mapStatus(localStatus)
             mutableState.value = state
@@ -106,7 +111,7 @@ class LocalRuntimeTarget(
     }
 
     override fun disconnect() {
-        mutableState.value = mapStatus(runtimeManager.status())
+        mutableState.value = mapStatus(runtimeManager.state.value)
     }
 
     override suspend fun listWorkspaces(): List<WorkspaceRef> {

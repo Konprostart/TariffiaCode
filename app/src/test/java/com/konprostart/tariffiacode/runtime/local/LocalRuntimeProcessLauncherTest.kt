@@ -375,6 +375,20 @@ class LocalRuntimeProcessLauncherTest {
     }
 
     @Test
+    fun `guest environment has no GitHub token when none is shared`() {
+        // Default: the policy withholds the token, so the sandbox env must carry none.
+        val environment =
+            localRuntimeEnvironment(
+                suiteEnvironment = emptyMap(),
+                prootTmp = File("/android/proot-tmp"),
+                githubToken = RuntimeCredentialPolicy.runtimeGitHubToken("token-from-encrypted-store", shareWithRuntime = false),
+            )
+
+        assertFalse("OPENCODE_GITHUB_TOKEN must be absent", environment.containsKey("OPENCODE_GITHUB_TOKEN"))
+        assertFalse("GH_TOKEN must be absent", environment.containsKey("GH_TOKEN"))
+    }
+
+    @Test
     fun `process tree termination order is children before parent`() {
         val children =
             mapOf(

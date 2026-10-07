@@ -55,6 +55,9 @@ class LocalRuntimeProcessLauncher(
         val workspace = File(runtimeDirectory, "workspace").apply { mkdirs() }
         val prootTmp = File(runtimeDirectory, "proot-tmp").apply { mkdirs() }
 
+        // PRoot only translates paths and fakes uid 0; it is not an access-control boundary. The
+        // process keeps the app's real uid, so Android's per-app sandbox is the actual containment.
+        // This bind list is what the sandbox is *asked* to expose, not a guarantee (docs/SECURITY_MODEL.md).
         val command =
             buildList {
                 add(suite.proot.absolutePath)
@@ -86,6 +89,10 @@ class LocalRuntimeProcessLauncher(
                 add(port.toString())
             }
 
+        // A fresh random password on every start: Android apps share loopback, so the server must
+        // reject requests from anything that is not this app. Kept in the app-private runtime dir,
+        // never in the agent sandbox and never logged.
+        val serverSecret = LocalRuntimeServerSecret.rotate(runtimeDirectory)
         val builder =
             ProcessBuilder(command)
                 .directory(runtimeDirectory)
@@ -94,6 +101,8 @@ class LocalRuntimeProcessLauncher(
         builder.environment().apply {
             clear()
             putAll(localRuntimeEnvironment(suite.environment(), prootTmp, githubToken()))
+            put(LocalRuntimeServerSecret.ENV_PASSWORD, serverSecret)
+            put(LocalRuntimeServerSecret.ENV_USERNAME, LocalRuntimeServerSecret.USERNAME)
         }
         val started = builder.start()
         process = started

@@ -7,58 +7,63 @@ source code.** See [TRADEMARKS.md](TRADEMARKS.md) for trademark notices.
 
 ## Bundled native runtime components (PRoot / Termux-derived)
 
-These binaries are downloaded from the official Termux package mirror at build time (pinned by
-package version and SHA-256 hash of the compiled `.deb` in
-[`runtime_tools/termux_assets.lock.json`](runtime_tools/termux_assets.lock.json)) and packaged into
-the APK so the on-device Linux runtime can start. TariffiaCode does not patch or modify these packages
-beyond what Termux's own packaging performs. **Full license text for each of GPL-2.0, GPL-3.0 (which
+These binaries are built at build time from the pinned upstream source archives (verified by SHA-256)
+using a pinned Android NDK, and packaged into the APK so the on-device Linux runtime can start. The
+pinned inputs live in
+[`runtime_tools/native_sources.lock.json`](runtime_tools/native_sources.lock.json) and the build is
+driven by [`scripts/build_android_runtime_from_source.py`](scripts/build_android_runtime_from_source.py).
+This is a fully self-contained, project-controlled build process and does not depend on the
+`termux-packages` build framework; it replaces the former build-time `.deb` fetch, whose lock file
+([`runtime_tools/termux_assets.lock.json`](runtime_tools/termux_assets.lock.json)) and mirrored
+recipes are retained as historical provenance. TariffiaCode does not patch or modify these packages
+beyond what the recipes perform. **Full license text for each of GPL-2.0, GPL-3.0 (which
 LGPL-3.0 incorporates by reference), LGPL-3.0, and the BSD-3-Clause text used by
 `libandroid-shmem` is bundled verbatim, unmodified, in [`THIRD_PARTY_LICENSES/`](THIRD_PARTY_LICENSES/)
 in this repository and at `assets/legal/licenses/*.txt` inside the shipped APK** — not just linked.
 
 | Package | Version | License (verified against upstream source, not guessed) | Copyright | Corresponding source (content-addressed) |
 |---|---|---|---|---|
-| `proot` | 5.1.107.92 | [GPL-2.0](THIRD_PARTY_LICENSES/GPL-2.0.txt), per [`TERMUX_PKG_LICENSE`](runtime_tools/termux-packaging-recipes/proot.build.sh) | The PRoot contributors | Upstream source archive `v5.1.107.92.zip`, SHA-256 `29385d1ddb619a9c4449ab512bfd55032034b22f724ddf98fc95ff300ea32135` (from [github.com/termux/proot](https://github.com/termux/proot/archive/v5.1.107.92.zip), tagged release, not `master`) |
-| `libandroid-shmem` | 0.7 | [BSD-3-Clause](THIRD_PARTY_LICENSES/BSD-3-Clause-libandroid-shmem.txt), per [`TERMUX_PKG_LICENSE`](runtime_tools/termux-packaging-recipes/libandroid-shmem.build.sh) and the project's own `LICENSE` file | Copyright (c) 2013 Sergii Pylypenko; Copyright (c) 2017 Fredrik Fornwall | Upstream source archive `v0.7.tar.gz`, SHA-256 `1e5ff8459bc0a8c229dd8a94b27d119987e09ef3414331c2b5ebfff20b98e867` (from [github.com/termux/libandroid-shmem](https://github.com/termux/libandroid-shmem/archive/refs/tags/v0.7.tar.gz), tagged release, not `master`) |
-| `libtalloc` | 2.4.3 | [LGPL-3.0-or-later](THIRD_PARTY_LICENSES/LGPL-3.0.txt) for the actual runtime library. Termux's own packaging metadata tags the *package* `GPL-3.0` (a coarser, package-level tag), but the shared library source itself (`talloc.c`/`talloc.h`, the only files that become `libtalloc.a`/`libtalloc.so`) carries its own header: *"the following LGPL license applies to the talloc library. This does NOT imply that all of Samba is released under the LGPL"* — version 3 or later. Resolved; no longer `REQUIRES_LICENSE_REVIEW`. | Copyright (C) Andrew Tridgell 2004; Copyright (C) Stefan Metzmacher 2006 | Upstream source archive `talloc-2.4.3.tar.gz`, SHA-256 `dc46c40b9f46bb34dd97fe41f548b0e8b247b77a918576733c528e83abd854dd` (from [samba.org/ftp/talloc](https://www.samba.org/ftp/talloc/talloc-2.4.3.tar.gz), versioned release path, not a mutable branch) |
+| `proot` | 5.1.107.92 | [GPL-2.0](THIRD_PARTY_LICENSES/GPL-2.0.txt), per [`TERMUX_PKG_LICENSE`](runtime_tools/termux-packaging-recipes/proot.build.sh) | The PRoot contributors | Upstream source archive `v5.1.107.92.zip`, SHA-256 `29385d1ddb619a9c4449ab512bfd55032034b22f724ddf98fc95ff300ea32135` (from [github.com/termux/proot](https://github.com/termux/proot/archive/v5.1.107.92.zip), tagged release, not `master`). Recipe pinned to `termux/termux-packages@08b49b3ce00b1e14a3a0365200f30e50f8dfafe1`. |
+| `libandroid-shmem` | 0.7 | [BSD-3-Clause](THIRD_PARTY_LICENSES/BSD-3-Clause-libandroid-shmem.txt), per [`TERMUX_PKG_LICENSE`](runtime_tools/termux-packaging-recipes/libandroid-shmem.build.sh) and the project's own `LICENSE` file | Copyright (c) 2013 Sergii Pylypenko; Copyright (c) 2017 Fredrik Fornwall | Upstream source archive `v0.7.tar.gz`, SHA-256 `1e5ff8459bc0a8c229dd8a94b27d119987e09ef3414331c2b5ebfff20b98e867` (from [github.com/termux/libandroid-shmem](https://github.com/termux/libandroid-shmem/archive/refs/tags/v0.7.tar.gz), tagged release, not `master`). Recipe pinned to `termux/termux-packages@b25e257208da6d2e8b558b8a2b51762158a2e806`. |
+| `libtalloc` | 2.4.3 | [LGPL-3.0-or-later](THIRD_PARTY_LICENSES/LGPL-3.0.txt) for the actual runtime library. Termux's own packaging metadata tags the *package* `GPL-3.0` (a coarser, package-level tag), but the shared library source itself (`talloc.c`/`talloc.h`, the only files that become `libtalloc.a`/`libtalloc.so`) carries its own header: *"the following LGPL license applies to the talloc library. This does NOT imply that all of Samba is released under the LGPL"* — version 3 or later. The library license is LGPL-3.0-or-later; for the historical `.deb`-derived binaries the corresponding-source status is `REQUIRES_LICENSE_REVIEW`, while current releases provide corresponding source via the self-contained source build (see below). | Copyright (C) Andrew Tridgell 2004; Copyright (C) Stefan Metzmacher 2006 | Upstream source archive `talloc-2.4.3.tar.gz`, SHA-256 `dc46c40b9f46bb34dd97fe41f548b0e8b247b77a918576733c528e83abd854dd` (from [samba.org/ftp/talloc](https://www.samba.org/ftp/talloc/talloc-2.4.3.tar.gz), versioned release path, not a mutable branch). Recipe pinned to `termux/termux-packages@fbc049451e7fc59cdf510732aad49bd45590b0bb`. |
 
 **Packaging recipes, mirrored (not just linked):** the exact `TERMUX_PKG_*` build recipe used for
 each package above — the thing that actually produces the `.deb` pinned by hash in
 `termux_assets.lock.json` — is copied verbatim into
 [`runtime_tools/termux-packaging-recipes/`](runtime_tools/termux-packaging-recipes/) in this
-repository, as retrieved from `termux/termux-packages` on 2026-08-02. This exists specifically so
+repository, each pinned to the exact `termux/termux-packages` commit it was retrieved from:
+`proot` at `08b49b3ce00b1e14a3a0365200f30e50f8dfafe1` (retrieved 2026-08-24), `libandroid-shmem` at
+`b25e257208da6d2e8b558b8a2b51762158a2e806` and `libtalloc` at
+`fbc049451e7fc59cdf510732aad49bd45590b0bb` (both retrieved 2026-08-02). This exists specifically so
 the corresponding-source reference does not depend on the upstream `termux-packages` repository's
 mutable `master` branch continuing to show the same content in the future; the recipe as it existed
 at the time these exact binaries were built is preserved here.
 
-**Source availability — what is provided today, and what is `REQUIRES_LICENSE_REVIEW`:**
+**Source availability — self-contained source build:**
 
 - *Provided:* the exact, versioned, content-addressed upstream source archive for each package
-  (verifiable by the SHA-256 shown, independent of any branch or tag being later force-moved), and
-  the exact `TERMUX_PKG_*` recipe file for each package, mirrored as retrieved from
-  `termux/termux-packages` on 2026-08-02.
-- *Not yet provided, and not claimed to be complete:* the recipe files above are not self-contained.
-  They call into the broader `termux-packages` **build framework** — `termux_step_*` helper
-  functions, environment set up by the framework's own scripts, the `termux-chroot` template file
-  `proot`'s recipe references, and the cross-compilation toolchain — none of which is vendored into
-  this repository. Nor has this project independently confirmed that the `termux-packages` `master`
-  commit these recipes were retrieved from on 2026-08-02 is the *exact* commit that produced the
-  specific `.deb` binaries pinned by SHA-256 in `termux_assets.lock.json` (Termux does not publish a
-  per-package-build commit pin in the `.deb` itself, and this project has not yet cross-referenced
-  `termux-packages`' commit history against the pinned hashes to establish that link).
+  (verifiable by the SHA-256 shown, independent of any branch or tag being later force-moved); the
+  exact `TERMUX_PKG_*` recipe file for each package, pinned to the `termux/termux-packages` commit it
+  was retrieved from (see above); the pinned Android NDK (`r29`, SHA-256 pinned in
+  `native_sources.lock.json`); and the self-contained build script
+  [`scripts/build_android_runtime_from_source.py`](scripts/build_android_runtime_from_source.py)
+  that reproduces all three binaries from those inputs without the `termux-packages` build framework.
+- *Historical provenance:* the former build-time `.deb` fetch and its lock file
+  ([`runtime_tools/termux_assets.lock.json`](runtime_tools/termux_assets.lock.json)) and mirrored
+  recipes are retained as provenance. The `.deb` SHA-256 pins describe releases built before the
+  self-contained source build landed; they are no longer the packaged artifacts.
 
-**Because of the gaps above, this project does not assert that the corresponding-source obligation
-for `proot`, `libandroid-shmem`, or `libtalloc` under GPLv2 §3(a)/(b) or LGPLv3 is fully satisfied
-yet — this is flagged `REQUIRES_LICENSE_REVIEW`, not resolved.** Until it is fully resolved by either
-(a) identifying and pinning the exact `termux-packages` commit and vendoring the complete build
-framework/toolchain instructions needed to reproduce the pinned binaries, or (b) rebuilding these
-three packages from source under this project's own pinned, fully self-contained build process, the
-following stands as a GPLv2 §3(b)-style written offer for these three packages specifically: **on
-request (open an issue at [Konprostart/TariffiaCode](https://github.com/Konprostart/TariffiaCode/issues)),
-for at least three years from the release you obtained, this project will provide, at no more than
-the cost of physically performing the distribution, a complete machine-readable copy of the
-corresponding source it is able to identify or reconstruct for the pinned `proot`, `libandroid-shmem`,
-and `libtalloc` binaries in that release.**
+**Current releases provide the corresponding source for `proot`, `libandroid-shmem`, and `libtalloc`
+through option (b): these three packages are rebuilt from source under this project's own pinned,
+fully self-contained build process (inputs pinned in `native_sources.lock.json`). The historical
+`.deb`-derived binaries remain flagged `REQUIRES_LICENSE_REVIEW`, and for releases that shipped
+those binaries the following GPLv2 §3(b)-style written offer still stands for those three packages
+specifically: **on request (open an issue at
+[Konprostart/TariffiaCode](https://github.com/Konprostart/TariffiaCode/issues)), for at least three
+years from the release you obtained, this project will provide, at no more than the cost of
+physically performing the distribution, a complete machine-readable copy of the corresponding source
+it is able to identify or reconstruct for the pinned `proot`, `libandroid-shmem`, and `libtalloc`
+binaries in that release.**
 
 ## Coding agent binaries downloaded and run on-device
 
@@ -84,8 +89,8 @@ installed and run.
 
 The `releaseRuntimeClasspath` Gradle configuration — everything actually resolved into a release
 build, direct **and** transitive — has ~190 distinct artifacts as of this writing. Rather than a
-hand-maintained table (which drifted from reality before: it previously listed Gson as a direct
-dependency, which it isn't, and omitted `org.tukaani:xz`, which is actually resolved), the authoritative, generated list is committed at
+hand-maintained table (which drifted from reality before - both listing things that were not actually
+resolved and omitting things that were), the authoritative, generated list is committed at
 [`THIRD_PARTY_LICENSES/release-dependencies-releaseRuntimeClasspath.txt`](THIRD_PARTY_LICENSES/release-dependencies-releaseRuntimeClasspath.txt).
 Regenerate it with:
 
@@ -106,10 +111,10 @@ claim that it is exhaustive — consult the generated file for the complete set.
 | Apache Commons Compress, Commons Codec, Commons IO, Commons Lang3 | `commons-compress:1.27.1`, `commons-codec:1.17.1`, `commons-io:2.16.1`, `commons-lang3:3.16.0` | Apache License 2.0 — [commons.apache.org](https://commons.apache.org/) |
 | **`org.tukaani:xz`** (used by `commons-compress` for `.xz` archive support) | `1.9` | Public-domain-style permissive license ("Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted"), per the project's own `COPYING` file — [github.com/tukaani-project/xz-java](https://github.com/tukaani-project/xz-java) |
 | Kotlin stdlib / Kotlin Gradle plugins | `2.0.21` | Apache License 2.0 — [kotlinlang.org](https://kotlinlang.org/) |
-| kotlinx.coroutines (Android, core, Play Services interop) | `1.9.0` | Apache License 2.0 — [github.com/Kotlin/kotlinx.coroutines](https://github.com/Kotlin/kotlinx.coroutines) |
+| kotlinx.coroutines (Android, core) | `1.9.0` | Apache License 2.0 — [github.com/Kotlin/kotlinx.coroutines](https://github.com/Kotlin/kotlinx.coroutines) |
 | Koin (`koin-android`, `koin-androidx-compose`, `koin-core`) | `4.0.1` | Apache License 2.0 — [insert-koin.io](https://insert-koin.io/) |
+| **Google Tink** (`com.google.crypto.tink:tink-android`, pulled in by `androidx.security:security-crypto` for `EncryptedSharedPreferences`) | `1.8.0` | Apache License 2.0 — [github.com/tink-crypto/tink-java](https://github.com/tink-crypto/tink-java) |
 | **`com.alphacephei:vosk-android`** (wake-word speech recognition; bundles Kaldi) | `0.3.75` | Apache License 2.0 — [github.com/alphacep/vosk-api](https://github.com/alphacep/vosk-api) |
-| Google Play Services (`play-services-basement`, `play-services-tasks`), Firebase Android SDK (BOM + Crashlytics/Installations/DataTransport client libraries), Google Tink, `com.google.android.odml:image`, Guava `listenablefuture`, Gson (transitive via Play Services) | `firebase-bom:34.17.0` and related, `tink-android:1.8.0`, `gson:2.8.9` | Apache License 2.0 for these client SDKs; the **Firebase Crashlytics service** they talk to is a proprietary Google service governed by the [Firebase Terms of Service](https://firebase.google.com/terms) (see [THIRD_PARTY_SERVICES.md](THIRD_PARTY_SERVICES.md)) |
 | AndroidX Test / Espresso, JUnit 4, MockWebServer, `kotlinx-coroutines-test` (test only, not shipped in a release APK) | various | Apache License 2.0 (AndroidX Test/Espresso, MockWebServer, coroutines-test) / Eclipse Public License 1.0 (JUnit 4 — [junit.org/junit4](https://junit.org/junit4/)) |
 
 Apache License 2.0's full text is bundled at

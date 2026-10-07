@@ -9,20 +9,29 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppUpdateReleaseClientTest {
+    private val SHA = "a".repeat(64)
+
     private fun release(
         tag: String,
         draft: Boolean = false,
         prerelease: Boolean = false,
         withApk: Boolean = true,
+        digest: String? = "sha256:$SHA",
+        size: Long? = 12_345L,
     ): String {
         val assets =
             if (withApk) {
-                """"assets":[{"name":"tariffiacode-$tag-release.apk","browser_download_url":
-                    "https://github.com/Konprostart/TariffiaCode/releases/download/$tag/tariffiacode-$tag-release.apk"}]"""
+                val digestJson = if (digest != null) ",\"digest\":\"$digest\"" else ""
+                val sizeJson = if (size != null) ",\"size\":$size" else ""
+                val asset =
+                    "{\"name\":\"tariffiacode-$tag-release.apk\",\"browser_download_url\":" +
+                        "\"https://github.com/Konprostart/TariffiaCode/releases/download/$tag/tariffiacode-$tag-release.apk\"" +
+                        "$digestJson$sizeJson}"
+                "\"assets\":[$asset]"
             } else {
-                """"assets":[]"""
+                "\"assets\":[]"
             }
-        return """{"tag_name":"$tag","draft":$draft,"prerelease":$prerelease,$assets}"""
+        return "{\"tag_name\":\"$tag\",\"draft\":$draft,\"prerelease\":$prerelease,$assets}"
     }
 
     private fun client(payload: String): AppUpdateReleaseClient = AppUpdateReleaseClient(fetchRelease = { "[$payload]" })
@@ -44,6 +53,23 @@ class AppUpdateReleaseClientTest {
             assertEquals("1.2.28", available.release.version)
             assertTrue(available.release.apkUrl.startsWith("https://github.com/Konprostart/TariffiaCode/releases/download/v1.2.28/"))
             assertTrue(available.release.apkUrl.contains("download=1"))
+            // The expected hash/size come from GitHub's own asset digest, not a hardcoded value.
+            assertEquals(SHA, available.release.sha256)
+            assertEquals(12_345L, available.release.sizeBytes)
+        }
+
+    @Test
+    fun `an update without a sha256 digest is refused rather than accepted unverified`() =
+        runTest {
+            val result = runCatching { client(release("v1.2.28", digest = null)).check("1.2.27") }
+            assertTrue("an asset with no digest must not be offered for install", result.isFailure)
+        }
+
+    @Test
+    fun `an update with a malformed or non-sha256 digest is refused`() =
+        runTest {
+            assertTrue(runCatching { client(release("v1.2.28", digest = "sha256:not-a-hash")).check("1.2.27") }.isFailure)
+            assertTrue(runCatching { client(release("v1.2.28", digest = "md5:$SHA")).check("1.2.27") }.isFailure)
         }
 
     @Test
@@ -116,15 +142,19 @@ class AppUpdateReleaseClientTest {
         version: String,
         assetName: String = "tariffiacode-debug.apk",
         withAsset: Boolean = true,
+        digest: String? = "sha256:$SHA",
     ): String {
         val assets =
             if (withAsset) {
-                """"assets":[{"name":"$assetName","browser_download_url":
-                    "https://github.com/Konprostart/TariffiaCode/releases/download/debug-latest/$assetName"}]"""
+                val digestJson = if (digest != null) ",\"digest\":\"$digest\"" else ""
+                val asset =
+                    "{\"name\":\"$assetName\",\"browser_download_url\":" +
+                        "\"https://github.com/Konprostart/TariffiaCode/releases/download/debug-latest/$assetName\"$digestJson}"
+                "\"assets\":[$asset]"
             } else {
-                """"assets":[]"""
+                "\"assets\":[]"
             }
-        return """{"tag_name":"debug-latest","name":"$version","draft":false,"prerelease":true,$assets}"""
+        return "{\"tag_name\":\"debug-latest\",\"name\":\"$version\",\"draft\":false,\"prerelease\":true,$assets}"
     }
 
     private fun debugClient(payload: String): AppUpdateReleaseClient =

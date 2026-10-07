@@ -4,6 +4,7 @@ import android.content.Context
 import android.system.Os
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.runtime.LocalAgent
+import com.konprostart.tariffiacode.runtime.ProprietaryAgents
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -66,12 +67,13 @@ class LocalRuntimeInstaller(
             runtimeDirectory.mkdirs()
             onShared(0.02f, context.getString(R.string.install_step_preparing_command_env))
             val existingMetadata = installedMetadata()
+            // Proprietary agents are dropped here when the build disables them (F-Droid), so no
+            // download step below can ever be reached for them. In every other build this is the
+            // unchanged selection-plus-carry-over set.
             val requestedAgents =
-                agents + (
-                    existingMetadata?.let {
-                            existing ->
-                        LocalAgent.entries.filter(existing::has)
-                    } ?: emptyList()
+                ProprietaryAgents.requestedForInstall(
+                    selected = agents,
+                    existing = existingMetadata?.let { metadata -> LocalAgent.entries.filter(metadata::has) } ?: emptyList(),
                 )
             // Runtimes created before this option existed already contain the full toolchain, and
             // adding another agent must not silently remove it by rebuilding a smaller rootfs.
@@ -369,6 +371,7 @@ class LocalRuntimeInstaller(
      * controller that owns both actions runs one at a time.
      */
     suspend fun updateAntigravity(onProgress: (Float) -> Unit = {}): String {
+        require(ProprietaryAgents.enabled) { "Antigravity is not available in this build" }
         val runtime = installedRuntime() ?: error("The Linux environment is not installed")
         val rootfs = runtime.antigravityRootfs ?: runtime.rootfs
         val release = resolveAntigravityRelease(abi, httpClient)

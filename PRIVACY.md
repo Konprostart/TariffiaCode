@@ -113,35 +113,12 @@ settings to remove these mounts.
 
 ## 7. Diagnostics and crash reporting
 
-TariffiaCode uses **Firebase Crashlytics** (a Google service) for crash and non-fatal error reporting in
-release builds (`CrashReporter` in `core/diagnostics`). It:
-
-- Sends the app version, build type, and OS version as custom keys that `CrashReporter.install()`
-  sets explicitly.
-- Sends crash stack traces and short diagnostic log lines. Custom log lines and custom-key values
-  that TariffiaCode's own code passes through `CrashReporter.log()`/`recordException()` are run through
-  redaction (`SecretRedaction`, `CrashReportSanitizer`) that strips *patterns resembling* API keys,
-  tokens, `Authorization`/`Cookie` headers, and passwords before they are attached to a report, and
-  truncates length. **This is a best-effort pattern match, not a guarantee that every possible
-  credential shape is caught** — for example, some provider key formats not covered by the current
-  patterns, or a key with no recognizable label, could slip through if it ever ended up in a log
-  line. Fatal crashes and their exception messages/stack traces that Crashlytics' own SDK collects
-  automatically (rather than through `CrashReporter`) are **not** run through this redaction, since
-  they are captured by Crashlytics itself before TariffiaCode's code runs.
-- The Crashlytics SDK also automatically collects standard device/app/installation diagnostics
-  independent of anything TariffiaCode's code sends explicitly — for example, device model, OS version,
-  app version, a Firebase installation identifier, and free/total storage and RAM at crash time. See
-  Firebase's own documentation for the current complete list, since TariffiaCode's code does not control
-  this baseline collection.
-- Is disabled in debug builds (`setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)`).
-
-Firebase Analytics is available for anonymous app-open/session and runtime outcome metrics, but is
-**disabled by default** and is only enabled after the user opts in. It does not receive prompts,
-source files, model responses, tokens, or workspace paths. The opt-in choice is stored locally and
-can be withdrawn in Settings.
-
-Crashlytics data is governed by Google's and Firebase's own privacy terms; see
-[THIRD_PARTY_SERVICES.md](THIRD_PARTY_SERVICES.md).
+TariffiaCode does **not** send crash reports, analytics, or any other diagnostics off your device.
+The `CrashReporter` and `AnalyticsReporter` implementations in `core/diagnostics` are no-ops: a crash
+is recorded only in a local log file on the device (`CrashLog`), and no usage metrics are collected or
+transmitted. There is no Firebase, Crashlytics, Play Services, or other crash-reporting/analytics SDK
+in the release build, and the debug and F-Droid builds are identical in this respect. Because nothing
+is transmitted, no diagnostic data is governed by a third-party service's terms.
 
 ## 8. Scheduled tasks and background processing
 

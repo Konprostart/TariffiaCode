@@ -2,6 +2,7 @@ package com.konprostart.tariffiacode.runtime.local
 
 import com.konprostart.tariffiacode.core.runtime.RuntimeWorkTracker
 import com.konprostart.tariffiacode.runtime.LocalAgent
+import com.konprostart.tariffiacode.runtime.ProprietaryAgents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -143,6 +144,8 @@ class AntigravityController(
         agents: Set<LocalAgent> = setOf(LocalAgent.ANTIGRAVITY),
         installFullDevelopmentTools: Boolean = false,
     ) {
+        // Proprietary agent: never provision it in a build that disables it (F-Droid).
+        if (!ProprietaryAgents.enabled) return
         if (mutableState.value.install is AntigravityInstallStatus.Installing) return
         mutableState.value = mutableState.value.copy(install = AntigravityInstallStatus.Installing(0f, ""))
         scope.launch {
@@ -185,6 +188,7 @@ class AntigravityController(
      * is read before and after so the card can say what the update did instead of just going quiet.
      */
     fun update() {
+        if (!ProprietaryAgents.enabled) return
         if (mutableState.value.install is AntigravityInstallStatus.Installing) return
         val before = mutableState.value.version
         mutableState.value =

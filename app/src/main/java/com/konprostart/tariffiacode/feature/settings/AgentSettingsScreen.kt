@@ -33,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -48,6 +49,7 @@ import com.konprostart.tariffiacode.feature.workspace.ClaudeCodeCard
 import com.konprostart.tariffiacode.feature.workspace.CodexCard
 import com.konprostart.tariffiacode.runtime.LocalAgent
 import com.konprostart.tariffiacode.runtime.LocalRuntimeStatus
+import com.konprostart.tariffiacode.runtime.ProprietaryAgents
 import com.konprostart.tariffiacode.runtime.local.AntigravityAuthCoordinator
 import com.konprostart.tariffiacode.runtime.local.AntigravityControllerState
 import com.konprostart.tariffiacode.runtime.local.AntigravityInstallStatus
@@ -84,12 +86,16 @@ fun AgentSettingsScreen(
     AgentSettingsScaffold(title = stringResource(R.string.settings_agents_row), onBack = onBack) {
         SettingsSection(title = stringResource(R.string.settings_agents_section)) {
             AgentRow(LocalAgent.OPEN_CODE, onOpenOpenCode)
-            SettingsDivider()
-            AgentRow(LocalAgent.CLAUDE_CODE, onOpenClaudeCode)
-            SettingsDivider()
-            AgentRow(LocalAgent.ANTIGRAVITY, onOpenAntigravity)
-            SettingsDivider()
-            AgentRow(LocalAgent.CODEX, onOpenCodex)
+            // Proprietary agents are not offered in builds that disable them (F-Droid); their
+            // install/update entry points are also blocked, so the rows would be dead ends.
+            if (ProprietaryAgents.enabled) {
+                SettingsDivider()
+                AgentRow(LocalAgent.CLAUDE_CODE, onOpenClaudeCode)
+                SettingsDivider()
+                AgentRow(LocalAgent.ANTIGRAVITY, onOpenAntigravity)
+                SettingsDivider()
+                AgentRow(LocalAgent.CODEX, onOpenCodex)
+            }
         }
     }
 }
@@ -115,6 +121,8 @@ fun CodexAgentSettingsScreen(
     onSignOut: () -> Unit,
     onOpenMcp: () -> Unit,
     onBack: () -> Unit,
+    fullAccessEnabled: Boolean = false,
+    onFullAccessChange: (Boolean) -> Unit = {},
 ) {
     AgentSettingsScaffold(title = stringResource(LocalAgent.CODEX.displayNameRes), onBack = onBack) {
         AgentCardSection {
@@ -142,6 +150,27 @@ fun CodexAgentSettingsScreen(
                 title = stringResource(R.string.mcp_settings_row),
                 onClick = onOpenMcp,
             )
+            // Explicit, default-off opt-in: Codex otherwise runs under its own `workspace-write`
+            // sandbox. Full access disables that sandbox entirely, so it is never the default.
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.codex_full_access_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        stringResource(R.string.codex_full_access_description),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = fullAccessEnabled, onCheckedChange = onFullAccessChange)
+            }
         }
     }
     if (signInDialog != null) {

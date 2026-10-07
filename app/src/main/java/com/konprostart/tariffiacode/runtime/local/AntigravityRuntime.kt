@@ -54,9 +54,27 @@ class AntigravityRuntime(
         }
     private val recordsFile = File(runtimeDirectory, "antigravity-sessions.json")
     private val messagesFile = File(runtimeDirectory, "antigravity-messages.json")
+    /**
+     * Guards [records], [messages] and [processes].
+     *
+     * The chat reads sessions/messages from the UI thread (listSessions/listMessages/workspacePaths),
+     * while a turn writes them from `Dispatchers.IO` in [send] and the archive/create/set/remove
+     * methods run on their callers' dispatchers. `LinkedHashMap` is not thread-safe, so an unsynchronized
+     * read racing a write threw `ConcurrentModificationException`. Every map access is taken under this
+     * lock and returns a snapshot; it is never held across process I/O or a suspend point.
+     */
+    private val lock = Any()
+
+    /**
+     * Serializes [persist]'s file writes. [writeAtomically] uses one temp name per file, so two
+     * persists racing would clobber each other's temp file and fail the rename.
+     */
+    private val persistLock = Any()
     private val records = linkedMapOf<String, AntigravitySessionRecord>()
     private val messages = linkedMapOf<String, MutableList<OpenCodeMessage>>()
     private val processes = linkedMapOf<String, Process>()
+
+    private inline fun <T> locked(block: () -> T): T = synchronized(lock) { block() }
 
     /** See [AntigravityAbortTracker] for why an intentional kill must not be reported as a crash. */
     private val abortTracker = AntigravityAbortTracker()
@@ -172,7 +190,7 @@ class AntigravityRuntime(
                     prepareAntigravityPrompt(
                         runtimeDirectory,
                         sessionId,
-                        records[sessionId]?.lastStep ?: 0,
+                        locked { records[sessionId]?.lastStep } ?: 0,
                         prompt,
                         attachments,
                     )
@@ -180,7 +198,7 @@ class AntigravityRuntime(
                 // Antigravity turn (see RuntimeCapabilities.forcesQueue) - kept as a safety net for
                 // e.g. two clients racing the same session. Marking the kill as intentional here is
                 // what stops the superseded call's own send() below from reporting it as a crash.
-                processes.remove(sessionId)?.let {
+                locked { processes.remove(sessionId) }?.let {
                     abortTracker.markIntentional(sessionId)
                     terminate(it)
                 }
@@ -229,9 +247,9 @@ class AntigravityRuntime(
                                     ),
                                 )
                             }.start()
-                    processes[sessionId] = process
+                    locked { processes[sessionId] = process }
                     val parser = AntigravityStreamJsonParser(sessionId, json)
-                    val record0 = records[sessionId] ?: AntigravitySessionRecord(sessionId, null, workspace)
+                    val record0 = locked { records[sessionId] } ?: AntigravitySessionRecord(sessionId, null, workspace)
                     val turnNow = System.currentTimeMillis()
                     // The turn's wall clock keeps the id unique per send: lastStep only advances
                     // once the turn finishes (below), so a death in between - the app being killed
@@ -244,7 +262,7 @@ class AntigravityRuntime(
                     // bubble is replaced by that snapshot - so a user turn that only lands at the
                     // end of the send would vanish from the screen (and never reappear on a failed
                     // result, which persisted nothing for it).
-                    messages.getOrPut(sessionId) { mutableListOf() }.add(
+                    val userMessage =
                         OpenCodeMessage(
                             OpenCodeMessageInfo(userId, sessionId, "user", OpenCodeTime(turnNow, turnNow, turnNow)),
                             // A part without an id is dropped when the chat maps the transcript for
@@ -265,8 +283,8 @@ class AntigravityRuntime(
                                     )
                                 }
                             },
-                        ),
-                    )
+                        )
+                    locked { messages.getOrPut(sessionId) { mutableListOf() }.add(userMessage) }
                     persist()
                     var discoveredConversationId: String? = null
                     var turnFinished = false
@@ -283,14 +301,14 @@ class AntigravityRuntime(
                         // one-turn lag seen on device. Claude Code avoids this by upserting before
                         // it emits, so the assistant reply (and its tool parts) land first here too.
                         parsed.messages.forEach { assistant ->
-                            messages.getOrPut(sessionId) { mutableListOf() }.add(
+                            val stored =
                                 assistant.copy(
                                     info =
                                         assistant.info.copy(
                                             model = model?.let { OpenCodeModelReference(AntigravityModels.PROVIDER_ID, it) },
                                         ),
-                                ),
-                            )
+                                )
+                            locked { messages.getOrPut(sessionId) { mutableListOf() }.add(stored) }
                             persist()
                         }
                         parsed.events.forEach(events::tryEmit)
@@ -301,22 +319,24 @@ class AntigravityRuntime(
                         }
                     }
                     process.waitFor()
-                    processes.remove(sessionId)
+                    locked { processes.remove(sessionId) }
                     // Consumed unconditionally, even when the turn actually finished cleanly (an
                     // abort can race a completion that was already on its way): leaving the flag set
                     // would make an unrelated later crash on this same session silently swallowed as
                     // "clean idle" instead of surfacing as an error.
                     val wasKilledIntentionally = abortTracker.consumeIntentional(sessionId)
-                    records[sessionId] =
-                        record0.copy(
-                            // Never invent a conversation id: --conversation must only be used with
-                            // an id emitted by the official CLI, otherwise a cold resume can attach
-                            // to an unrelated conversation. The id now comes straight from the stream's
-                            // top-level conversation_id rather than being scraped out of the prose.
-                            conversationId = discoveredConversationId ?: record0.conversationId,
-                            updatedAt = System.currentTimeMillis(),
-                            lastStep = record0.lastStep + 1,
-                        )
+                    locked {
+                        records[sessionId] =
+                            record0.copy(
+                                // Never invent a conversation id: --conversation must only be used with
+                                // an id emitted by the official CLI, otherwise a cold resume can attach
+                                // to an unrelated conversation. The id now comes straight from the stream's
+                                // top-level conversation_id rather than being scraped out of the prose.
+                                conversationId = discoveredConversationId ?: record0.conversationId,
+                                updatedAt = System.currentTimeMillis(),
+                                lastStep = record0.lastStep + 1,
+                            )
+                    }
                     persist()
                     if (turnFinished) {
                         // On a failed result the parser already emitted SessionError then SessionIdle;
@@ -342,49 +362,57 @@ class AntigravityRuntime(
             }
         }
 
-    fun abort(sessionId: String) {
-        processes[sessionId]?.let { process ->
+    suspend fun abort(sessionId: String) {
+        locked { processes[sessionId] }?.let { process ->
             // Marked before either the graceful ESC or the SIGKILL fallback below: whichever one
             // actually ends the process, the exit code should not be read as a crash by the send()
             // call still blocked reading its stdout. See AntigravityAbortTracker.
             abortTracker.markIntentional(sessionId)
-            runCatching {
-                process.outputStream.write(27)
-                process.outputStream.flush()
-            }
-            Thread.sleep(2000)
-            if (process.isAlive) terminate(process)
+            // Suspends for the grace period instead of sleeping the caller's thread; the chat aborts
+            // from the UI thread, where a blocking sleep froze the whole app.
+            AntigravityAbort.gracefully(
+                requestStop = {
+                    process.outputStream.write(27)
+                    process.outputStream.flush()
+                },
+                isAlive = process::isAlive,
+                terminate = { terminate(process) },
+            )
         }
     }
 
     /** The drawer's list: every chat that is not archived, optionally narrowed to one workspace. */
     fun listSessions(directory: String?): List<AntigravitySessionRecord> =
-        records.values.filter {
-            !it.archived && (directory == null || it.workspace == directory)
+        locked {
+            records.values.filter {
+                !it.archived && (directory == null || it.workspace == directory)
+            }
         }
 
     /** A record by id whether archived or not, so reopening an archived chat still resolves. */
-    fun findSession(sessionId: String): AntigravitySessionRecord? = records[sessionId]
+    fun findSession(sessionId: String): AntigravitySessionRecord? = locked { records[sessionId] }
 
     /** Every chat's workspace, archived ones included: the picker must keep offering folders whose chats were all archived. */
-    fun workspacePaths(): List<String> = records.values.map { it.workspace }.distinct()
+    fun workspacePaths(): List<String> = locked { records.values.map { it.workspace }.distinct() }
 
     /** Marks a session archived; see [AntigravitySessionRecord.archived]. */
     fun archive(sessionId: String): AntigravitySessionRecord? {
-        val record = records[sessionId] ?: return null
-        if (record.archived) return record
-        val archived = record.copy(archived = true)
-        records[sessionId] = archived
+        val archived =
+            locked {
+                val record = records[sessionId] ?: return@locked null
+                if (record.archived) return@locked record
+                record.copy(archived = true).also { records[sessionId] = it }
+            } ?: return null
         persist()
         return archived
     }
 
-    fun listMessages(sessionId: String): List<OpenCodeMessage> = messages[sessionId].orEmpty().toList()
+    fun listMessages(sessionId: String): List<OpenCodeMessage> = locked { messages[sessionId].orEmpty().toList() }
 
-    fun remove(sessionId: String): Boolean {
+    suspend fun remove(sessionId: String): Boolean {
         abort(sessionId)
-        val removed = records.remove(sessionId) != null
-        messages.remove(sessionId)
+        val removed = locked { records.remove(sessionId) } != null
+        locked { messages.remove(sessionId) }
         val safeSession = sessionId.replace(Regex("[^A-Za-z0-9._-]"), "_")
         File(runtimeDirectory, "workspace/.tariffiacode-attachments/$safeSession").deleteRecursively()
         persist()
@@ -397,8 +425,10 @@ class AntigravityRuntime(
         title: String? = null,
         permissionMode: AntigravityPermissionMode = AntigravityPermissionMode.DEFAULT,
     ) {
-        records[sessionId] =
-            AntigravitySessionRecord(sessionId, null, workspace, title = title, permissionMode = permissionMode.cliValue)
+        locked {
+            records[sessionId] =
+                AntigravitySessionRecord(sessionId, null, workspace, title = title, permissionMode = permissionMode.cliValue)
+        }
         persist()
     }
 
@@ -408,8 +438,10 @@ class AntigravityRuntime(
         model: String?,
         variant: String?,
     ) {
-        val record = records[sessionId] ?: return
-        records[sessionId] = record.copy(model = model, variant = variant)
+        locked {
+            val record = records[sessionId] ?: return@locked
+            records[sessionId] = record.copy(model = model, variant = variant)
+        }
         persist()
     }
 
@@ -418,8 +450,10 @@ class AntigravityRuntime(
         sessionId: String,
         title: String,
     ) {
-        val record = records[sessionId] ?: return
-        records[sessionId] = record.copy(title = title, updatedAt = System.currentTimeMillis())
+        locked {
+            val record = records[sessionId] ?: return@locked
+            records[sessionId] = record.copy(title = title, updatedAt = System.currentTimeMillis())
+        }
         persist()
     }
 
@@ -433,7 +467,7 @@ class AntigravityRuntime(
      * the signed-in account can use. `plan` mode keeps a naming call from touching the workspace.
      */
     fun summarizeTitle(prompt: String): String? {
-        if (processes.isNotEmpty()) return null
+        if (locked { processes.isNotEmpty() }) return null
         val runtime = installedRuntimeProvider() ?: return null
         if (!isInstalled()) return null
         val entries = cachedModels.orEmpty()
@@ -495,13 +529,15 @@ class AntigravityRuntime(
         sessionId: String,
         mode: AntigravityPermissionMode,
     ) {
-        val record = records[sessionId] ?: return
-        records[sessionId] = record.copy(permissionMode = mode.cliValue)
+        locked {
+            val record = records[sessionId] ?: return@locked
+            records[sessionId] = record.copy(permissionMode = mode.cliValue)
+        }
         persist()
     }
 
-    fun abortAll() {
-        processes.keys.toList().forEach(::abort)
+    suspend fun abortAll() {
+        locked { processes.keys.toList() }.forEach { abort(it) }
     }
 
     fun respond(
@@ -543,10 +579,18 @@ class AntigravityRuntime(
     }
 
     private fun persist() {
-        runCatching {
-            recordsFile.parentFile?.mkdirs()
-            writeAtomically(recordsFile, json.encodeToString(records.values.toList()))
-            writeAtomically(messagesFile, json.encodeToString(messages.mapValues { it.value.toList() }))
+        // Snapshot under the map lock, write under the persist lock: serialization and file I/O must
+        // not hold the map lock, and two writes must not share a temp file.
+        val (recordsSnapshot, messagesSnapshot) =
+            locked {
+                records.values.toList() to messages.mapValues { it.value.toList() }
+            }
+        synchronized(persistLock) {
+            runCatching {
+                recordsFile.parentFile?.mkdirs()
+                writeAtomically(recordsFile, json.encodeToString(recordsSnapshot))
+                writeAtomically(messagesFile, json.encodeToString(messagesSnapshot))
+            }
         }
     }
 }

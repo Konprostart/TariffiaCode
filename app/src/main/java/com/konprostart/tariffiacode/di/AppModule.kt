@@ -90,13 +90,18 @@ val appModule =
             LocalRuntimeProcessLauncher(
                 runtimeDirectory = runtimeDirectory,
                 portProbe = LocalRuntimeManager::defaultPortProbe,
-                githubToken = { settings.githubToken },
+                githubToken = { RuntimeCredentialPolicy.runtimeGitHubToken(settings.githubToken, settings.shareGitHubTokenWithRuntime) },
                 beforeStart = { installed ->
                     runCatching { providerCredentials.syncToRuntime(installed.rootfs) }
                     runCatching { customProviders.syncToRuntime(installed.rootfs) }
                     runCatching {
-                        GitCredentialHelper(installed.rootfs) { settings.githubToken }.let { helper ->
-                            if (settings.githubToken.isNullOrBlank()) helper.remove() else helper.install()
+                        val runtimeToken =
+                            RuntimeCredentialPolicy.runtimeGitHubToken(
+                                settings.githubToken,
+                                settings.shareGitHubTokenWithRuntime,
+                            )
+                        GitCredentialHelper(installed.rootfs) { runtimeToken }.let { helper ->
+                            if (runtimeToken.isNullOrBlank()) helper.remove() else helper.install()
                         }
                     }
                 },

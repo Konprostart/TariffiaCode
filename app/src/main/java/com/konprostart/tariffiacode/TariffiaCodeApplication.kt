@@ -27,12 +27,15 @@ import com.konprostart.tariffiacode.data.repository.AndroidRuntimeActivityMessag
 import com.konprostart.tariffiacode.data.repository.AndroidRuntimeCatalogMessages
 import com.konprostart.tariffiacode.data.repository.ProviderCatalogCache
 import com.konprostart.tariffiacode.data.repository.PullRequestStatusRepository
+import com.konprostart.tariffiacode.data.remote.RemoteProjectStore
 import com.konprostart.tariffiacode.data.repository.RuntimeActivityRepository
 import com.konprostart.tariffiacode.data.repository.RuntimeCatalogRepository
 import com.konprostart.tariffiacode.data.repository.SessionAutoArchiver
 import com.konprostart.tariffiacode.data.schedule.ScheduleRepository
 import com.konprostart.tariffiacode.data.settings.AppPreferencesRepository
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
+import com.konprostart.tariffiacode.data.ssh.SshProfileStore
+import com.konprostart.tariffiacode.data.vps.VpsSelectionStore
 import com.konprostart.tariffiacode.di.appModule
 import com.konprostart.tariffiacode.di.viewModelModule
 import com.konprostart.tariffiacode.feature.schedule.AppScheduleStore
@@ -76,6 +79,7 @@ import com.konprostart.tariffiacode.runtime.local.LocalRuntimeReleaseClient
 import com.konprostart.tariffiacode.runtime.local.LocalRuntimeServiceController
 import com.konprostart.tariffiacode.runtime.local.LocalRuntimeTarget
 import com.konprostart.tariffiacode.runtime.local.LocalRuntimeUpdater
+import com.konprostart.tariffiacode.runtime.local.RuntimeCredentialPolicy
 import com.konprostart.tariffiacode.runtime.local.SystemPromptStore
 import com.konprostart.tariffiacode.runtime.local.VerifiedRuntimeDownloader
 import com.konprostart.tariffiacode.runtime.local.applyOpenCodeSystemPrompt
@@ -270,6 +274,10 @@ class TariffiaCodeApplication : Application() {
         // Asked on every sandbox launch rather than captured once: the user can grant all-files
         // access from system settings and come straight back without the process restarting.
         DeviceStorage.install { deviceStorageAccess.mounts() }
+        // The sandbox only ever binds the folders the user registered as projects, never all of
+        // shared storage. Read at launch, so a newly registered project needs a runtime restart
+        // (see WorkspaceViewModel.confirmFolderPicker).
+        DeviceStorage.installProjectPaths { settings.projectPaths }
         notifications = RuntimeNotificationHelper(this)
         providerCredentials = LocalProviderCredentialStore(settings)
         customProviders = CustomProviderStore(settings)
@@ -306,13 +314,20 @@ class TariffiaCodeApplication : Application() {
             LocalRuntimeProcessLauncher(
                 runtimeDirectory = runtimeDirectory,
                 portProbe = LocalRuntimeManager::defaultPortProbe,
-                githubToken = { settings.githubToken },
+                // The GitHub token reaches the long-lived agent sandbox only when the user explicitly
+                // opted in; otherwise it is used solely for specific app-run operations (e.g. clone).
+                githubToken = { RuntimeCredentialPolicy.runtimeGitHubToken(settings.githubToken, settings.shareGitHubTokenWithRuntime) },
                 beforeStart = { installed ->
                     runCatching { providerCredentials.syncToRuntime(installed.rootfs) }
                     runCatching { customProviders.syncToRuntime(installed.rootfs) }
                     runCatching {
-                        GitCredentialHelper(installed.rootfs) { settings.githubToken }.let { helper ->
-                            if (settings.githubToken.isNullOrBlank()) helper.remove() else helper.install()
+                        val runtimeToken =
+                            RuntimeCredentialPolicy.runtimeGitHubToken(
+                                settings.githubToken,
+                                settings.shareGitHubTokenWithRuntime,
+                            )
+                        GitCredentialHelper(installed.rootfs) { runtimeToken }.let { helper ->
+                            if (runtimeToken.isNullOrBlank()) helper.remove() else helper.install()
                         }
                     }
                 },
@@ -331,14 +346,24 @@ class TariffiaCodeApplication : Application() {
                 installer::installedRuntime,
                 accessCoordinator,
                 claudeMessages,
-                githubToken = { settings.githubToken },
+                // The GitHub token reaches an agent sandbox only after the user opts in.
+                githubToken = {
+                    RuntimeCredentialPolicy.runtimeGitHubToken(settings.githubToken, settings.shareGitHubTokenWithRuntime)
+                },
             )
         // One store for every agent that can carry a preset, so a prompt the user wrote for Claude
         // Code is the same one OpenCode offers. Claude Code passes it per session on the command
         // line; OpenCode reads it from an instructions file, which is kept in step below.
         systemPromptStore = SystemPromptStore(File(runtimeDirectory, "claude-system-prompts.json"))
         claudeCodeTarget = ClaudeCodeTarget(claudeCodeRuntime, claudeMessages, systemPromptStore)
-        antigravityRuntime = AntigravityRuntime(runtimeDirectory, installer::installedRuntime, githubToken = { settings.githubToken })
+        antigravityRuntime =
+            AntigravityRuntime(
+                runtimeDirectory,
+                installer::installedRuntime,
+                githubToken = {
+                    RuntimeCredentialPolicy.runtimeGitHubToken(settings.githubToken, settings.shareGitHubTokenWithRuntime)
+                },
+            )
         antigravityTarget = AntigravityTarget(antigravityRuntime)
         antigravityController = AntigravityController(installer, antigravityTarget, runtimeWork, applicationScope)
         val codexMessages = AndroidCodexMessages(this)
@@ -348,7 +373,12 @@ class TariffiaCodeApplication : Application() {
                 installedRuntimeProvider = installer::installedRuntime,
                 accessCoordinator = accessCoordinator,
                 messages = codexMessages,
-                githubToken = { settings.githubToken },
+                githubToken = {
+                    RuntimeCredentialPolicy.runtimeGitHubToken(settings.githubToken, settings.shareGitHubTokenWithRuntime)
+                },
+                // Off by default: Codex uses its own `workspace-write` sandbox unless the user
+                // explicitly opts into `danger-full-access` (see CodexSandboxPolicy).
+                fullAccessEnabled = { settings.codexFullAccessEnabled },
             )
         codexTarget = CodexTarget(codexRuntime, codexMessages)
         // Codex is a child of this process, so it is cut off from the network the moment the app has
@@ -473,7 +503,16 @@ class TariffiaCodeApplication : Application() {
         // An SSH-reached OpenCode on a VPS is just another remote runtime: the same OpenCode experience
         // runs through RemoteOpenCodeBackend, only the endpoint is a loopback forward instead of a URL
         // the user typed. Selecting an SSH profile for it is a later step; with none it stays unavailable.
-        vpsRuntimeTarget = VpsRuntimeTarget(VpsRuntimeConnector(MinaSshPortForwarder(), SshCredentialStore(settings)))
+        val sshProfileStore = SshProfileStore(settings)
+        vpsRuntimeTarget =
+            VpsRuntimeTarget(
+                connector = VpsRuntimeConnector(MinaSshPortForwarder(), SshCredentialStore(settings)),
+                // Restore the selected SSH profile and applied Remote Project mapping on startup, and
+                // persist changes, so the VPS runtime survives a restart / process death.
+                profiles = sshProfileStore,
+                projects = RemoteProjectStore(settings, sshProfileStore),
+                selection = VpsSelectionStore(settings),
+            )
         runtimeRegistry =
             RuntimeRegistry(
                 store = settings,

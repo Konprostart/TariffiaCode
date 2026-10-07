@@ -48,30 +48,22 @@ class RemoteGitPusher(
             RemoteCommandOutcome.MissingCredential -> RemoteGitPushResult.MissingCredential
             is RemoteCommandOutcome.HostKeyUntrusted -> RemoteGitPushResult.HostKeyUntrusted(outcome.hostKey)
             is RemoteCommandOutcome.Failed -> RemoteGitPushResult.Failed(outcome.message)
-            is RemoteCommandOutcome.Completed -> parse(outcome.output)
+            is RemoteCommandOutcome.Completed -> parse(outcome)
         }
     }
 
     private fun buildScript(remotePath: String): String {
         val path = RemoteGitPath.shellQuote(remotePath.trim())
-        val dollar = "$"
-        val marker = SshShellCommandExecutor.EXIT_MARKER
-        return "if [ ! -d $path/.git ]; then echo \"Not a git repository: $path\"; " +
-            "echo \"${marker}128\"; else git -C $path push 2>&1; " +
-            "echo \"${marker}$dollar?\"; fi"
+        return "if [ ! -d $path/.git ]; then echo \"Not a git repository: $path\" >&2; exit 128; " +
+            "else git -C $path push 2>&1; fi"
     }
 
-    private fun parse(output: String): RemoteGitPushResult {
-        val match =
-            Regex(Regex.escape(SshShellCommandExecutor.EXIT_MARKER) + "(\\d+)").find(output)
-                ?: return RemoteGitPushResult.Failed("No result from the VPS", output)
-        val exit = match.groupValues[1].toInt()
-        return if (exit == 0) {
-            RemoteGitPushResult.Success(output.substringBefore(match.value).trim())
+    private fun parse(outcome: RemoteCommandOutcome.Completed): RemoteGitPushResult =
+        if (outcome.exitCode == 0) {
+            RemoteGitPushResult.Success(outcome.output.trim())
         } else {
-            RemoteGitPushResult.Failed("git push failed (exit $exit)", output)
+            RemoteGitPushResult.Failed("git push failed (exit ${outcome.exitCode})", outcome.output)
         }
-    }
 
     companion object {
         const val DEFAULT_TIMEOUT_MILLIS = 300_000L

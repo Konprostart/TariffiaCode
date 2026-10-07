@@ -224,8 +224,23 @@ class AdbConnectionManager(
      * and any earlier `adb connect` is lost on every restart.
      */
     suspend fun restoreAndReconnect(): Boolean {
+        // Agents must not get an adb link without the user's explicit opt-in; the manual pair/connect
+        // path is a direct user action and is unaffected.
+        if (!connectionStore.agentAdbEnabled) return false
         val port = connectionStore.loadConnectedPort() ?: return false
         return reconnectQuietly(port)
+    }
+
+    /**
+     * Explicit user opt-in/out for agent use of the wireless-ADB link. Enabling keeps the link alive
+     * (auto-reconnect); disabling drops it so an agent can no longer control the device over adb.
+     */
+    suspend fun setAgentAdbEnabled(enabled: Boolean) {
+        connectionStore.agentAdbEnabled = enabled
+        if (!enabled) {
+            stopAutoReconnect()
+            disconnect()
+        }
     }
 
     /**
@@ -253,6 +268,8 @@ class AdbConnectionManager(
     }
 
     private suspend fun ensureConnection() {
+        // No unattended re-connection unless the user explicitly allowed agents to use adb.
+        if (!connectionStore.agentAdbEnabled) return
         val port = connectionStore.loadConnectedPort() ?: return
         if (checkConnection()) return
         reconnectQuietly(port)

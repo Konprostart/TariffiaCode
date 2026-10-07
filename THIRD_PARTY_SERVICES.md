@@ -18,8 +18,6 @@ Claude Code, Antigravity, and OpenCode specifically.
 | **Alpine Linux** (`dl-cdn.alpinelinux.org`) | Minimal Linux root filesystem the on-device runtime runs in | N/A (unauthenticated download) | The app downloads the official Alpine minirootfs archive over HTTPS | N/A | No | [Alpine Linux license terms](https://alpinelinux.org/) (per-package) | Delete the local runtime | Independent open-source project |
 | **Debian** (`deb.debian.org`, `security.debian.org`) | Bookworm root filesystem used only for the glibc-dependent Antigravity CLI | N/A (unauthenticated `apt` mirrors) | `apt` inside the Debian rootfs fetches packages over the configured mirrors | N/A | No | [Debian's licenses](https://www.debian.org/legal/) (per-package) | Delete the local runtime | Independent open-source project |
 | **Termux package mirror** (`packages.termux.dev`) | Source of the `proot`, `libandroid-shmem`, and `libtalloc` binaries bundled into the APK at build time | N/A (build-time download, pinned by hash) | Build machine only, not the end-user's device at runtime | N/A | No | Upstream licenses vary — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | N/A (bundled at build time) | Independent open-source project |
-| **Firebase Crashlytics** (Google) | Crash and non-fatal error reporting in release builds | N/A (app-level Firebase project, no end-user login) | The app sends crash reports and small diagnostic breadcrumbs directly to Firebase; custom log lines/keys TariffiaCode's own code adds are redacted on a best-effort basis (see PRIVACY.md §7), but automatic fatal-crash collection by the Crashlytics SDK itself is not routed through that redaction | N/A (no user credential; app-level Firebase config) | This *is* a Google-operated collection service, not a TariffiaCode server | [Firebase Terms of Service](https://firebase.google.com/terms) / [Google Privacy Policy](https://policies.google.com/privacy) | Disabled automatically in debug builds; release collection follows the app's diagnostics policy | Independent Google service; not affiliated with the AI-agent integrations above |
-| **Firebase Analytics** (Google) | Opt-in anonymous app-open/session and runtime outcome metrics | N/A (app-level Firebase project, no end-user login) | The Firebase SDK sends telemetry directly to Firebase; TariffiaCode excludes prompts, code, responses, tokens, and workspace paths | N/A (no user credential; app-level Firebase config) | This *is* a Google-operated collection service, not a TariffiaCode server | [Firebase Terms of Service](https://firebase.google.com/terms) / [Google Privacy Policy](https://policies.google.com/privacy) | Disabled by default; enable or withdraw consent in Settings | Independent Google service; not affiliated with the AI-agent integrations above |
 
 ## OpenCode credential paths
 
@@ -44,8 +42,8 @@ you use it:
 
 ## Notes
 
-- "Routed through a TariffiaCode server" is **No** for every row except Crashlytics, which is a
-  telemetry pipeline, not a proxy for your prompts, files, or credentials.
+- "Routed through a TariffiaCode server" is **No** for every row: TariffiaCode operates no server in
+  any of these paths.
 - Rows for Claude Code, Antigravity, and OpenCode describe the *official* CLI's own network and
   credential behavior, not something TariffiaCode re-implements — see
   [docs/AUTHENTICATION_AND_DATA_FLOW.md](docs/AUTHENTICATION_AND_DATA_FLOW.md).

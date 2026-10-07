@@ -2,6 +2,7 @@ package com.konprostart.tariffiacode.runtime.local
 
 import com.konprostart.tariffiacode.core.runtime.RuntimeWorkTracker
 import com.konprostart.tariffiacode.runtime.LocalAgent
+import com.konprostart.tariffiacode.runtime.ProprietaryAgents
 import com.konprostart.tariffiacode.runtime.RuntimeState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -94,6 +95,8 @@ class CodexController(
         agents: Set<LocalAgent> = setOf(LocalAgent.CODEX),
         installFullDevelopmentTools: Boolean = false,
     ) {
+        // Proprietary agent: never provision it in a build that disables it (F-Droid).
+        if (!ProprietaryAgents.enabled) return
         if (mutableState.value.install is CodexInstallStatus.Installing) return
         mutableState.update { it.copy(install = CodexInstallStatus.Installing()) }
         scope.launch {

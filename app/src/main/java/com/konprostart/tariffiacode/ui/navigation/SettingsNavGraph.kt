@@ -440,6 +440,7 @@ fun NavGraphBuilder.settingsNavGraph(
                     },
             )
         val signInDialog by signInViewModel.dialog.collectAsState()
+        var codexFullAccess by remember { mutableStateOf(app.settings.codexFullAccessEnabled) }
         // Re-read on open: an install can have finished, or the account been signed out, since the last look.
         androidx.compose.runtime.LaunchedEffect(Unit) { app.codexController.refresh() }
         CodexAgentSettingsScreen(
@@ -458,6 +459,14 @@ fun NavGraphBuilder.settingsNavGraph(
             onSignOut = app.codexController::signOut,
             onOpenMcp = { navController.navigate(ROUTE_SETTINGS_MCP_CODEX) },
             onBack = { navController.popBackStack() },
+            fullAccessEnabled = codexFullAccess,
+            onFullAccessChange = { value ->
+                codexFullAccess = value
+                app.settings.codexFullAccessEnabled = value
+                // The mode is fixed when the app-server starts, so stop it now: the next call starts
+                // a fresh process under the new sandbox mode.
+                app.codexRuntime.stopAll()
+            },
         )
     }
 
@@ -494,6 +503,8 @@ fun NavGraphBuilder.settingsNavGraph(
 
     composable(ROUTE_SETTINGS_GITHUB) {
         val settingsState by settingsViewModel.state.collectAsState()
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        var shareTokenWithRuntime by remember { mutableStateOf(app.settings.shareGitHubTokenWithRuntime) }
         GitHubSettingsScreen(
             state = settingsState,
             onConnect = settingsViewModel::beginGitHubDeviceFlow,
@@ -504,6 +515,11 @@ fun NavGraphBuilder.settingsNavGraph(
                 }
             },
             onBack = { navController.popBackStack() },
+            shareTokenWithRuntime = shareTokenWithRuntime,
+            onShareTokenWithRuntimeChange = { value ->
+                shareTokenWithRuntime = value
+                app.settings.shareGitHubTokenWithRuntime = value
+            },
         )
     }
 
@@ -581,6 +597,8 @@ fun NavGraphBuilder.settingsNavGraph(
             onConnect = remoteProjectViewModel::connect,
             onDisconnect = remoteProjectViewModel::disconnect,
             onReconnect = remoteProjectViewModel::reconnect,
+            onTrustHostKey = remoteProjectViewModel::trustPendingHostKey,
+            onDismissHostKey = remoteProjectViewModel::dismissPendingHostKey,
             onOpenTerminal = { navController.navigate(ROUTE_REMOTE_TERMINAL) },
             onOpenGit = { navController.navigate(ROUTE_REMOTE_GIT) },
             onOpenClone = { navController.navigate(ROUTE_REMOTE_GIT_CLONE) },
@@ -629,15 +647,15 @@ fun NavGraphBuilder.settingsNavGraph(
                             // Pull runs `git pull` on the VPS over the existing SSH shell executor.
                             puller =
                                 com.konprostart.tariffiacode.feature.git.RemoteGitPuller(
-                                    com.konprostart.tariffiacode.feature.git.SshShellCommandExecutor(
-                                        shellClient = com.konprostart.tariffiacode.core.ssh.MinaSshShellClient(),
+                                    com.konprostart.tariffiacode.feature.git.SshExecCommandExecutor(
+                                        execClient = com.konprostart.tariffiacode.core.ssh.MinaSshExecClient(),
                                         credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
                                     ),
                                 ),
                             pusher =
                                 com.konprostart.tariffiacode.feature.git.RemoteGitPusher(
-                                    com.konprostart.tariffiacode.feature.git.SshShellCommandExecutor(
-                                        shellClient = com.konprostart.tariffiacode.core.ssh.MinaSshShellClient(),
+                                    com.konprostart.tariffiacode.feature.git.SshExecCommandExecutor(
+                                        execClient = com.konprostart.tariffiacode.core.ssh.MinaSshExecClient(),
                                         credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
                                     ),
                                 ),
@@ -666,8 +684,8 @@ fun NavGraphBuilder.settingsNavGraph(
                         com.konprostart.tariffiacode.feature.git.RemoteGitCloneViewModel(
                             cloner =
                                 com.konprostart.tariffiacode.feature.git.RemoteGitCloner(
-                                    com.konprostart.tariffiacode.feature.git.SshShellCommandExecutor(
-                                        shellClient = com.konprostart.tariffiacode.core.ssh.MinaSshShellClient(),
+                                    com.konprostart.tariffiacode.feature.git.SshExecCommandExecutor(
+                                        execClient = com.konprostart.tariffiacode.core.ssh.MinaSshExecClient(),
                                         credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
                                     ),
                                 ),

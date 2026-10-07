@@ -67,6 +67,29 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
         preferences.edit().remove(KEY_ADB_CONNECTION_PORT).apply()
     }
 
+    /** Explicit, default-off opt-in that lets agents keep/use the wireless-ADB link to this device. */
+    override var agentAdbEnabled: Boolean
+        get() = preferences.getBoolean(KEY_AGENT_ADB_ENABLED, false)
+        set(value) = preferences.edit().putBoolean(KEY_AGENT_ADB_ENABLED, value).apply()
+
+    /**
+     * Explicit, default-off opt-in that exposes the GitHub token to the long-lived local runtime
+     * (agent sandbox). When off, the token is not written to the sandbox (`GH_TOKEN`,
+     * `~/.git-credentials`) and is used only for specific app-run operations such as cloning.
+     */
+    var shareGitHubTokenWithRuntime: Boolean
+        get() = preferences.getBoolean(KEY_SHARE_GITHUB_TOKEN_WITH_RUNTIME, false)
+        set(value) = preferences.edit().putBoolean(KEY_SHARE_GITHUB_TOKEN_WITH_RUNTIME, value).apply()
+
+    /**
+     * Explicit, default-off opt-in that lets Codex run without its own sandbox
+     * (`sandbox_mode="danger-full-access"`). Off means Codex uses `workspace-write`, so it can still
+     * edit the workspace but cannot reach the rest of the filesystem, network or processes freely.
+     */
+    var codexFullAccessEnabled: Boolean
+        get() = preferences.getBoolean(KEY_CODEX_FULL_ACCESS_ENABLED, false)
+        set(value) = preferences.edit().putBoolean(KEY_CODEX_FULL_ACCESS_ENABLED, value).apply()
+
     var ttsEnabled: Boolean
         get() = preferences.getBoolean(KEY_TTS_ENABLED, true)
         set(value) = preferences.edit().putBoolean(KEY_TTS_ENABLED, value).apply()
@@ -370,6 +393,16 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
                 .apply()
         }
 
+    /** Which saved SSH profile the single VPS runtime is pointed at, so the choice survives restarts. */
+    var selectedVpsProfileId: String?
+        get() = preferences.getString(KEY_SELECTED_VPS_PROFILE_ID, null)
+        set(value) = preferences.edit().putString(KEY_SELECTED_VPS_PROFILE_ID, value).apply()
+
+    /** Which Remote Project mapping is applied to the VPS runtime, so the mapping survives restarts. */
+    var appliedRemoteProjectId: String?
+        get() = preferences.getString(KEY_APPLIED_REMOTE_PROJECT_ID, null)
+        set(value) = preferences.edit().putString(KEY_APPLIED_REMOTE_PROJECT_ID, value).apply()
+
     /**
      * SSH secrets keyed by the profile's credential reference, each a JSON-encoded
      * [com.konprostart.tariffiacode.data.ssh.SshCredential]. Encrypted with the same MasterKey as
@@ -589,6 +622,9 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
         private const val KEY_CONNECTIONS = "connections"
         private const val KEY_SELECTED_CONNECTION = "selected_connection"
         private const val KEY_ADB_CONNECTION_PORT = "adb_connection_port"
+        private const val KEY_AGENT_ADB_ENABLED = "agent_adb_enabled"
+        private const val KEY_SHARE_GITHUB_TOKEN_WITH_RUNTIME = "share_github_token_with_runtime"
+        private const val KEY_CODEX_FULL_ACCESS_ENABLED = "codex_full_access_enabled"
         private const val KEY_TTS_ENABLED = "tts_enabled"
         private const val KEY_TTS_PROVIDER = "tts_provider"
         private const val KEY_TTS_ANDROID_ENGINE = "tts_android_engine"
@@ -631,6 +667,8 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
         private const val KEY_SSH_PROFILES = "ssh_profiles"
         private const val KEY_SSH_CREDENTIALS = "ssh_credentials"
         private const val KEY_REMOTE_PROJECTS = "remote_projects"
+        private const val KEY_SELECTED_VPS_PROFILE_ID = "selected_vps_profile_id"
+        private const val KEY_APPLIED_REMOTE_PROJECT_ID = "applied_remote_project_id"
         private const val KEY_GITHUB_TOKEN = "github_token"
         private const val KEY_GITHUB_LOGIN = "github_login"
         private const val KEY_GITHUB_STAR_PROMPT_SHOWN = "github_star_prompt_shown"

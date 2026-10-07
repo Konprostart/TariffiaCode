@@ -78,7 +78,10 @@ class AntigravityTarget(internal val runtime: AntigravityRuntime) : RuntimeTarge
         }
 
     override fun disconnect() {
-        runtime.abortAll()
+        // abortAll waits out the graceful-stop grace period and force-kills each process. A
+        // non-suspend interface method cannot suspend, so run it on the target's own IO scope rather
+        // than block the caller's thread.
+        titleScope.launch { runtime.abortAll() }
         mutableState.value = RuntimeState.Disconnected
     }
 
@@ -225,10 +228,13 @@ class AntigravityTarget(internal val runtime: AntigravityRuntime) : RuntimeTarge
             AntigravityMcp.remove(rootfs, name)
         }
 
-    override suspend fun abortSession(sessionId: String): Boolean {
-        runtime.abort(sessionId)
-        return true
-    }
+    override suspend fun abortSession(sessionId: String): Boolean =
+        withContext(Dispatchers.IO) {
+            // abort() suspends for the graceful-stop grace period and then force-kills, and the kill
+            // waits on the process; keep the whole sequence off the caller's (UI) thread.
+            runtime.abort(sessionId)
+            true
+        }
 
     override suspend fun deleteSession(sessionId: String): Boolean =
         withContext(kotlinx.coroutines.Dispatchers.IO) { runtime.remove(sessionId) }
