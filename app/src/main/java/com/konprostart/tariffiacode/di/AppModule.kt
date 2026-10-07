@@ -31,6 +31,7 @@ import com.konprostart.tariffiacode.runtime.local.LocalRuntimeReleaseClient
 import com.konprostart.tariffiacode.runtime.local.LocalRuntimeServiceController
 import com.konprostart.tariffiacode.runtime.local.LocalRuntimeTarget
 import com.konprostart.tariffiacode.runtime.local.LocalRuntimeUpdater
+import com.konprostart.tariffiacode.runtime.local.RuntimeCredentialPolicy
 import com.konprostart.tariffiacode.runtime.local.VerifiedRuntimeDownloader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

@@ -9,14 +9,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppUpdateReleaseClientTest {
-    private val SHA = "a".repeat(64)
+    private val sha = "a".repeat(64)
 
     private fun release(
         tag: String,
         draft: Boolean = false,
         prerelease: Boolean = false,
         withApk: Boolean = true,
-        digest: String? = "sha256:$SHA",
+        digest: String? = "sha256:$sha",
         size: Long? = 12_345L,
     ): String {
         val assets =
@@ -54,7 +54,7 @@ class AppUpdateReleaseClientTest {
             assertTrue(available.release.apkUrl.startsWith("https://github.com/Konprostart/TariffiaCode/releases/download/v1.2.28/"))
             assertTrue(available.release.apkUrl.contains("download=1"))
             // The expected hash/size come from GitHub's own asset digest, not a hardcoded value.
-            assertEquals(SHA, available.release.sha256)
+            assertEquals(sha, available.release.sha256)
             assertEquals(12_345L, available.release.sizeBytes)
         }
 
@@ -69,7 +69,7 @@ class AppUpdateReleaseClientTest {
     fun `an update with a malformed or non-sha256 digest is refused`() =
         runTest {
             assertTrue(runCatching { client(release("v1.2.28", digest = "sha256:not-a-hash")).check("1.2.27") }.isFailure)
-            assertTrue(runCatching { client(release("v1.2.28", digest = "md5:$SHA")).check("1.2.27") }.isFailure)
+            assertTrue(runCatching { client(release("v1.2.28", digest = "md5:$sha")).check("1.2.27") }.isFailure)
         }
 
     @Test
@@ -142,7 +142,7 @@ class AppUpdateReleaseClientTest {
         version: String,
         assetName: String = "tariffiacode-debug.apk",
         withAsset: Boolean = true,
-        digest: String? = "sha256:$SHA",
+        digest: String? = "sha256:$sha",
     ): String {
         val assets =
             if (withAsset) {

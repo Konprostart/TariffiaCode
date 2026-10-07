@@ -68,7 +68,13 @@ class VpsRuntimeTarget(
     /** Resolves the persisted applied-mapping id back to a Remote Project on startup. */
     private val projects: RemoteProjectStore? = null,
     /** Persists the selected profile / applied mapping so they survive restarts. */
-    private val selection: VpsSelectionStore = VpsSelectionStore(),
+    private val selection: VpsSelectionStore =
+        VpsSelectionStore(
+            loadProfileId = { null },
+            saveProfileId = {},
+            loadProjectId = { null },
+            saveProjectId = {},
+        ),
 ) : RuntimeTarget,
     VpsConnectionController {
     override val displayName: String = "OpenCode VPS"
