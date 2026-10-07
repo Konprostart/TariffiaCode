@@ -24,19 +24,20 @@ import java.net.URLClassLoader
  */
 class SshJaasStubTest {
     /** Loads the app's own JAAS stubs instead of the JDK's for the Android-absent names. */
-    private class AndroidLikeLoader(urls: Array<URL>, parent: ClassLoader) : URLClassLoader(urls, parent) {
-        override fun loadClass(name: String, resolve: Boolean): Class<*> =
-            synchronized(getClassLoadingLock(name)) {
-                findLoadedClass(name)?.let { return@let it } ?: run {
-                    if (name in ANDROID_ABSENT_JAAS) {
-                        val stub = findClass(name)
-                        if (resolve) resolveClass(stub)
-                        stub
-                    } else {
-                        super.loadClass(name, resolve)
-                    }
+    private class AndroidLikeLoader(
+        urls: Array<URL>,
+        parent: ClassLoader,
+    ) : URLClassLoader(urls, parent) {
+        override fun loadClass(
+            name: String,
+            resolve: Boolean,
+        ): Class<*> =
+            findLoadedClass(name)
+                ?: if (name in ANDROID_ABSENT_JAAS) {
+                    findClass(name).also { if (resolve) resolveClass(it) }
+                } else {
+                    super.loadClass(name, resolve)
                 }
-            }
 
         private companion object {
             val ANDROID_ABSENT_JAAS =
@@ -49,26 +50,13 @@ class SshJaasStubTest {
 
     @Test
     fun `ssh client setup resolves the Android-absent JAAS classes from the app, not the JDK`() {
-        val urls =
-            (System.getProperty("java.class.path") ?: "")
-                .split(File.pathSeparator)
-                .filter(String::isNotBlank)
-                .map { File(it).toURI().toURL() }
-                .toTypedArray()
-        val loader = AndroidLikeLoader(urls, ClassLoader.getPlatformClassLoader())
+        val loader = AndroidLikeLoader(classpathUrls(), jdkClassesOnlyParent())
 
-        // The app's stubs (not the JDK's) must satisfy the JAAS references, and both must be JAAS
-        // LoginExceptions so MINA SSHD's catch/throw signatures type-check at runtime.
-        val failedLogin = loader.loadClass("javax.security.auth.login.FailedLoginException")
-        val credential = loader.loadClass("javax.security.auth.login.CredentialException")
-        val loginException = loader.loadClass("javax.security.auth.login.LoginException")
-        assertTrue(loginException.isAssignableFrom(failedLogin))
-        assertTrue(loginException.isAssignableFrom(credential))
-
-        // The real regression: ClientBuilder's static initializer must no longer throw
-        // NoClassDefFoundError for those classes. MINA SSHD resolves providers via ServiceLoader,
-        // which consults the thread context class loader, so point it at the isolated loader for the
-        // duration to keep sshd's own classes single-sourced.
+        // The real regression: ClientBuilder's static initializer must not throw NoClassDefFoundError
+        // for the Android-absent JAAS classes. MINA SSHD resolves providers via ServiceLoader, which
+        // consults the thread context class loader, so point it at the isolated loader for the
+        // duration to keep sshd's own classes single-sourced. Without the app's stubs this call fails
+        // with NoClassDefFoundError for `FailedLoginException`, exactly as it did on device.
         val previous = Thread.currentThread().contextClassLoader
         Thread.currentThread().contextClassLoader = loader
         try {
@@ -78,5 +66,42 @@ class SshJaasStubTest {
         } finally {
             Thread.currentThread().contextClassLoader = previous
         }
+
+        // The app's stubs (not the JDK's) satisfied those references, and both must be JAAS
+        // LoginExceptions so MINA SSHD's catch/throw signatures type-check at runtime.
+        val failedLogin = loader.loadClass("javax.security.auth.login.FailedLoginException")
+        val credential = loader.loadClass("javax.security.auth.login.CredentialException")
+        val loginException = loader.loadClass("javax.security.auth.login.LoginException")
+        assertTrue(loginException.isAssignableFrom(failedLogin))
+        assertTrue(loginException.isAssignableFrom(credential))
     }
+
+    /**
+     * The classes MINA SSHD needs must be loadable by the isolated loader, so collect the test
+     * classpath from `java.class.path` and from any [URLClassLoader] in the current loader chain
+     * (Gradle loads tests through one and does not always populate `java.class.path`).
+     */
+    private fun classpathUrls(): Array<URL> {
+        val urls = LinkedHashSet<URL>()
+        System.getProperty("java.class.path")
+            ?.split(File.pathSeparator)
+            ?.filter(String::isNotBlank)
+            ?.forEach { urls.add(File(it).toURI().toURL()) }
+        var loader: ClassLoader? = javaClass.classLoader
+        while (loader != null) {
+            if (loader is URLClassLoader) {
+                urls.addAll(loader.getURLs())
+            }
+            loader = loader.parent
+        }
+        return urls.toTypedArray()
+    }
+
+    /**
+     * A parent that exposes the JDK's own `java.*`/`javax.*` classes but not the app classpath, so
+     * MINA SSHD and the JAAS stubs are loaded by [AndroidLikeLoader] instead. On the JVM the system
+     * class loader's parent is the platform class loader, which is exactly that (the JDK 9
+     * `getPlatformClassLoader()` API is unavailable to Android unit-test compilation).
+     */
+    private fun jdkClassesOnlyParent(): ClassLoader = ClassLoader.getSystemClassLoader().parent ?: ClassLoader.getSystemClassLoader()
 }
