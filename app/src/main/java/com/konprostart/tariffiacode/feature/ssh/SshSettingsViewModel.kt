@@ -199,7 +199,16 @@ class SshSettingsViewModel(
             )
         }
         viewModelScope.launch {
-            when (val outcome = connections.connect(profile)) {
+            // A transport that throws (including an Error from native/static init) must never escape
+            // into the coroutine and crash the app; surface it as a normal failure instead.
+            val outcome =
+                runCatching { connections.connect(profile) }
+                    .getOrElse { error ->
+                        SshConnectionOutcome.Failed(
+                            "${error::class.java.simpleName}: ${error.message ?: "SSH connection failed"}",
+                        )
+                    }
+            when (outcome) {
                 is SshConnectionOutcome.Connected -> {
                     _state.update {
                         it.copy(

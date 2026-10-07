@@ -169,4 +169,24 @@ class MinaSshClientTest {
             assertTrue(result is SshConnectResult.HostKeyUntrusted)
             assertTrue(observed != null)
         }
+
+    @Test
+    fun `a client initialisation Error is reported as a failure instead of crashing`() =
+        runTest {
+            // Android/MINA static init can throw an Error (not an Exception) on Connect; it must be
+            // surfaced as a normal failure, never escape into the caller's coroutine.
+            val client =
+                MinaSshClient(
+                    clientFactory = { throw NoClassDefFoundError("javax/security/auth/login/CredentialException") },
+                )
+            val result =
+                client.connect(
+                    host = "127.0.0.1",
+                    port = 22,
+                    auth = SshAuth.Password("tester", "secret"),
+                    verifier = trustAllVerifier(),
+                )
+            assertTrue("expected Failure, got $result", result is SshConnectResult.Failure)
+            assertTrue((result as SshConnectResult.Failure).message.contains("NoClassDefFoundError"))
+        }
 }

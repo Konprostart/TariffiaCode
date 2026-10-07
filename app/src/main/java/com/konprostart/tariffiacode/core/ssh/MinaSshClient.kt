@@ -1,5 +1,6 @@
 package com.konprostart.tariffiacode.core.ssh
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -41,16 +42,23 @@ class MinaSshClient(
         connectTimeoutMillis: Long,
     ): SshConnectResult =
         withContext(Dispatchers.IO) {
-            val client = clientFactory()
-            val hostKeyVerifier = FingerprintServerKeyVerifier(host, port, verifier)
-            client.serverKeyVerifier = hostKeyVerifier
+            // Everything - including building the MINA client - runs inside the guard. On Android the
+            // client's static initialisation can throw an Error (e.g. NoClassDefFoundError /
+            // ExceptionInInitializerError from MINA or BouncyCastle), which the old code let escape
+            // from viewModelScope and crash the app on Connect.
+            var client: MinaApacheSshClient? = null
+            var hostKeyVerifier: FingerprintServerKeyVerifier? = null
             var session: ClientSession? = null
             try {
-                client.start()
+                val created = clientFactory()
+                client = created
+                hostKeyVerifier = FingerprintServerKeyVerifier(host, port, verifier)
+                created.serverKeyVerifier = hostKeyVerifier
+                created.start()
                 // MINA's verify(timeout) blocks until the handshake (including our host-key check)
                 // completes or throws, so no coroutine-future adapter is needed.
                 session =
-                    client.connect(auth.username, host, port)
+                    created.connect(auth.username, host, port)
                         .verify(connectTimeoutMillis)
                         .session
 
@@ -74,18 +82,23 @@ class MinaSshClient(
                 channel.open().verify(connectTimeoutMillis)
 
                 SshConnectResult.Connected(sshSession)
-            } catch (e: Exception) {
+            } catch (e: CancellationException) {
+                runCatching { session?.close() }
+                throw e
+            } catch (e: Throwable) {
                 runCatching { session?.close() }
                 // MINA wraps verifier-rejection exceptions, so we surface an untrusted host key from
                 // the verifier's recorded state rather than relying on exception types.
-                val untrusted = hostKeyVerifier.untrustedKey
+                val untrusted = hostKeyVerifier?.untrustedKey
                 if (untrusted != null) {
                     SshConnectResult.HostKeyUntrusted(untrusted)
                 } else {
-                    SshConnectResult.Failure(e.message ?: "SSH connection failed", e)
+                    // Surface the real cause (class + message) instead of hiding it behind a generic
+                    // failure, so the UI can show what actually went wrong.
+                    SshConnectResult.Failure("${e::class.java.simpleName}: ${e.message ?: "SSH connection failed"}", e)
                 }
             } finally {
-                runCatching { client.stop() }
+                runCatching { client?.stop() }
             }
         }
 
