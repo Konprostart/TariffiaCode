@@ -18,10 +18,13 @@ import com.konprostart.tariffiacode.data.ssh.SshProfileStore
 import com.konprostart.tariffiacode.runtime.RuntimeState
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.security.KeyFactory
+import java.security.Security
 import java.util.UUID
 
 /** Executes the Remote Project SSH/password/forward path on Android ART against a CI-local sshd. */
@@ -38,6 +41,9 @@ class VpsSshConnectInstrumentedTest {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
             // Android ART does not define user.home; MINA's PathUtils reads it during static init.
             System.setProperty("user.home", context.filesDir.absolutePath)
+            val bcProvider = Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) ?: error("BC provider is missing")
+            assertEquals(BouncyCastleProvider::class.java, bcProvider.javaClass)
+            KeyFactory.getInstance("Ed25519", bcProvider)
             val settings = SecureSettingsRepository(context)
             val profiles = SshProfileStore(settings)
             val credentials = SshCredentialStore(settings)

@@ -104,9 +104,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import java.io.File
+import java.security.Security
 
 class TariffiaCodeApplication : Application() {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -252,6 +254,17 @@ class TariffiaCodeApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        val bcName = BouncyCastleProvider.PROVIDER_NAME
+        if (Security.getProvider(bcName)?.javaClass != BouncyCastleProvider::class.java) {
+            val bcPosition = Security.getProviders().indexOfFirst { it.name == bcName } + 1
+            Security.removeProvider(bcName)
+            val bundledBc = BouncyCastleProvider()
+            if (bcPosition > 0) {
+                Security.insertProviderAt(bundledBc, bcPosition)
+            } else {
+                Security.addProvider(bundledBc)
+            }
+        }
         // First, so a crash in the rest of this method is recorded too.
         CrashLog.install(this)
         // CrashLog records the local crash file.
