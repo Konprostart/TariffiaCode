@@ -295,3 +295,14 @@ jobs:
           if [ -f "$fixture_dir/sshd.pid" ]; then sudo kill "$(cat "$fixture_dir/sshd.pid")" || true; fi
           if [ -f "$fixture_dir/opencode.pid" ]; then kill "$(cat "$fixture_dir/opencode.pid")" || true; fi
           if [ -n "${SSH_TEST_USERNAME:-}" ]; then sudo userdel -r "$SSH_TEST_USERNAME" || true; fi
+
+      - name: Upload connected Android test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssh-android-connected-test-reports
+          path: |
+            app/build/outputs/androidTest-results/connected/
+            app/build/reports/androidTests/connected/
+          if-no-files-found: warn
+          retention-days: 7
