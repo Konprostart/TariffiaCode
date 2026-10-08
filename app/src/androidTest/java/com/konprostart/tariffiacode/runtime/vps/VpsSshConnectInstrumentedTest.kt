@@ -109,11 +109,15 @@ class VpsSshConnectInstrumentedTest {
         }
 
     /**
-     * Diagnostic only: runs the same MINA forward path once and fails with the full cause chain, stack traces and
-     * exception messages, so the CI test report shows the exact JCA/MINA failure. The password is redacted.
+     * Diagnostic: captures the exact failure of the password step and passes only when it does.
+     *
+     * The first handshake must stop at HostKeyUntrusted, which yields the server host key; the verifier refuses it,
+     * as the connect flow does. The second handshake pins exactly that key so that authentication runs. The test
+     * passes only when that handshake fails in the password step ("auth()") with a captured cause, and the printed
+     * report has the password redacted. Any other outcome fails.
      */
     @Test
-    fun diagnosePasswordHandshakeFailure() =
+    fun diagnosePasswordHandshakeFailure(): Unit =
         runBlocking {
             val arguments = InstrumentationRegistry.getArguments()
             val host = arguments.getString(ARG_HOST) ?: error("SSH test host argument is missing")
@@ -123,34 +127,78 @@ class VpsSshConnectInstrumentedTest {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
             System.setProperty("user.home", context.filesDir.absolutePath)
 
-            val verifier =
-                object : SshHostKeyVerifier {
-                    override fun verify(
-                        host: String,
-                        port: Int,
-                        hostKey: SshHostKey,
-                    ): SshHostKeyDecision = SshHostKeyDecision.Unknown(hostKey)
-                }
-            val result =
-                MinaSshPortForwarder().openLocalForward(
+            val forwarder = MinaSshPortForwarder()
+            val probe =
+                forwarder.openLocalForward(
                     host = host,
                     port = port,
                     auth = SshAuth.Password(username, password),
-                    verifier = verifier,
+                    verifier =
+                        object : SshHostKeyVerifier {
+                            override fun verify(
+                                host: String,
+                                port: Int,
+                                hostKey: SshHostKey,
+                            ): SshHostKeyDecision = SshHostKeyDecision.Unknown(hostKey)
+                        },
                     remoteHost = "127.0.0.1",
                     remotePort = TEST_OPENCODE_PORT,
                     connectTimeoutMillis = CONNECT_TIMEOUT_MILLIS,
                 )
-            val report =
-                when (result) {
+            val presented =
+                when (probe) {
+                    is SshPortForwardResult.HostKeyUntrusted -> probe.hostKey
+                    is SshPortForwardResult.Failure ->
+                        throw AssertionError(
+                            "Stopped before the password step, so no host key was presented:\n" +
+                                describeFailure(probe.message, probe.cause, password),
+                        )
                     is SshPortForwardResult.Listening -> {
-                        result.forward.close()
-                        "DIAGNOSTIC: handshake succeeded (no failure)"
+                        probe.forward.close()
+                        throw AssertionError("DIAGNOSTIC: password handshake succeeded, expected a failure")
                     }
-                    is SshPortForwardResult.HostKeyUntrusted -> "DIAGNOSTIC: host key untrusted ${result.hostKey.keyType}"
-                    is SshPortForwardResult.Failure -> describeFailure(result.message, result.cause, password)
                 }
-            throw AssertionError(report)
+            val result =
+                forwarder.openLocalForward(
+                    host = host,
+                    port = port,
+                    auth = SshAuth.Password(username, password),
+                    verifier =
+                        object : SshHostKeyVerifier {
+                            override fun verify(
+                                host: String,
+                                port: Int,
+                                hostKey: SshHostKey,
+                            ): SshHostKeyDecision =
+                                if (hostKey.sha256Fingerprint == presented.sha256Fingerprint) {
+                                    SshHostKeyDecision.Trusted
+                                } else {
+                                    SshHostKeyDecision.Unknown(hostKey)
+                                }
+                        },
+                    remoteHost = "127.0.0.1",
+                    remotePort = TEST_OPENCODE_PORT,
+                    connectTimeoutMillis = CONNECT_TIMEOUT_MILLIS,
+                )
+
+            when (result) {
+                is SshPortForwardResult.Failure -> {
+                    val report = describeFailure(result.message, result.cause, password)
+                    assertTrue("diagnostic report must not contain the password", !report.contains(password))
+                    assertTrue(
+                        "expected a failure in the password step, got:\n$report",
+                        result.message.startsWith("auth() failed"),
+                    )
+                    assertTrue("diagnostic must capture the failure cause", result.cause != null)
+                    println(report)
+                }
+                is SshPortForwardResult.Listening -> {
+                    result.forward.close()
+                    throw AssertionError("DIAGNOSTIC: password handshake succeeded, expected a failure")
+                }
+                is SshPortForwardResult.HostKeyUntrusted ->
+                    throw AssertionError("DIAGNOSTIC: host key changed between handshakes (${result.hostKey.keyType})")
+            }
         }
 
     private fun describeFailure(
@@ -167,7 +215,7 @@ class VpsSshConnectInstrumentedTest {
             java.io.StringWriter().also { writer ->
                 cause?.printStackTrace(java.io.PrintWriter(writer))
             }.toString().replace(password, "***")
-        return "DIAGNOSTIC: $message\nCause chain:\n$chain\nStack:\n$stack"
+        return "DIAGNOSTIC: ${message.replace(password, "***")}\nCause chain:\n$chain\nStack:\n$stack"
     }
 
     private companion object {

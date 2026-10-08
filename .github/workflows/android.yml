@@ -201,6 +201,7 @@ jobs:
           key: and-code-runtime-${{ runner.os }}-${{ hashFiles('runtime_tools/native_sources.lock.json', 'runtime_tools/ndk-patches/**', 'runtime_tools/termux_assets.lock.json', 'runtime_tools/termux_assets.py', 'scripts/build_android_runtime_from_source.py', 'scripts/prepare_android_runtime_*.py') }}
 
       - name: Prepare ephemeral SSH and OpenCode endpoints
+        id: prepare-fixture
         shell: bash
         run: |
           set -euo pipefail
@@ -269,7 +270,7 @@ jobs:
           echo "Temporary SSH/health fixture did not start" >&2
           exit 1
 
-      - name: Run Remote Project SSH instrumentation on Android ART
+      - name: Run persisted-password SSH test on Android ART
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 26
@@ -281,7 +282,38 @@ jobs:
           disable-animations: true
           script: >-
             ./gradlew :app:connectedGithubDebugAndroidTest
-            -Pandroid.testInstrumentationRunnerArguments.class=com.konprostart.tariffiacode.runtime.vps.VpsSshConnectInstrumentedTest
+            -Pandroid.testInstrumentationRunnerArguments.class=com.konprostart.tariffiacode.runtime.vps.VpsSshConnectInstrumentedTest#persistedPasswordAuthenticatesAndForwardsToLoopbackOpenCodeHealth
+            -Pandroid.testInstrumentationRunnerArguments.sshTestHost=10.0.2.2
+            -Pandroid.testInstrumentationRunnerArguments.sshTestPort=2222
+            -Pandroid.testInstrumentationRunnerArguments.sshTestUsername=$SSH_TEST_USERNAME
+            -Pandroid.testInstrumentationRunnerArguments.sshTestPassword=$SSH_TEST_PASSWORD
+
+      - name: Upload persisted-password SSH test reports
+        if: always() && steps.prepare-fixture.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssh-android-main-test-reports
+          path: |
+            app/build/outputs/androidTest-results/connected/
+            app/build/reports/androidTests/connected/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Run SSH handshake diagnostic separately (non-blocking)
+        if: always() && steps.prepare-fixture.outcome == 'success'
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 26
+          target: default
+          arch: x86_64
+          disable-linux-hw-accel: true
+          emulator-boot-timeout: 1200
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel off
+          disable-animations: true
+          script: >-
+            ./gradlew :app:connectedGithubDebugAndroidTest
+            -Pandroid.testInstrumentationRunnerArguments.class=com.konprostart.tariffiacode.runtime.vps.VpsSshConnectInstrumentedTest#diagnosePasswordHandshakeFailure
             -Pandroid.testInstrumentationRunnerArguments.sshTestHost=10.0.2.2
             -Pandroid.testInstrumentationRunnerArguments.sshTestPort=2222
             -Pandroid.testInstrumentationRunnerArguments.sshTestUsername=$SSH_TEST_USERNAME
@@ -296,11 +328,11 @@ jobs:
           if [ -f "$fixture_dir/opencode.pid" ]; then kill "$(cat "$fixture_dir/opencode.pid")" || true; fi
           if [ -n "${SSH_TEST_USERNAME:-}" ]; then sudo userdel -r "$SSH_TEST_USERNAME" || true; fi
 
-      - name: Upload connected Android test reports
+      - name: Upload SSH diagnostic reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ssh-android-connected-test-reports
+          name: ssh-android-diagnostic-reports
           path: |
             app/build/outputs/androidTest-results/connected/
             app/build/reports/androidTests/connected/
