@@ -4,11 +4,16 @@ import com.konprostart.tariffiacode.core.ssh.SshAuth
 import com.konprostart.tariffiacode.core.ssh.SshConnectResult
 import com.konprostart.tariffiacode.core.ssh.SshConnectionClient
 import com.konprostart.tariffiacode.core.ssh.SshHostKeyVerifier
+import com.konprostart.tariffiacode.core.ssh.SshPortForwardResult
+import com.konprostart.tariffiacode.core.ssh.SshPortForwarder
 import com.konprostart.tariffiacode.data.ssh.SshAuthType
 import com.konprostart.tariffiacode.data.ssh.SshCredential
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.data.ssh.SshProfileStore
+import com.konprostart.tariffiacode.runtime.vps.VpsConnectOutcome
+import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeConnector
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -47,6 +52,23 @@ class SshSettingsViewModelTest {
             verifier: SshHostKeyVerifier,
             connectTimeoutMillis: Long,
         ): SshConnectResult = SshConnectResult.Failure("unused in this test")
+    }
+
+    private class RecordingForwarder : SshPortForwarder {
+        var capturedAuth: SshAuth? = null
+
+        override suspend fun openLocalForward(
+            host: String,
+            port: Int,
+            auth: SshAuth,
+            verifier: SshHostKeyVerifier,
+            remoteHost: String,
+            remotePort: Int,
+            connectTimeoutMillis: Long,
+        ): SshPortForwardResult {
+            capturedAuth = auth
+            return SshPortForwardResult.Failure("test forwarder reached")
+        }
     }
 
     @Test
@@ -151,6 +173,63 @@ class SshSettingsViewModelTest {
         assertEquals("Renamed", updated.name)
         val stored = SshCredentialStore(load = { backend.credentials }, save = {}).credential(created.credentialRef)
         assertEquals(SshCredential.Password("hunter2"), stored)
+    }
+
+    @Test
+    fun `saved password survives viewmodel recreation and reaches ssh authentication`() =
+        runTest {
+            val backend = Backend()
+            val vm = viewModel(backend)
+            vm.newProfile()
+            vm.updateForm {
+                it.copy(
+                    name = "VPS",
+                    host = "example.com",
+                    port = "22",
+                    username = "root",
+                    authType = SshAuthType.PASSWORD,
+                    password = "test-password",
+                )
+            }
+            vm.saveProfile()
+            val savedProfile = backend.profiles.single()
+
+            val reopenedVm = viewModel(backend)
+            reopenedVm.editProfile(savedProfile.id)
+            assertTrue(reopenedVm.state.value.form?.credentialAlreadyStored == true)
+
+            val reloadedCredentials = SshCredentialStore(load = { backend.credentials }, save = {})
+            val forwarder = RecordingForwarder()
+            val outcome = VpsRuntimeConnector(forwarder, reloadedCredentials).connect(savedProfile)
+
+            assertTrue(outcome is VpsConnectOutcome.Failed)
+            val auth = forwarder.capturedAuth as? SshAuth.Password
+            assertTrue("password auth must reach the Remote Project SSH forward", auth != null)
+            assertTrue("stored password must be unchanged", auth?.password == "test-password")
+        }
+
+    @Test
+    fun `changing auth type cannot silently reuse a saved password as a private key`() {
+        val backend = Backend()
+        val vm = viewModel(backend)
+        vm.newProfile()
+        vm.updateForm {
+            it.copy(name = "VPS", host = "example.com", username = "root", password = "test-password")
+        }
+        vm.saveProfile()
+        val savedProfile = backend.profiles.single()
+
+        vm.editProfile(savedProfile.id)
+        vm.updateForm { it.copy(authType = SshAuthType.PRIVATE_KEY) }
+        assertFalse(vm.state.value.form?.credentialAlreadyStored == true)
+        assertTrue(vm.state.value.form?.isCredentialMissing() == true)
+
+        vm.saveProfile()
+
+        assertEquals(SshAuthType.PASSWORD, backend.profiles.single().authType)
+        assertTrue(vm.state.value.form?.errors?.containsKey(SshProfileValidator.FIELD_CREDENTIAL) == true)
+        val stored = SshCredentialStore(load = { backend.credentials }, save = {}).credential(savedProfile.credentialRef)
+        assertEquals(SshCredential.Password("test-password"), stored)
     }
 
     @Test

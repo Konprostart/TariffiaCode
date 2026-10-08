@@ -139,7 +139,7 @@ private fun SshCredentialFields(
     form: SshProfileForm,
     onChange: ((SshProfileForm) -> SshProfileForm) -> Unit,
 ) {
-    val missing = form.errors.containsKey(SshProfileValidator.FIELD_CREDENTIAL) || form.isCredentialMissingForNew()
+    val missing = form.errors.containsKey(SshProfileValidator.FIELD_CREDENTIAL) || form.isCredentialMissing()
     when (form.authType) {
         SshAuthType.PASSWORD -> {
             var visible by remember { mutableStateOf(false) }

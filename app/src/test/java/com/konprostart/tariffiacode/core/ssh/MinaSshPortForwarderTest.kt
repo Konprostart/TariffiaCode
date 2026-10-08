@@ -97,6 +97,32 @@ class MinaSshPortForwarderTest {
     private fun freePort(): Int = ServerSocket(0).use { it.localPort }
 
     @Test
+    fun `Android class linkage Error during client initialization is returned as a phased failure`() =
+        runTest {
+            val result =
+                MinaSshPortForwarder(
+                    clientFactory = {
+                        throw NoClassDefFoundError("javax/security/auth/login/FailedLoginException")
+                    },
+                ).openLocalForward(
+                    host = "127.0.0.1",
+                    port = 22,
+                    auth = SshAuth.Password("tester", "test-only-secret"),
+                    verifier = trustAllVerifier(),
+                    remoteHost = "127.0.0.1",
+                    remotePort = 4096,
+                )
+
+            assertTrue("expected Failure, got $result", result is SshPortForwardResult.Failure)
+            val failure = result as SshPortForwardResult.Failure
+            assertTrue(failure.message.contains("clientFactory()"))
+            assertTrue(failure.message.contains("NoClassDefFoundError"))
+            assertTrue(failure.message.contains("javax/security/auth/login/FailedLoginException"))
+            assertTrue(failure.cause is NoClassDefFoundError)
+            assertFalse(failure.message.contains("test-only-secret"))
+        }
+
+    @Test
     fun `a local client reaches the remote loopback service through the forward`() =
         runTest {
             val ssh = startSshServer()
