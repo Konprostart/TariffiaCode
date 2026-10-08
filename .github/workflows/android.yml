@@ -165,3 +165,176 @@ jobs:
           name: and-code-release-unsigned
           path: app/build/outputs/apk/github/release/app-github-release-unsigned.apk
           if-no-files-found: error
+
+  ssh-android-runtime:
+    runs-on: ubuntu-latest
+    needs: test-and-build
+    timeout-minutes: 60
+    env:
+      GITHUB_CLIENT_ID: ${{ vars.AND_CODE_GITHUB_CLIENT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache generated Android runtime
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/generated/runtime-assets
+            build/generated/runtime-jni
+            build/native-source-work/ndk/*.zip
+          key: and-code-runtime-${{ runner.os }}-${{ hashFiles('runtime_tools/native_sources.lock.json', 'runtime_tools/ndk-patches/**', 'runtime_tools/termux_assets.lock.json', 'runtime_tools/termux_assets.py', 'scripts/build_android_runtime_from_source.py', 'scripts/prepare_android_runtime_*.py') }}
+
+      - name: Prepare ephemeral SSH and OpenCode endpoints
+        id: prepare-fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v sshd >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y openssh-server
+          fi
+
+          fixture_dir="$RUNNER_TEMP/tariffia-ssh-fixture"
+          mkdir -p "$fixture_dir"
+          test_user="ssh-test-${GITHUB_RUN_ID}"
+          test_password="$(openssl rand -hex 24)"
+          echo "::add-mask::$test_password"
+          echo "SSH_TEST_USERNAME=$test_user" >> "$GITHUB_ENV"
+          echo "SSH_TEST_PASSWORD=$test_password" >> "$GITHUB_ENV"
+
+          ssh-keygen -q -t ed25519 -N '' -f "$fixture_dir/host_key"
+          sudo useradd --create-home --shell /bin/bash "$test_user"
+          printf '%s:%s\n' "$test_user" "$test_password" | sudo chpasswd
+          sudo mkdir -p /run/sshd
+          cat > "$fixture_dir/sshd_config" <<EOF
+          Port 2222
+          ListenAddress 0.0.0.0
+          HostKey $fixture_dir/host_key
+          PidFile $fixture_dir/sshd.pid
+          PasswordAuthentication yes
+          KbdInteractiveAuthentication no
+          UsePAM no
+          PermitRootLogin no
+          AllowUsers $test_user
+          AllowTcpForwarding local
+          PermitOpen 127.0.0.1:4096
+          LogLevel ERROR
+          EOF
+          sudo /usr/sbin/sshd -t -f "$fixture_dir/sshd_config"
+          sudo /usr/sbin/sshd -D -e -f "$fixture_dir/sshd_config" > "$fixture_dir/sshd.log" 2>&1 &
+          echo "$!" > "$fixture_dir/sshd.pid"
+
+          python3 -u - <<'PY' > "$fixture_dir/opencode.log" 2>&1 &
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+
+          class HealthHandler(BaseHTTPRequestHandler):
+              def do_GET(self):
+                  if self.path != "/global/health":
+                      self.send_error(404)
+                      return
+                  body = b'{"healthy":true,"version":"android-art-test"}'
+                  self.send_response(200)
+                  self.send_header("Content-Type", "application/json")
+                  self.send_header("Content-Length", str(len(body)))
+                  self.send_header("Connection", "close")
+                  self.end_headers()
+                  self.wfile.write(body)
+
+              def log_message(self, format, *args):
+                  return
+
+          HTTPServer(("127.0.0.1", 4096), HealthHandler).serve_forever()
+          PY
+          echo "$!" > "$fixture_dir/opencode.pid"
+
+          for attempt in $(seq 1 30); do
+            if nc -z 127.0.0.1 2222 && nc -z 127.0.0.1 4096; then exit 0; fi
+            sleep 1
+          done
+          echo "Temporary SSH/health fixture did not start" >&2
+          exit 1
+
+      - name: Run persisted-password SSH test on Android ART
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 26
+          target: default
+          arch: x86_64
+          disable-linux-hw-accel: true
+          emulator-boot-timeout: 1200
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel off
+          disable-animations: true
+          script: >-
+            ./gradlew :app:connectedGithubDebugAndroidTest
+            -Pandroid.testInstrumentationRunnerArguments.class=com.konprostart.tariffiacode.runtime.vps.VpsSshConnectInstrumentedTest#persistedPasswordAuthenticatesAndForwardsToLoopbackOpenCodeHealth
+            -Pandroid.testInstrumentationRunnerArguments.sshTestHost=10.0.2.2
+            -Pandroid.testInstrumentationRunnerArguments.sshTestPort=2222
+            -Pandroid.testInstrumentationRunnerArguments.sshTestUsername=$SSH_TEST_USERNAME
+            -Pandroid.testInstrumentationRunnerArguments.sshTestPassword=$SSH_TEST_PASSWORD
+
+      - name: Upload persisted-password SSH test reports
+        if: always() && steps.prepare-fixture.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssh-android-main-test-reports
+          path: |
+            app/build/outputs/androidTest-results/connected/
+            app/build/reports/androidTests/connected/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Run SSH handshake diagnostic separately (non-blocking)
+        if: always() && steps.prepare-fixture.outcome == 'success'
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 26
+          target: default
+          arch: x86_64
+          disable-linux-hw-accel: true
+          emulator-boot-timeout: 1200
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel off
+          disable-animations: true
+          script: >-
+            ./gradlew :app:connectedGithubDebugAndroidTest
+            -Pandroid.testInstrumentationRunnerArguments.class=com.konprostart.tariffiacode.runtime.vps.VpsSshConnectInstrumentedTest#diagnosePasswordHandshakeFailure
+            -Pandroid.testInstrumentationRunnerArguments.sshTestHost=10.0.2.2
+            -Pandroid.testInstrumentationRunnerArguments.sshTestPort=2222
+            -Pandroid.testInstrumentationRunnerArguments.sshTestUsername=$SSH_TEST_USERNAME
+            -Pandroid.testInstrumentationRunnerArguments.sshTestPassword=$SSH_TEST_PASSWORD
+
+      - name: Stop ephemeral SSH fixture
+        if: always()
+        shell: bash
+        run: |
+          fixture_dir="$RUNNER_TEMP/tariffia-ssh-fixture"
+          if [ -f "$fixture_dir/sshd.pid" ]; then sudo kill "$(cat "$fixture_dir/sshd.pid")" || true; fi
+          if [ -f "$fixture_dir/opencode.pid" ]; then kill "$(cat "$fixture_dir/opencode.pid")" || true; fi
+          if [ -n "${SSH_TEST_USERNAME:-}" ]; then sudo userdel -r "$SSH_TEST_USERNAME" || true; fi
+
+      - name: Upload SSH diagnostic reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssh-android-diagnostic-reports
+          path: |
+            app/build/outputs/androidTest-results/connected/
+            app/build/reports/androidTests/connected/
+          if-no-files-found: warn
+          retention-days: 7
