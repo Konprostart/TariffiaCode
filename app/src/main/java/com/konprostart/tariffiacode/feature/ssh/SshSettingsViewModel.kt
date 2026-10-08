@@ -30,14 +30,15 @@ data class SshProfileForm(
     val privateKeyPem: String = "",
     val passphrase: String = "",
     val trustedHostKeyFingerprint: String? = null,
-    val credentialAlreadyStored: Boolean = false,
+    val storedCredentialAuthType: SshAuthType? = null,
     val errors: Map<String, String> = emptyMap(),
     val isNew: Boolean = true,
 ) {
     val portOrNull: Int? get() = port.trim().toIntOrNull()
+    val credentialAlreadyStored: Boolean get() = storedCredentialAuthType == authType
 
-    /** True when a brand-new profile has no credential typed and none stored to fall back on. */
-    fun isCredentialMissingForNew(): Boolean {
+    /** True when the current auth type has neither newly entered nor matching stored credentials. */
+    fun isCredentialMissing(): Boolean {
         if (credentialAlreadyStored) return false
         return when (authType) {
             SshAuthType.PASSWORD -> password.isBlank()
@@ -122,7 +123,10 @@ class SshSettingsViewModel(
                         username = profile.username,
                         authType = profile.authType,
                         trustedHostKeyFingerprint = profile.trustedHostKeyFingerprint,
-                        credentialAlreadyStored = credentials.hasCredential(profile.credentialRef),
+                        storedCredentialAuthType =
+                            credentials.credential(profile.credentialRef)
+                                ?.takeIf { it.isUsable }
+                                ?.let(::authTypeOf),
                         isNew = false,
                     ),
                 message = null,
@@ -299,5 +303,12 @@ class SshSettingsViewModel(
     private fun existingCredentialIfEditing(form: SshProfileForm): SshCredential? {
         val existing = profiles.profile(form.id) ?: return null
         return credentials.credential(existing.credentialRef)
+            ?.takeIf { it.isUsable && authTypeOf(it) == form.authType }
     }
+
+    private fun authTypeOf(credential: SshCredential): SshAuthType =
+        when (credential) {
+            is SshCredential.Password -> SshAuthType.PASSWORD
+            is SshCredential.PrivateKey -> SshAuthType.PRIVATE_KEY
+        }
 }
