@@ -115,12 +115,11 @@ class VpsSshConnectInstrumentedTest {
         }
 
     /**
-     * Diagnostic: captures the exact failure of the password step and passes only when it does.
+     * Diagnostic: passes when the pinned password handshake succeeds and reports failures only when they occur.
      *
      * The first handshake must stop at HostKeyUntrusted, which yields the server host key; the verifier refuses it,
-     * as the connect flow does. The second handshake pins exactly that key so that authentication runs. The test
-     * passes only when that handshake fails in the password step ("auth()") with a captured cause, and the printed
-     * report has the password redacted. Any other outcome fails.
+     * as the connect flow does. The second handshake pins exactly that key so authentication runs. A successful
+     * handshake passes; a failure surfaces its cause chain and stack with the password redacted.
      */
     @Test
     fun diagnosePasswordHandshakeFailure(): Unit =
@@ -156,12 +155,11 @@ class VpsSshConnectInstrumentedTest {
                     is SshPortForwardResult.HostKeyUntrusted -> probe.hostKey
                     is SshPortForwardResult.Failure ->
                         throw AssertionError(
-                            "Stopped before the password step, so no host key was presented:\n" +
-                                describeFailure(probe.message, probe.cause, password),
+                            describeFailure(probe.message, probe.cause, password),
                         )
                     is SshPortForwardResult.Listening -> {
                         probe.forward.close()
-                        throw AssertionError("DIAGNOSTIC: password handshake succeeded, expected a failure")
+                        throw AssertionError("DIAGNOSTIC: the initial untrusted host key was accepted")
                     }
                 }
             val result =
@@ -191,16 +189,10 @@ class VpsSshConnectInstrumentedTest {
                 is SshPortForwardResult.Failure -> {
                     val report = describeFailure(result.message, result.cause, password)
                     assertTrue("diagnostic report must not contain the password", !report.contains(password))
-                    assertTrue(
-                        "expected a failure in the password step, got:\n$report",
-                        result.message.startsWith("auth() failed"),
-                    )
-                    assertTrue("diagnostic must capture the failure cause", result.cause != null)
-                    println(report)
+                    throw AssertionError(report)
                 }
                 is SshPortForwardResult.Listening -> {
                     result.forward.close()
-                    throw AssertionError("DIAGNOSTIC: password handshake succeeded, expected a failure")
                 }
                 is SshPortForwardResult.HostKeyUntrusted ->
                     throw AssertionError("DIAGNOSTIC: host key changed between handshakes (${result.hostKey.keyType})")
