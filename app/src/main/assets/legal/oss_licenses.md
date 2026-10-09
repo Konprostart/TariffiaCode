@@ -123,7 +123,7 @@ Apache License 2.0's full text is bundled at
 
 **NOTICE files are not preserved in the built APK and must be aggregated separately.** An earlier
 version of this document claimed that Gradle keeps each dependency's `META-INF/NOTICE` file intact
-in the final package; that was checked against the actual `and-code-debug` CI artifact and found to
+in the final package; that was checked against the actual `tariffiacode-debug` CI artifact and found to
 be false. AGP's resource merging deduplicates files that collide under `META-INF/NOTICE*` across
 dependencies by keeping a single, arbitrarily-chosen copy (a "pick first" rule, not per-artifact
 preservation) — inspecting the built APK showed only `okhttp3/internal/publicsuffix/NOTICE`
