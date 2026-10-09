@@ -145,7 +145,7 @@ class LocalRuntimeInstaller(
                         null
                     }
                 if (antigravityRootfs != null) {
-                    ensureAndCodeAgentContext(antigravityRootfs, context)
+                    ensureTariffiaCodeAgentContext(antigravityRootfs, context)
                     copyCaCertificates(rootfs, antigravityRootfs)
                     // Keep the Android-vision tool surface added for Claude/OpenCode available
                     // to agy's Debian tool runner as well. The scripts still fail closed when adb
@@ -158,7 +158,7 @@ class LocalRuntimeInstaller(
                 // the whole environment directory, so without this the user is signed out of every
                 // agent whenever another one is added or the runtime is reinstalled.
                 carryOverHomeDirectory(File(active, "rootfs"), rootfs)
-                ensureAndCodeAgentContext(rootfs, context)
+                ensureTariffiaCodeAgentContext(rootfs, context)
                 onShared(
                     0.91f,
                     context.getString(
@@ -280,8 +280,8 @@ class LocalRuntimeInstaller(
                 File(active, "antigravity-rootfs").takeIf { metadata.has(LocalAgent.ANTIGRAVITY) && it.isDirectory },
             )
         }?.also { installed ->
-            ensureAndCodeAgentContext(installed.rootfs, context)
-            installed.antigravityRootfs?.let { ensureAndCodeAgentContext(it, context) }
+            ensureTariffiaCodeAgentContext(installed.rootfs, context)
+            installed.antigravityRootfs?.let { ensureTariffiaCodeAgentContext(it, context) }
         }
 
     /** Metadata of the active install, without requiring the command suite to be extractable. */

@@ -13,7 +13,7 @@ import java.nio.file.Files
  * Writing the selected preset where OpenCode reads it.
  *
  * The file lives in the guest filesystem, which an agent can write to, so the write is guarded the
- * same way [installAndCodeAgentContext]'s are.
+ * same way [installTariffiaCodeAgentContext]'s are.
  */
 class OpenCodeSystemPromptTest {
     @get:Rule val folder = TemporaryFolder()

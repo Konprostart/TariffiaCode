@@ -13,7 +13,7 @@ import java.nio.file.StandardOpenOption
  * Listed in the `instructions` OpenCode is launched with (see
  * `AND_CODE_OPENCODE_CONFIG_CONTENT`), and deliberately separate from the TariffiaCode environment
  * blurb at `tariffiacode-context.md`: that one is a file the user may take over and edit, which
- * [installAndCodeAgentContext] then stops managing, while this one is rewritten on every switch.
+ * [installTariffiaCodeAgentContext] then stops managing, while this one is rewritten on every switch.
  */
 internal const val OPENCODE_SYSTEM_PROMPT_PATH = "root/.config/opencode/tariffiacode-system-prompt.md"
 
