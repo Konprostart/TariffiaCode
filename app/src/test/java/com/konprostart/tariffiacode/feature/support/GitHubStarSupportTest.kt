@@ -28,7 +28,7 @@ class GitHubStarSupportTest {
     }
 
     @Test
-    fun `project links point to the AndCode repository`() {
+    fun `project links point to the TariffiaCode repository`() {
         assertEquals("https://github.com/Konprostart/TariffiaCode", ProjectLinks.GITHUB_REPOSITORY)
         assertEquals("https://github.com/Konprostart/TariffiaCode/issues", ProjectLinks.GITHUB_ISSUES)
         assertEquals("https://github.com/Konprostart/TariffiaCode/releases", ProjectLinks.GITHUB_RELEASES)
