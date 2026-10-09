@@ -24,9 +24,7 @@ TariffiaCode is a fork of the [AndCode](https://github.com/yuga-hashimoto/and-co
 
 <table>
   <tr>
-    <td align="center"><img src="screenshots/navigation-drawer.jpg" width="180" alt="Navigation drawer with agents, projects, and recent chats"><br><em>Navigation drawer</em></td>
     <td align="center"><img src="screenshots/model-picker.jpg" width="180" alt="Model and runtime picker with searchable favorite models"><br><em>Model &amp; runtime picker</em></td>
-    <td align="center"><img src="screenshots/repository-chat.jpg" width="180" alt="Chat with an agent inspecting the TariffiaCode repository"><br><em>Repository chat</em></td>
   </tr>
   <tr>
     <td align="center"><img src="screenshots/image-generation.jpg" width="180" alt="Agent-generated image displayed inside a conversation"><br><em>Image generation</em></td>

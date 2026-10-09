@@ -24,9 +24,7 @@ TariffiaCodeは[AndCode](https://github.com/yuga-hashimoto/and-code)プロジェ
 
 <table>
   <tr>
-    <td align="center"><img src="screenshots/navigation-drawer.jpg" width="180" alt="エージェント、プロジェクト、最近のチャットを表示するナビゲーションドロワー"><br><em>ナビゲーションドロワー</em></td>
     <td align="center"><img src="screenshots/model-picker.jpg" width="180" alt="お気に入りのモデルを検索できるモデル・実行先ピッカー"><br><em>モデル・実行先ピッカー</em></td>
-    <td align="center"><img src="screenshots/repository-chat.jpg" width="180" alt="TariffiaCodeのリポジトリを調査するエージェントとのチャット"><br><em>リポジトリチャット</em></td>
   </tr>
   <tr>
     <td align="center"><img src="screenshots/image-generation.jpg" width="180" alt="会話内に表示されたエージェント生成画像"><br><em>画像生成</em></td>
