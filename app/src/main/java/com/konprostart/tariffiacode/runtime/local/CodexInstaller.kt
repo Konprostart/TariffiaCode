@@ -94,7 +94,7 @@ object CodexInstaller {
         url: String,
         destination: File,
     ) {
-        val request = Request.Builder().url(url).header("User-Agent", "AndCode").get().build()
+        val request = Request.Builder().url(url).header("User-Agent", "TariffiaCode").get().build()
         httpClient.newCall(request).execute().use { response ->
             check(response.isSuccessful) { "Codex download failed with HTTP ${response.code}" }
             val body = checkNotNull(response.body) { "Codex download response had no body" }

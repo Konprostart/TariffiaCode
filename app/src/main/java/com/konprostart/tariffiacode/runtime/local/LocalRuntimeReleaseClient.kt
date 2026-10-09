@@ -141,7 +141,7 @@ class LocalRuntimeReleaseClient(
         const val OFFICIAL_RELEASE_ENDPOINT =
             "https://api.github.com/repos/anomalyco/opencode/releases/latest"
         private const val GITHUB_ACCEPT = "application/vnd.github+json"
-        private const val USER_AGENT = "AndCode"
+        private const val USER_AGENT = "TariffiaCode"
         private const val SHA256_PREFIX = "sha256:"
         private val SHA256_DIGEST = Regex("^sha256:[a-f0-9]{64}$")
         private val LOOPBACK_HOSTS = setOf("127.0.0.1", "localhost", "::1")
