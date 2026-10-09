@@ -13,6 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
+import java.security.MessageDigest
 
 class AppUpdateViewModelTest {
     private val sha = "a".repeat(64)
@@ -60,24 +61,23 @@ class AppUpdateViewModelTest {
         }
     }
 
-    private fun releaseJson(tag: String = "v9.9.9"): String =
-        """
-        [
-          {
-            "tag_name": "$tag",
-            "draft": false,
-            "prerelease": false,
-            "assets": [
-              {
-                "name": "tariffiacode-$tag-release.apk",
-                "browser_download_url": "https://github.com/Konprostart/TariffiaCode/releases/download/$tag/tariffiacode-$tag-release.apk",
-                "digest": "sha256:$sha",
-                "size": 12345
-              }
-            ]
-          }
-        ]
-        """.trimIndent()
+    private val manifests = mutableMapOf<String, ByteArray>()
+
+    private fun releaseJson(tag: String = "v9.9.9"): String {
+        val assetName = "tariffiacode-$tag-release.apk"
+        val manifestName = "tariffiacode-$tag-update.json"
+        val manifestUrl = "https://github.com/Konprostart/TariffiaCode/releases/download/$tag/$manifestName"
+        val manifest =
+            """{"schemaVersion":1,"channel":"release","applicationId":"com.konprostart.tariffiacode","versionName":"${tag.removePrefix(
+                "v",
+            )}","versionCode":9999,"commitSha":"${"c".repeat(
+                40,
+            )}","apkAssetName":"$assetName","apkSha256":"$sha","signerSha256":"${"b".repeat(64)}"}"""
+        val manifestBytes = manifest.toByteArray()
+        val manifestSha = MessageDigest.getInstance("SHA-256").digest(manifestBytes).joinToString("") { "%02x".format(it) }
+        manifests[manifestUrl] = manifestBytes
+        return """[{"tag_name":"$tag","draft":false,"prerelease":false,"assets":[{"name":"$assetName","browser_download_url":"https://github.com/Konprostart/TariffiaCode/releases/download/$tag/$assetName","digest":"sha256:$sha","size":12345},{"name":"$manifestName","browser_download_url":"$manifestUrl","digest":"sha256:$manifestSha"}]}]"""
+    }
 
     private fun release(
         url: String = "https://example.com/update.apk",
@@ -91,7 +91,11 @@ class AppUpdateViewModelTest {
         apkFile: File,
     ) = AppUpdateViewModel(
         installedVersion = "1.2.29",
-        client = AppUpdateReleaseClient(fetchRelease = { json }),
+        client =
+            AppUpdateReleaseClient(
+                fetchRelease = { json },
+                fetchAsset = { url -> manifests.getValue(url.substringBefore('?')) },
+            ),
         downloader = downloader,
         installer = installer,
         apkFileProvider = { apkFile },

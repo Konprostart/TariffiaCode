@@ -1207,6 +1207,10 @@
     <string name="app_update_installed_version">インストール済み: %1$s</string>
     <string name="app_update_available_version">利用可能: %1$s</string>
     <string name="app_update_download_button">%1$sをダウンロード</string>
+    <string name="app_update_channel_debug">デバッグ</string>
+    <string name="app_update_channel_release">リリース</string>
+    <string name="app_update_metadata_unavailable">利用不可</string>
+    <string name="app_update_build_details">チャンネル: %1$s\nパッケージ: %2$s\nバージョン: %3$s\nバージョンコード: %4$s\nコミットSHA: %5$s\nダウンロード: %6$s\nAPK SHA-256: %7$s\n署名者SHA-256: %8$s</string>
 <!-- SSH connection profiles (settings). Secrets are stored encrypted; never shown back. -->
     <string name="settings_ssh_row">SSH connections</string>
     <string name="ssh_title">SSH connections</string>

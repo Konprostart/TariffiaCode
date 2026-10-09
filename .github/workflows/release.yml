@@ -22,14 +22,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # workflow_dispatch always runs the workflow definition frozen at the ref it's
-          # dispatched against, but a re-run for an existing tag (e.g. backfilling a new
-          # release asset for an already-published version) still needs the CURRENT
-          # workflow logic - so dispatch from main and let this checkout target the tag
-          # instead. github.event.inputs.tag is unset for the push trigger, where the
-          # default (this run's own ref) is already correct.
           ref: ${{ github.event.inputs.tag || github.ref }}
           fetch-depth: 0
+
+      - name: Resolve and validate release tag
+        id: tag
+        env:
+          RELEASE_TAG_INPUT: ${{ github.event.inputs.tag }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "Manual releases must be dispatched from main" >&2
+              exit 1
+            fi
+            TAG="$RELEASE_TAG_INPUT"
+            if ! [[ "$TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Invalid release tag: $TAG" >&2
+              exit 1
+            fi
+            git merge-base --is-ancestor "$TAG^{commit}" origin/main || {
+              echo "Manual release tag must point to a commit on main" >&2
+              exit 1
+            }
+          else
+            TAG="$(tr -d '[:space:]' < .release-version)"
+            if ! [[ "$TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Invalid release tag: $TAG" >&2
+              exit 1
+            fi
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -81,7 +103,7 @@ jobs:
             echo "AND_CODE_GITHUB_CLIENT_ID repo variable is not set - the published APK would have no GitHub sign-in" >&2
             exit 1
           fi
-           ./gradlew detekt spotlessCheck :app:lintGithubDebug :app:testGithubDebugUnitTest assembleGithubDebug assembleGithubRelease
+          ./gradlew detekt spotlessCheck :app:lintGithubDebug :app:testGithubDebugUnitTest assembleGithubDebug assembleGithubRelease
           # Separate invocation, deliberately without GITHUB_CLIENT_ID: this is the same flavor and
           # signing config F-Droid's own build server produces (gradleprops: andcode.fdroidBuild=true,
           # no client ID), so this asset is what fdroiddata's Binaries:/AllowedAPKSigningKeys: verify
@@ -90,41 +112,62 @@ jobs:
           # otherwise it is baked into BuildConfig and classes.dex no longer matches F-Droid's.
           env -u GITHUB_CLIENT_ID ./gradlew -Pandcode.fdroidBuild=true :app:assembleFdroidRelease
 
-      - name: Resolve tag
-        id: tag
+      - name: Verify signed production APK and create updater metadata
+        env:
+          RELEASE_KEYSTORE_FILE: ${{ runner.temp }}/release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="$(tr -d '[:space:]' < .release-version)"
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          APK="app/build/outputs/apk/github/release/app-github-release.apk"
+          test -f "$APK" || { echo "Signed production APK missing: $APK" >&2; exit 1; }
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          EXPECTED="$("$JAVA_HOME/bin/keytool" -list -v -keystore "$RELEASE_KEYSTORE_FILE" \
+            -storepass "$RELEASE_KEYSTORE_PASSWORD" -alias "$RELEASE_KEY_ALIAS" 2>/dev/null \
+            | sed -n 's/^[[:space:]]*SHA256: //p' | tr -d ':' | tr 'A-Z' 'a-z' | head -1)"
+          ACTUAL="$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" 2>/dev/null \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          test -n "$EXPECTED" && test "$EXPECTED" = "$ACTUAL" || {
+            echo "Production APK signer does not match the configured release keystore" >&2
+            exit 1
+          }
+          TAG="${{ steps.tag.outputs.tag }}"
+          python scripts/create_app_update_manifest.py \
+            --apk "$APK" \
+            --channel release \
+            --commit-sha "$(git rev-parse HEAD)" \
+            --asset-name "tariffiacode-$TAG-release.apk" \
+            --output "$RUNNER_TEMP/tariffiacode-update-manifest.json" \
+            --expected-signer-sha256 "$EXPECTED"
+          python3 - "$RUNNER_TEMP/tariffiacode-update-manifest.json" "${{ steps.tag.outputs.tag }}" <<'PY'
+          import json
+          import sys
+
+          manifest = json.load(open(sys.argv[1], encoding="utf-8"))
+          expected_version = sys.argv[2].removeprefix("v")
+          if manifest["versionName"] != expected_version:
+              raise SystemExit(f"Release tag {sys.argv[2]} does not match APK version {manifest['versionName']}")
+          PY
 
       - name: Create release and upload APKs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
+          RELEASE_APK="app/build/outputs/apk/github/release/app-github-release.apk"
+          test -f "$RELEASE_APK" || { echo "Refusing to publish without a signed release APK" >&2; exit 1; }
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
-              --target "${{ github.sha }}" \
+              --target "$(git rev-parse HEAD)" \
               --title "$TAG" \
               --generate-notes
           fi
-           cp app/build/outputs/apk/github/debug/app-github-debug.apk "tariffiacode-$TAG-debug.apk"
-           ASSETS=("tariffiacode-$TAG-debug.apk")
-           if [ -f app/build/outputs/apk/github/release/app-github-release.apk ]; then
-             cp app/build/outputs/apk/github/release/app-github-release.apk "tariffiacode-$TAG-release.apk"
-             ASSETS+=("tariffiacode-$TAG-release.apk")
-             # Clear a stale unsigned asset under either naming. Releases published before the
-             # and-code -> tariffiacode asset rename used "and-code-", so keep deleting it too when
-             # this workflow backfills an older tag.
-             gh release delete-asset "$TAG" "tariffiacode-$TAG-release-unsigned.apk" -y || true
-             gh release delete-asset "$TAG" "and-code-$TAG-release-unsigned.apk" -y || true
-           else
-             cp app/build/outputs/apk/github/release/app-github-release-unsigned.apk "tariffiacode-$TAG-release-unsigned.apk"
-             ASSETS+=("tariffiacode-$TAG-release-unsigned.apk")
-          fi
+          cp "$RELEASE_APK" "tariffiacode-$TAG-release.apk"
+          cp "$RUNNER_TEMP/tariffiacode-update-manifest.json" "tariffiacode-$TAG-update.json"
+          ASSETS=("tariffiacode-$TAG-release.apk" "tariffiacode-$TAG-update.json")
+          # Never leave an unsigned or non-updater debug APK looking like an installable release asset.
+          gh release delete-asset "$TAG" "tariffiacode-$TAG-release-unsigned.apk" -y || true
+          gh release delete-asset "$TAG" "and-code-$TAG-release-unsigned.apk" -y || true
+          gh release delete-asset "$TAG" "tariffiacode-$TAG-debug.apk" -y || true
           # F-Droid's own build server produces this same flavor/signing combination from source
           # (see the "Verify and build APKs" step above); publishing it lets fdroiddata's
           # Binaries:/AllowedAPKSigningKeys: metadata verify a reproducible build against it.

@@ -69,7 +69,7 @@ class AppUpdateHostValidationTest {
     @Test
     fun `a GitHub asset URL is accepted`() =
         runBlocking {
-            val json = releaseJson("https://github.com/Konprostart/TariffiaCode/releases/download/v9.9.9/x.apk")
+            val json = releaseJson("https://github.com/Konprostart/TariffiaCode/releases/download/v1.2.34/tariffiacode-v1.2.34-release.apk")
             val result = AppUpdateReleaseClient(fetchRelease = { json }).check("1.2.29")
             assertTrue(result is AppUpdateCheck.Available)
         }
@@ -78,7 +78,7 @@ class AppUpdateHostValidationTest {
     @Test
     fun `an asset URL on another host is rejected`() =
         runBlocking {
-            val json = releaseJson("https://evil.example/x.apk")
+            val json = releaseJson("https://evil.example/x.apk", tag = "v1.2.34")
             assertTrue(runCatching { AppUpdateReleaseClient(fetchRelease = { json }).check("1.2.29") }.isFailure)
         }
 
@@ -129,7 +129,10 @@ class AppUpdateHostValidationTest {
             }
         }
 
-    private fun releaseJson(url: String): String =
-        """[{"tag_name":"v9.9.9","draft":false,"prerelease":false,"assets":[""" +
-            """{"name":"tariffiacode-v9.9.9-release.apk","browser_download_url":"$url","digest":"sha256:$sha"}]}]"""
+    private fun releaseJson(
+        url: String,
+        tag: String = "v1.2.34",
+    ): String =
+        """[{"tag_name":"$tag","draft":false,"prerelease":false,"assets":[""" +
+            """{"name":"tariffiacode-$tag-release.apk","browser_download_url":"$url","digest":"sha256:$sha"}]}]"""
 }

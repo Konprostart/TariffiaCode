@@ -102,10 +102,13 @@ jobs:
             scripts/build_android_runtime_from_source.py \
             scripts/prepare_android_runtime_assets.py \
             scripts/prepare_android_runtime_native_libs.py \
+            scripts/create_app_update_manifest.py \
+            scripts/test_create_app_update_manifest.py \
             scripts/test_android_runtime_source_build.py
           python scripts/build_android_runtime_from_source.py --self-test
           python scripts/prepare_android_runtime_assets.py --help >/dev/null
           python -m unittest scripts.test_android_runtime_source_build
+          python -m unittest scripts.test_create_app_update_manifest
           python - <<'PY'
           import json
           from pathlib import Path

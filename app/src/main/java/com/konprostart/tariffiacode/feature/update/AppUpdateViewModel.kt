@@ -33,6 +33,7 @@ class AppUpdateViewModel(
     private val downloader: AppUpdateApkDownloader = OkHttpAppUpdateApkDownloader(),
     private val installer: AppUpdateInstaller,
     private val apkFileProvider: () -> File,
+    private val installedVersionCode: Long = 0,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(AppUpdateUiState(installedVersion = installedVersion))
     val state: StateFlow<AppUpdateUiState> = mutableState.asStateFlow()
@@ -41,7 +42,7 @@ class AppUpdateViewModel(
         if (mutableState.value.isChecking) return
         mutableState.update { it.copy(isChecking = true, error = null) }
         viewModelScope.launch {
-            runCatching { client.check(mutableState.value.installedVersion) }
+            runCatching { client.check(mutableState.value.installedVersion, installedVersionCode) }
                 .onSuccess { result ->
                     mutableState.update { it.copy(check = result, isChecking = false, error = null) }
                 }
@@ -89,6 +90,7 @@ class AppUpdateViewModel(
             installedVersion: String,
             installer: AppUpdateInstaller,
             apkFileProvider: () -> File,
+            installedVersionCode: Long = 0,
             channel: AppUpdateChannel = AppUpdateChannel.Release,
             downloader: AppUpdateApkDownloader = OkHttpAppUpdateApkDownloader(),
             client: AppUpdateReleaseClient = AppUpdateReleaseClient(channel),
@@ -96,7 +98,14 @@ class AppUpdateViewModel(
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    AppUpdateViewModel(installedVersion, client, downloader, installer, apkFileProvider) as T
+                    AppUpdateViewModel(
+                        installedVersion = installedVersion,
+                        client = client,
+                        downloader = downloader,
+                        installer = installer,
+                        apkFileProvider = apkFileProvider,
+                        installedVersionCode = installedVersionCode,
+                    ) as T
             }
     }
 }
