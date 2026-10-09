@@ -362,7 +362,7 @@ internal fun localRuntimeEnvironment(
     }
 
 /**
- * The instruction files OpenCode is launched with: the AndCode environment blurb, and the
+ * The instruction files OpenCode is launched with: the TariffiaCode environment blurb, and the
  * system-prompt preset the user selected (see [applyOpenCodeSystemPrompt]).
  *
  * Only the paths are fixed here, at launch. OpenCode re-reads each file's content per turn, so

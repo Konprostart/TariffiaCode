@@ -47,7 +47,7 @@ internal const val OPENCODE_SYSTEM_PROMPT_PATH = "root/.config/opencode/tariffia
  * following it. What is left uncovered is a *parent* directory swapped for a symlink between the
  * check and the write, which Java cannot close without an `openat` walk - and it buys nothing,
  * because the guest runs under PRoot as the app's own uid and can write any of these files
- * directly. These checks exist to keep AndCode from clobbering a path the user has taken over, not
+ * directly. These checks exist to keep TariffiaCode from clobbering a path the user has taken over, not
  * as a privilege boundary.
  */
 internal fun applyOpenCodeSystemPrompt(

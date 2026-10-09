@@ -14,7 +14,7 @@ import kotlinx.serialization.json.put
 import java.io.File
 
 /**
- * Installs AndCode's Claude Code PermissionRequest hook into the guest settings and binary path.
+ * Installs TariffiaCode's Claude Code PermissionRequest hook into the guest settings and binary path.
  */
 object ClaudePermissionHooks {
     const val HOOK_GUEST_PATH = "/usr/local/bin/tariffiacode-claude-permission-hook.sh"
