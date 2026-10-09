@@ -154,7 +154,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: and-code-debug
+          name: tariffiacode-debug
           path: app/build/outputs/apk/github/debug/app-github-debug.apk
           if-no-files-found: error
 
@@ -162,7 +162,7 @@ jobs:
         if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
-          name: and-code-release-unsigned
+          name: tariffiacode-release-unsigned
           path: app/build/outputs/apk/github/release/app-github-release-unsigned.apk
           if-no-files-found: error
 
