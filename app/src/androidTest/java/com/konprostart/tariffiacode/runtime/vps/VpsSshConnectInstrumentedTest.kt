@@ -97,9 +97,11 @@ class VpsSshConnectInstrumentedTest {
                 val presentedHostKey =
                     activeTarget.pendingHostKey.value
                         ?: error("No host-key prompt; state=${activeTarget.state.value}")
-                val trustedProfile = activeTarget.trustHostKey(reopenedProfile, presentedHostKey)
+                val trustedProfile =
+                    activeTarget.trustHostKey(presentedHostKey)
+                        ?: error("selected SSH profile disappeared")
                 reopenedProfiles.upsert(trustedProfile)
-                activeTarget.selectProfile(trustedProfile)
+                assertEquals(trustedProfile, activeTarget.selectedProfile.value)
 
                 val connected = withTimeout(CONNECT_TIMEOUT_MILLIS) { activeTarget.connect() }
 

@@ -163,7 +163,11 @@ class VpsRuntimeTarget(
         hostKey: SshHostKey,
     ): SshProfile {
         mutablePendingHostKey.value = null
-        return profile.trusting(hostKey.sha256Fingerprint)
+        val trustedProfile = profile.trusting(hostKey.sha256Fingerprint)
+        if (mutableSelectedProfile.value?.id == profile.id) {
+            mutableSelectedProfile.value = trustedProfile
+        }
+        return trustedProfile
     }
 
     /** The UI confirms the pending key: trust it for the selected profile, returning it to persist. */
