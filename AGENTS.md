@@ -16,7 +16,7 @@ Then:
 
 1. Work exclusively within the worktree directory.
 2. Never modify the main working tree directly.
-3. After creating the worktree, ALL subsequent tool calls (read, edit, grep, glob, bash) MUST use the worktree absolute path as their base directory. The default working directory (`/workspace/and-code`) is the main tree and must NEVER be used for file operations after worktree creation. Verify by running `pwd` or checking paths before the first edit.
+3. After creating the worktree, ALL subsequent tool calls (read, edit, grep, glob, bash) MUST use the worktree absolute path as their base directory. The default working directory (`/workspace/TariffiaCode`) is the main tree and must NEVER be used for file operations after worktree creation. Verify by running `pwd` or checking paths before the first edit.
 4. Once the branch's pull request is merged, clean up immediately: remove the worktree (`git worktree remove <path>`) and delete the local branch (`git branch -D <branch-name>`). Never leave a merged worktree or its branch behind.
 
 ## Session Todo
