@@ -32,18 +32,21 @@ CI validates commit messages on all PRs.
 ## Development Setup
 
 - **JDK 17** (Temurin recommended)
-- **Android SDK** (API 34)
+- **Android SDK** (compileSdk/targetSdk 35, minSdk 26)
 - **Python 3** (for runtime asset generation)
 - Network access on first build (downloads Termux packages)
 
 ## Project Structure
 
 ```
-app/src/main/java/com/yugahashimoto/androidcode/
+app/src/main/java/com/konprostart/tariffiacode/
+├── core/          # Shared platform abstractions and utilities
 ├── data/          # API clients, repositories, models
+├── di/            # Dependency injection
+├── feature/       # Feature-scoped UI and logic
 ├── runtime/       # On-device PRoot runtime management
-├── ui/            # Jetpack Compose screens and components
-└── di/            # Dependency injection
+├── startup/       # Startup gating and initialization
+└── ui/            # Jetpack Compose screens and components
 ```
 
 ## Code Style

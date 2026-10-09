@@ -27,8 +27,8 @@ snapshot() {
     echo "-- process tree RSS (kB) --"
     top -m 20 -s rss -n 1 2>/dev/null | grep -E 'opencode|proot' || true
     echo "-- runtime disk --"
-    du -sh /data/data/com.yugahashimoto.androidcode/files/runtime 2>/dev/null || true
-    du -sh /data/data/com.yugahashimoto.androidcode/files/runtime/logs 2>/dev/null || true
+    du -sh /data/data/com.konprostart.tariffiacode/files/runtime 2>/dev/null || true
+    du -sh /data/data/com.konprostart.tariffiacode/files/runtime/logs 2>/dev/null || true
     echo
   } | tee -a "tariffiacode-benchmark-${stamp%%[+ ]*}.log"
 }
