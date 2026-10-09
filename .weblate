@@ -3,7 +3,6 @@ url = https://hosted.weblate.org/api/
 
 [project]
 name = TariffiaCode
-slug = tariffiacode
 
 [component]
 name = Android Strings
