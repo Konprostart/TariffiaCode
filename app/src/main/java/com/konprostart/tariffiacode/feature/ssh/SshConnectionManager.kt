@@ -3,6 +3,7 @@ package com.konprostart.tariffiacode.feature.ssh
 import com.konprostart.tariffiacode.core.ssh.SshAuth
 import com.konprostart.tariffiacode.core.ssh.SshConnectResult
 import com.konprostart.tariffiacode.core.ssh.SshConnectionClient
+import com.konprostart.tariffiacode.core.ssh.SshFailureDiagnostic
 import com.konprostart.tariffiacode.core.ssh.SshHostKey
 import com.konprostart.tariffiacode.core.ssh.SshHostKeyDecision
 import com.konprostart.tariffiacode.core.ssh.SshHostKeyVerifier
@@ -104,7 +105,7 @@ class SshConnectionManager(
             is SshConnectResult.Failure ->
                 mismatch
                     ?.let { (expected, presented) -> SshConnectionOutcome.HostKeyMismatch(expected, presented) }
-                    ?: SshConnectionOutcome.Failed(result.message)
+                    ?: SshConnectionOutcome.Failed(SshFailureDiagnostic.format(result.message, result.cause, auth))
         }
     }
 
