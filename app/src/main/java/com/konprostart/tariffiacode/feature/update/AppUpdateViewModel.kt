@@ -92,8 +92,9 @@ class AppUpdateViewModel(
             apkFileProvider: () -> File,
             installedVersionCode: Long = 0,
             channel: AppUpdateChannel = AppUpdateChannel.Release,
-            downloader: AppUpdateApkDownloader = OkHttpAppUpdateApkDownloader(),
-            client: AppUpdateReleaseClient = AppUpdateReleaseClient(channel),
+            githubTokenProvider: () -> String? = { null },
+            client: AppUpdateReleaseClient = AppUpdateReleaseClient(channel = channel, githubTokenProvider = githubTokenProvider),
+            downloader: AppUpdateApkDownloader = OkHttpAppUpdateApkDownloader(githubTokenProvider = client::tokenForPrivateAssets),
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

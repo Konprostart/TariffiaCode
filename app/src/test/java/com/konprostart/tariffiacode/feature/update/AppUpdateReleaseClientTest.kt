@@ -3,8 +3,10 @@ package com.konprostart.tariffiacode.feature.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import okhttp3.Request
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.security.MessageDigest
@@ -12,6 +14,27 @@ import java.security.MessageDigest
 class AppUpdateReleaseClientTest {
     private val sha = "a".repeat(64)
     private val updateManifests = mutableMapOf<String, ByteArray>()
+
+    @Test
+    fun `GitHub requests attach a token only for private repositories`() {
+        assertEquals("private-token", privateRepositoryToken(repositoryIsPrivate = true, token = " private-token "))
+        assertNull(privateRepositoryToken(repositoryIsPrivate = false, token = "public-token"))
+        assertNull(privateRepositoryToken(repositoryIsPrivate = true, token = "  "))
+
+        val authenticated =
+            Request.Builder()
+                .url("https://api.github.com/repos/Konprostart/TariffiaCode/releases")
+                .withGitHubAuthorization(" token ")
+                .build()
+        val anonymous =
+            Request.Builder()
+                .url("https://api.github.com/repos/Konprostart/TariffiaCode/releases")
+                .withGitHubAuthorization("  ")
+                .build()
+
+        assertEquals("Bearer token", authenticated.header("Authorization"))
+        assertNull(anonymous.header("Authorization"))
+    }
 
     private fun release(
         tag: String,

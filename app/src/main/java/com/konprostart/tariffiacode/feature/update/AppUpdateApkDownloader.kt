@@ -36,6 +36,7 @@ interface AppUpdateApkDownloader {
  */
 class OkHttpAppUpdateApkDownloader(
     private val client: OkHttpClient = AppUpdateHttp.assetClient(),
+    private val githubTokenProvider: () -> String? = { null },
 ) : AppUpdateApkDownloader {
     override suspend fun download(
         apkUrl: String,
@@ -49,6 +50,7 @@ class OkHttpAppUpdateApkDownloader(
                     Request.Builder()
                         .url(apkUrl)
                         .header("User-Agent", "TariffiaCode")
+                        .withGitHubAuthorization(githubTokenProvider())
                         .get()
                         .build()
                 client.newCall(request).execute().use { response ->

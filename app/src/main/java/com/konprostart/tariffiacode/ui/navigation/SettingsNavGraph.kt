@@ -86,6 +86,9 @@ fun NavGraphBuilder.settingsNavGraph(
                         AppUpdateSectionCard(
                             installedVersion = appVersion,
                             installedVersionCode = com.konprostart.tariffiacode.BuildConfig.VERSION_CODE.toLong(),
+                            githubTokenProvider = {
+                                (context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication).settings.githubToken
+                            },
                             // Debug builds track the dedicated `debug-latest` channel; production uses releases.
                             channel =
                                 if (com.konprostart.tariffiacode.BuildConfig.DEBUG) {

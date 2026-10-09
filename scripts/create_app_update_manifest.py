@@ -44,6 +44,17 @@ def validate_package_id(channel: str, package_id: str) -> None:
         raise ValueError(f"{channel} APK package must be {expected_package}, got {package_id}")
 
 
+def validate_update_transition(previous: dict[str, object], current: dict[str, object]) -> None:
+    if previous["channel"] != current["channel"] or previous["applicationId"] != current["applicationId"]:
+        raise ValueError("update channel or package ID changed")
+    previous_code = int(previous["versionCode"])
+    current_code = int(current["versionCode"])
+    if current_code < previous_code or (current_code == previous_code and current["commitSha"] != previous["commitSha"]):
+        raise ValueError("update versionCode must advance, or be an identical commit rerun")
+    if previous["signerSha256"] != current["signerSha256"]:
+        raise ValueError("update signer changed from the previously published channel signer")
+
+
 def tool_paths(android_home: Path) -> tuple[Path, Path]:
     build_tools = sorted(
         (path for path in (android_home / "build-tools").iterdir() if path.is_dir()),

@@ -6,7 +6,13 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from scripts.create_app_update_manifest import create_manifest, parse_apk_badging, parse_signer_sha256, validate_package_id
+from scripts.create_app_update_manifest import (
+    create_manifest,
+    parse_apk_badging,
+    parse_signer_sha256,
+    validate_package_id,
+    validate_update_transition,
+)
 
 
 class AppUpdateManifestTest(unittest.TestCase):
@@ -65,6 +71,21 @@ class AppUpdateManifestTest(unittest.TestCase):
                         Path("apksigner"),
                         expected_signer_sha256="b" * 64,
                     )
+
+    def test_channel_update_must_keep_signer_and_advance_monotonically(self) -> None:
+        previous = {
+            "channel": "debug",
+            "applicationId": "com.konprostart.tariffiacode.debug",
+            "versionCode": 73,
+            "commitSha": "c" * 40,
+            "signerSha256": "a" * 64,
+        }
+        current = {**previous, "versionCode": 74, "commitSha": "d" * 40}
+        validate_update_transition(previous, current)
+        with self.assertRaisesRegex(ValueError, "signer changed"):
+            validate_update_transition(previous, {**current, "signerSha256": "b" * 64})
+        with self.assertRaisesRegex(ValueError, "versionCode"):
+            validate_update_transition(previous, {**current, "versionCode": 72})
 
 
 if __name__ == "__main__":

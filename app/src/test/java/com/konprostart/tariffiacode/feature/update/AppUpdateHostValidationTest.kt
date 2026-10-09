@@ -9,6 +9,7 @@ import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -123,6 +124,31 @@ class AppUpdateHostValidationTest {
                     .download("https://${AppUpdateHttp.ASSET_HOST}:${server.port}/update.apk", destination, apkBytesSha)
 
                 assertEquals("APK-BYTES", destination.readText())
+            } finally {
+                server.shutdown()
+                destination.delete()
+            }
+        }
+
+    @Test
+    fun `private release token is not forwarded to the asset CDN redirect`() =
+        runBlocking {
+            val server = startTlsServer()
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(302)
+                    .setHeader("Location", "https://${AppUpdateHttp.ASSET_CDN_HOST}:${server.port}/asset.apk"),
+            )
+            server.enqueue(MockResponse().setResponseCode(200).setBody("APK-BYTES"))
+            val destination = File.createTempFile("update", ".apk")
+            try {
+                OkHttpAppUpdateApkDownloader(
+                    client = assetClient(),
+                    githubTokenProvider = { "private-repo-token" },
+                ).download("https://${AppUpdateHttp.ASSET_HOST}:${server.port}/update.apk", destination, apkBytesSha)
+
+                assertEquals("Bearer private-repo-token", server.takeRequest().getHeader("Authorization"))
+                assertNull(server.takeRequest().getHeader("Authorization"))
             } finally {
                 server.shutdown()
                 destination.delete()

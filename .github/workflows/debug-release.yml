@@ -161,12 +161,11 @@ jobs:
             python3 - "$RUNNER_TEMP/previous-debug/tariffiacode-debug-update.json" "$RUNNER_TEMP/tariffiacode-debug-update.json" <<'PY'
           import json
           import sys
+          from scripts.create_app_update_manifest import validate_update_transition
+
           old = json.load(open(sys.argv[1], encoding="utf-8"))
           new = json.load(open(sys.argv[2], encoding="utf-8"))
-          old_code = int(old["versionCode"])
-          new_code = int(new["versionCode"])
-          if new_code < old_code or (new_code == old_code and new["commitSha"] != old["commitSha"]):
-              raise SystemExit(f"Refusing to replace debug-latest {old_code}/{old['commitSha']} with {new_code}/{new['commitSha']}")
+          validate_update_transition(old, new)
           PY
           fi
           if ! gh release view debug-latest >/dev/null 2>&1; then

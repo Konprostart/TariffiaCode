@@ -40,6 +40,7 @@ fun AppUpdateSectionCard(
     installedVersion: String,
     installedVersionCode: Long,
     channel: AppUpdateChannel = AppUpdateChannel.Release,
+    githubTokenProvider: () -> String? = { null },
     context: Context = LocalContext.current,
     viewModel: AppUpdateViewModel =
         viewModel(
@@ -47,6 +48,7 @@ fun AppUpdateSectionCard(
                 AppUpdateViewModel.factory(
                     installedVersion = installedVersion,
                     installedVersionCode = installedVersionCode,
+                    githubTokenProvider = githubTokenProvider,
                     installer = AndroidAppUpdateInstaller(context.applicationContext),
                     apkFileProvider = { File(context.applicationContext.cacheDir, "updates/tariffiacode-update.apk") },
                     channel = channel,

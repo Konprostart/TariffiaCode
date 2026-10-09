@@ -40,6 +40,25 @@ class AppUpdateHttpsOnlyTest {
             .build()
 
     @Test
+    fun `private release asset download sends the stored GitHub token`() =
+        runBlocking {
+            val server = startTlsServer()
+            server.enqueue(MockResponse().setResponseCode(200).setBody("APK-BYTES"))
+            val destination = File.createTempFile("update", ".apk")
+            try {
+                OkHttpAppUpdateApkDownloader(
+                    client = httpsOnlyClient(),
+                    githubTokenProvider = { "test-token" },
+                ).download(server.url("/private.apk").toString(), destination, apkBytesSha)
+
+                assertEquals("Bearer test-token", server.takeRequest().getHeader("Authorization"))
+            } finally {
+                server.shutdown()
+                destination.delete()
+            }
+        }
+
+    @Test
     fun `an HTTPS download is allowed`() =
         runBlocking {
             val server = startTlsServer()
