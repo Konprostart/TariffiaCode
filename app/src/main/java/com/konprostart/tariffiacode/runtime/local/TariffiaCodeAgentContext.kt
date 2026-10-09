@@ -6,12 +6,12 @@ import java.io.IOException
 import java.nio.file.Files
 import java.security.MessageDigest
 
-internal const val AND_CODE_AGENT_CONTEXT_ASSET = "tariffiacode-agent-context.md"
+internal const val TARIFFIACODE_AGENT_CONTEXT_ASSET = "tariffiacode-agent-context.md"
 
 private const val RUNTIME_CONTEXT_PATH = "root/.config/tariffiacode/agent-context.md"
 
 /**
- * Records the hash of what AndCode itself last wrote to each path in [AGENT_CONTEXT_PATHS], so a
+ * Records the hash of what TariffiaCode itself last wrote to each path in [AGENT_CONTEXT_PATHS], so a
  * later run can tell "still what we wrote" apart from "the user edited this since". One line per
  * entry, `<relativePath>\t<sha256>`.
  */
@@ -32,19 +32,19 @@ private val AGENT_CONTEXT_PATHS =
         "root/.gemini/GEMINI.md",
     )
 
-internal fun ensureAndCodeAgentContext(
+internal fun ensureTariffiaCodeAgentContext(
     rootfs: File,
     context: Context,
 ) {
     val agentContext =
-        context.assets.open(AND_CODE_AGENT_CONTEXT_ASSET).use { input ->
+        context.assets.open(TARIFFIACODE_AGENT_CONTEXT_ASSET).use { input ->
             input.readBytes()
         }
-    installAndCodeAgentContext(rootfs, agentContext)
+    installTariffiaCodeAgentContext(rootfs, agentContext)
 }
 
 /**
- * Writes the AndCode environment blurb into each coding agent's instructions file (Claude Code's
+ * Writes the TariffiaCode environment blurb into each coding agent's instructions file (Claude Code's
  * CLAUDE.md, Gemini's GEMINI.md, and OpenCode's instructions file).
  *
  * These are the exact files users write their own custom instructions into, and this runs on
@@ -85,7 +85,7 @@ internal fun ensureAndCodeAgentContext(
  * the staging file, so installing the instruction files never depends on that staging copy
  * existing.
  */
-internal fun installAndCodeAgentContext(
+internal fun installTariffiaCodeAgentContext(
     rootfs: File,
     agentContext: ByteArray,
 ) {
@@ -220,7 +220,7 @@ internal fun manageablePathOrNull(
  * which bounds the returned map no matter what the file holds.
  *
  * Best-effort otherwise: an [IOException] (a transient I/O error, permissions, etc.) must not
- * abort [installAndCodeAgentContext] or the runtime startup that calls it, so it is treated the
+ * abort [installTariffiaCodeAgentContext] or the runtime startup that calls it, so it is treated the
  * same as "no sidecar yet" -- an empty map.
  */
 private fun readWrittenHashes(file: File): Map<String, String> {

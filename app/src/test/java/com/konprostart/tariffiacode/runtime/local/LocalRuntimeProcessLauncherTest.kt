@@ -51,7 +51,7 @@ class LocalRuntimeProcessLauncherTest {
     fun `guest agent context is copied to each agent's instruction path`() {
         val rootfs = temporaryFolder.newFolder("rootfs")
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
             "root/.config/opencode/tariffiacode-context.md",
@@ -67,7 +67,7 @@ class LocalRuntimeProcessLauncherTest {
     fun `user edits to an instructions file survive a later context refresh`() {
         val rootfs = temporaryFolder.newFolder("rootfs-user-edit")
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         val claudeMd = File(rootfs, "root/.claude/CLAUDE.md")
         val customInstructions = "Always use 4-space indentation and write tests first."
@@ -75,7 +75,7 @@ class LocalRuntimeProcessLauncherTest {
 
         // A later runtime start (e.g. bundled context text changes, or the same context is
         // simply re-ensured) must not stomp the user's edit.
-        installAndCodeAgentContext(rootfs, (AGENT_CONTEXT_FIXTURE + "\nExtra default line.").toByteArray())
+        installTariffiaCodeAgentContext(rootfs, (AGENT_CONTEXT_FIXTURE + "\nExtra default line.").toByteArray())
 
         assertEquals(customInstructions, claudeMd.readText())
     }
@@ -84,10 +84,10 @@ class LocalRuntimeProcessLauncherTest {
     fun `untouched instructions files still pick up bundled context updates`() {
         val rootfs = temporaryFolder.newFolder("rootfs-untouched")
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         val updatedFixture = "$AGENT_CONTEXT_FIXTURE\nExtra default line."
-        installAndCodeAgentContext(rootfs, updatedFixture.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, updatedFixture.toByteArray())
 
         listOf(
             "root/.config/opencode/tariffiacode-context.md",
@@ -111,7 +111,7 @@ class LocalRuntimeProcessLauncherTest {
         claudeMd.parentFile.mkdirs()
         java.nio.file.Files.createSymbolicLink(claudeMd.toPath(), outsideTarget.toPath())
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         assertEquals(originalContent, outsideTarget.readText())
     }
@@ -130,7 +130,7 @@ class LocalRuntimeProcessLauncherTest {
         geminiMd.parentFile.mkdirs()
         java.nio.file.Files.createSymbolicLink(geminiMd.toPath(), outsideTarget.toPath())
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         assertFalse(outsideTarget.exists())
     }
@@ -145,7 +145,7 @@ class LocalRuntimeProcessLauncherTest {
         val claudeMd = File(rootfs, "root/.claude/CLAUDE.md")
         claudeMd.mkdirs()
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         assertTrue(claudeMd.isDirectory)
         assertEquals(
@@ -164,7 +164,7 @@ class LocalRuntimeProcessLauncherTest {
         val sidecar = File(rootfs, "root/.config/tariffiacode/agent-context-written.tsv")
         sidecar.mkdirs()
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
             "root/.config/opencode/tariffiacode-context.md",
@@ -187,7 +187,7 @@ class LocalRuntimeProcessLauncherTest {
         sidecar.parentFile.mkdirs()
         java.nio.file.Files.createSymbolicLink(sidecar.toPath(), outsideTarget.toPath())
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
             "root/.config/opencode/tariffiacode-context.md",
@@ -209,7 +209,7 @@ class LocalRuntimeProcessLauncherTest {
         val source = File(rootfs, "root/.config/tariffiacode/agent-context.md")
         source.mkdirs()
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
             "root/.config/opencode/tariffiacode-context.md",
@@ -232,7 +232,7 @@ class LocalRuntimeProcessLauncherTest {
         source.parentFile.mkdirs()
         java.nio.file.Files.createSymbolicLink(source.toPath(), outsideTarget.toPath())
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
             "root/.config/opencode/tariffiacode-context.md",
@@ -258,7 +258,7 @@ class LocalRuntimeProcessLauncherTest {
         claudeDir.parentFile.mkdirs()
         claudeDir.writeText("not a directory")
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
             "root/.config/opencode/tariffiacode-context.md",
@@ -297,7 +297,7 @@ class LocalRuntimeProcessLauncherTest {
         sidecar.parentFile.mkdirs()
         sidecar.writeText("root/.claude/CLAUDE.md\t${"0".repeat(200_000)}\n")
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
             "root/.config/opencode/tariffiacode-context.md",
@@ -318,7 +318,7 @@ class LocalRuntimeProcessLauncherTest {
         sidecar.parentFile.mkdirs()
         sidecar.writeText("root/somewhere/else.md\tdeadbeef\nnot-a-tsv-line\n")
 
-        installAndCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
+        installTariffiaCodeAgentContext(rootfs, AGENT_CONTEXT_FIXTURE.toByteArray())
 
         listOf(
             "root/.config/opencode/tariffiacode-context.md",
