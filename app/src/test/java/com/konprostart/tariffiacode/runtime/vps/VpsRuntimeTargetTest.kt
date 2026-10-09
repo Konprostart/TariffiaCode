@@ -91,8 +91,8 @@ class VpsRuntimeTargetTest {
         connect()
         val pending = pendingHostKey.value
         require(pending != null) { "expected a pending host key" }
-        val trusted = trustHostKey(profile(sshPort), pending)
-        selectProfile(trusted)
+        val trusted = trustHostKey(pending) ?: error("selected SSH profile disappeared")
+        assertEquals("trust confirmation must update the active profile", trusted, selectedProfile.value)
         return trusted
     }
 
