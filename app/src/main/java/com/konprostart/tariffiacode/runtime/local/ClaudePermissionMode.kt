@@ -5,7 +5,7 @@ import com.konprostart.tariffiacode.R
 /**
  * How Claude Code handles tool permissions for a session.
  *
- * When AndCode's PermissionRequest hook bridge is installed, [ASK] routes unmatched tools to the
+ * When TariffiaCode's PermissionRequest hook bridge is installed, [ASK] routes unmatched tools to the
  * Android approval UI. Without the bridge, prefer [ACCEPT_EDITS] (pre-approves Bash) so the CLI
  * does not hang waiting for a prompt nobody can answer.
  */
@@ -20,7 +20,7 @@ enum class ClaudePermissionMode(
      * [ASK] leaves this empty so every unmatched call reaches the PermissionRequest hook.
      */
     val allowedTools: List<String> = emptyList(),
-    /** True when this mode expects the AndCode permission bridge to answer prompts. */
+    /** True when this mode expects the TariffiaCode permission bridge to answer prompts. */
     val requiresBridge: Boolean = false,
 ) {
     PLAN("plan", R.string.claude_permission_plan, R.string.claude_permission_plan_desc),

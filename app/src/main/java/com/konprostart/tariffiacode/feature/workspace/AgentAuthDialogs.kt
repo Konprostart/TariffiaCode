@@ -13,7 +13,7 @@ import androidx.compose.ui.res.stringResource
 import com.konprostart.tariffiacode.R
 
 /**
- * Explains, before either official CLI's own sign-in flow starts, that AndCode is only relaying the
+ * Explains, before either official CLI's own sign-in flow starts, that TariffiaCode is only relaying the
  * browser URL and code between this device and that CLI process - not authenticating on the user's
  * behalf. Shown once per tap of the sign-in button; the CLI's actual auth flow (unchanged) only
  * starts once the user taps through.
@@ -47,7 +47,7 @@ fun AgentAuthExplainerDialog(
 }
 
 /**
- * Confirms an action that widens what an official CLI (or AndCode itself) can do without asking
+ * Confirms an action that widens what an official CLI (or TariffiaCode itself) can do without asking
  * again - full access permission modes, all-files access, adding a third-party MCP server, and so
  * on. Shown every time the action is taken rather than gated behind a persisted flag, since each of
  * these is itself a deliberate settings change rather than something that happens on every message.

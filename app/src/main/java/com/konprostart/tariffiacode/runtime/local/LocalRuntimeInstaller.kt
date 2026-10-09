@@ -719,7 +719,7 @@ class LocalRuntimeInstaller(
             root.put(containerKey, servers)
         }
 
-        /** Required by OpenCode and AndCode's built-in Git, MCP, and Android-device features. */
+        /** Required by OpenCode and TariffiaCode's built-in Git, MCP, and Android-device features. */
         val REQUIRED_RUNTIME_PACKAGES =
             listOf(
                 "bash",
