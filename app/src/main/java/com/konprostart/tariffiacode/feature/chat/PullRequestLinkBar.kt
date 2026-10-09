@@ -285,7 +285,7 @@ private fun previewPullRequest(
     additions: Int,
     deletions: Int,
 ): ChatPullRequest {
-    val ref = PullRequestRef("yuga-hashimoto", "and-code", number)
+    val ref = PullRequestRef("Konprostart", "TariffiaCode", number)
     return ChatPullRequest(
         ref = ref,
         status =
