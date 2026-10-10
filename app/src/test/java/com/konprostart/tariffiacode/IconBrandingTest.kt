@@ -53,6 +53,108 @@ class IconBrandingTest {
         )
     }
 
+    /**
+     * The foreground and monochrome layers must carry the TC mark, not the retired AC artwork.
+     *
+     * Both marks are monoline letterforms with a code glyph, so "the glyph exists" cannot tell
+     * them apart. The reliable discriminator is mass distribution: the TC design has a tall solid
+     * C bowl that over-fills the lower-right quadrant (measured ~0.39 of all mark pixels), whereas
+     * the old AC artwork is close to evenly balanced across quadrants (~0.16-0.29, lower-right
+     * ~0.29). The thresholds below sit well between the two so a revert fails the build.
+     */
+    @Test
+    fun `launcher mark is the TC ligature and not the retired AC artwork`() {
+        val root = repositoryRoot()
+        val foreground = decodePng(root.resolve("app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png").readBytes())
+        val monochrome = decodePng(root.resolve("app/src/main/res/mipmap-xxxhdpi/ic_launcher_monochrome.png").readBytes())
+
+        for ((layer, image) in listOf("foreground" to foreground, "monochrome" to monochrome)) {
+            val mask = opaqueMask(image)
+            val total = mask.sum()
+            assertTrue("$layer must contain mark pixels", total > 0)
+
+            val lowerRight = quadrant(mask, image, 1, 1) / total.toDouble()
+            val upperLeft = quadrant(mask, image, 0, 0) / total.toDouble()
+
+            // TC: solid C bowl dominates the lower-right; the old AC art did not.
+            assertTrue(
+                "$layer lower-right mass must be the TC C bowl (was $lowerRight)",
+                lowerRight > 0.33,
+            )
+            // TC: the C opening leaves the upper-left lighter than the old, more even AC art.
+            assertTrue(
+                "$layer upper-left mass must be the TC T crossbar (was $upperLeft)",
+                upperLeft in 0.16..0.27,
+            )
+        }
+    }
+
+    /**
+     * Returns a mask of the mark pixels.
+     *
+     * The foreground, monochrome and in-app layers are all drawn as the mark on a fully
+     * transparent background, so any pixel that is not transparent is mark. [decodePng] reports
+     * transparent pixels with alpha 0, which is what this relies on.
+     */
+    private fun opaqueMask(image: RgbImage): BooleanArray {
+        val mask = BooleanArray(image.pixels.size)
+        for (i in image.pixels.indices) {
+            mask[i] = ((image.pixels[i] ushr 24) and 0xFF) >= 50
+        }
+        return mask
+    }
+
+    /** Counts mask pixels in the given quadrant: qx/qy are 0 (left/top) or 1 (right/bottom). */
+    private fun quadrant(
+        mask: BooleanArray,
+        image: RgbImage,
+        qx: Int,
+        qy: Int,
+    ): Int {
+        val midX = image.width / 2
+        val midY = image.height / 2
+        var count = 0
+        for (y in 0 until image.height) {
+            val inY = if (qy == 0) y < midY else y >= midY
+            if (!inY) continue
+            for (x in 0 until image.width) {
+                val inX = if (qx == 0) x < midX else x >= midX
+                if (inX && mask[y * image.width + x]) count++
+            }
+        }
+        return count
+    }
+
+    /**
+     * The in-app drawer logo must show the same TC mark as the launcher, so the app and the
+     * home screen cannot drift apart. Both are the mark on transparency, so comparing the share
+     * of mark pixels in each quadrant is enough to prove they are the same silhouette.
+     */
+    @Test
+    fun `in-app logo matches the launcher mark`() {
+        val root = repositoryRoot()
+        val logo = decodePng(root.resolve("app/src/main/res/drawable-nodpi/tariffiacode_logo.png").readBytes())
+        val foreground = decodePng(root.resolve("app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png").readBytes())
+
+        val logoMask = opaqueMask(logo)
+        val foregroundMask = opaqueMask(foreground)
+        val logoTotal = logoMask.sum().toDouble()
+        val foregroundTotal = foregroundMask.sum().toDouble()
+
+        for (qx in 0..1) {
+            for (qy in 0..1) {
+                val logoShare = quadrant(logoMask, logo, qx, qy) / logoTotal
+                val foregroundShare = quadrant(foregroundMask, foreground, qx, qy) / foregroundTotal
+                assertEquals(
+                    "in-app logo must match the launcher mark in quadrant ($qx,$qy)",
+                    foregroundShare,
+                    logoShare,
+                    0.05,
+                )
+            }
+        }
+    }
+
     private class RgbImage(
         val width: Int,
         val height: Int,
