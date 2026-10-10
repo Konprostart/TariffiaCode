@@ -101,7 +101,7 @@ class CodexReleaseClient(
     companion object {
         const val OFFICIAL_REGISTRY = "https://registry.npmjs.org/"
         private const val PACKAGE_NAME = "@openai/codex"
-        private const val USER_AGENT = "AndCode"
+        private const val USER_AGENT = "TariffiaCode"
         private val SRI_SHA512 = Regex("^sha512-[A-Za-z0-9+/]+=*$")
         private val LOOPBACK_HOSTS = setOf("127.0.0.1", "localhost", "::1")
 

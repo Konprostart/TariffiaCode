@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 private const val REPOSITORY_PATH = "/repos/Konprostart/TariffiaCode"
 private const val STAR_STATUS_PATH = "/user/starred/Konprostart/TariffiaCode"
-private const val USER_AGENT = "AndCode"
+private const val USER_AGENT = "TariffiaCode"
 
 const val GITHUB_STAR_COUNT_CACHE_TTL_MS = 6 * 60 * 60 * 1000L
 const val GITHUB_STAR_STATUS_CACHE_TTL_MS = 15 * 60 * 1000L

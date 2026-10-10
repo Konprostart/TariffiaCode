@@ -52,7 +52,7 @@ class AntigravityReleaseClientTest {
             )
             val request = server.takeRequest()
             assertEquals("application/vnd.github+json", request.getHeader("Accept"))
-            assertEquals("AndCode", request.getHeader("User-Agent"))
+            assertEquals("TariffiaCode", request.getHeader("User-Agent"))
         }
 
     @Test
