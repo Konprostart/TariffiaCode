@@ -70,7 +70,7 @@ class IconBrandingTest {
 
         for ((layer, image) in listOf("foreground" to foreground, "monochrome" to monochrome)) {
             val mask = opaqueMask(image)
-            val total = mask.sum()
+            val total = countMark(mask)
             assertTrue("$layer must contain mark pixels", total > 0)
 
             val lowerRight = quadrant(mask, image, 1, 1) / total.toDouble()
@@ -138,8 +138,8 @@ class IconBrandingTest {
 
         val logoMask = opaqueMask(logo)
         val foregroundMask = opaqueMask(foreground)
-        val logoTotal = logoMask.sum().toDouble()
-        val foregroundTotal = foregroundMask.sum().toDouble()
+        val logoTotal = countMark(logoMask).toDouble()
+        val foregroundTotal = countMark(foregroundMask).toDouble()
 
         for (qx in 0..1) {
             for (qy in 0..1) {
@@ -160,6 +160,15 @@ class IconBrandingTest {
         val height: Int,
         val pixels: IntArray,
     )
+
+    /** Counts the mark pixels in a mask produced by [opaqueMask]. */
+    private fun countMark(mask: BooleanArray): Int {
+        var count = 0
+        for (i in mask.indices) {
+            if (mask[i]) count++
+        }
+        return count
+    }
 
     /** Decodes an 8-bit truecolor (RGB or RGBA), non-interlaced PNG into ARGB pixels. */
     private fun decodePng(bytes: ByteArray): RgbImage {
