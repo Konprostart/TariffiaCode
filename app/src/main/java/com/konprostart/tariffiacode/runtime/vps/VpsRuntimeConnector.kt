@@ -1,5 +1,6 @@
 package com.konprostart.tariffiacode.runtime.vps
 
+import com.konprostart.tariffiacode.core.ssh.SshFailureDiagnostic
 import com.konprostart.tariffiacode.core.ssh.SshHostKey
 import com.konprostart.tariffiacode.core.ssh.SshPortForward
 import com.konprostart.tariffiacode.core.ssh.SshPortForwardResult
@@ -105,7 +106,8 @@ class VpsRuntimeConnector(
                     VpsConnectOutcome.NeedsHostKeyTrust(result.hostKey)
                 }
             }
-            is SshPortForwardResult.Failure -> VpsConnectOutcome.Failed(result.message)
+            is SshPortForwardResult.Failure ->
+                VpsConnectOutcome.Failed(SshFailureDiagnostic.format(result.message, result.cause, auth))
         }
     }
 

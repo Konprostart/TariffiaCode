@@ -187,6 +187,8 @@ class MinaSshClientTest {
                     verifier = trustAllVerifier(),
                 )
             assertTrue("expected Failure, got $result", result is SshConnectResult.Failure)
-            assertTrue((result as SshConnectResult.Failure).message.contains("NoClassDefFoundError"))
+            val failure = result as SshConnectResult.Failure
+            assertTrue(failure.message.contains("clientFactory() failed"))
+            assertTrue(failure.cause is NoClassDefFoundError)
         }
 }

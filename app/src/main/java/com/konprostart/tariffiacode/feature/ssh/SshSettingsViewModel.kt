@@ -2,6 +2,7 @@ package com.konprostart.tariffiacode.feature.ssh
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.konprostart.tariffiacode.core.ssh.SshFailureDiagnostic
 import com.konprostart.tariffiacode.core.ssh.SshHostKey
 import com.konprostart.tariffiacode.core.ssh.SshSession
 import com.konprostart.tariffiacode.data.ssh.SshAuthType
@@ -9,6 +10,7 @@ import com.konprostart.tariffiacode.data.ssh.SshCredential
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.data.ssh.SshProfileStore
+import com.konprostart.tariffiacode.data.ssh.resolveAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -208,8 +210,16 @@ class SshSettingsViewModel(
             val outcome =
                 runCatching { connections.connect(profile) }
                     .getOrElse { error ->
+                        val auth =
+                            runCatching {
+                                credentials.credential(profile.credentialRef)?.let { profile.resolveAuth(it) }
+                            }.getOrNull()
                         SshConnectionOutcome.Failed(
-                            "${error::class.java.simpleName}: ${error.message ?: "SSH connection failed"}",
+                            SshFailureDiagnostic.format(
+                                "${error::class.java.simpleName}: ${error.message ?: "SSH connection failed"}",
+                                error,
+                                auth,
+                            ),
                         )
                     }
             when (outcome) {

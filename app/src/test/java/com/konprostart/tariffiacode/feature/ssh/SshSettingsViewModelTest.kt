@@ -11,8 +11,9 @@ import com.konprostart.tariffiacode.data.ssh.SshCredential
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.data.ssh.SshProfileStore
-import com.konprostart.tariffiacode.runtime.vps.VpsConnectOutcome
+import com.konprostart.tariffiacode.runtime.RuntimeState
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeConnector
+import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeTarget
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -54,7 +55,9 @@ class SshSettingsViewModelTest {
         ): SshConnectResult = SshConnectResult.Failure("unused in this test")
     }
 
-    private class RecordingForwarder : SshPortForwarder {
+    private class RecordingForwarder(
+        private val failure: SshPortForwardResult.Failure = SshPortForwardResult.Failure("test forwarder reached"),
+    ) : SshPortForwarder {
         var capturedAuth: SshAuth? = null
 
         override suspend fun openLocalForward(
@@ -67,7 +70,7 @@ class SshSettingsViewModelTest {
             connectTimeoutMillis: Long,
         ): SshPortForwardResult {
             capturedAuth = auth
-            return SshPortForwardResult.Failure("test forwarder reached")
+            return failure
         }
     }
 
@@ -178,6 +181,7 @@ class SshSettingsViewModelTest {
     @Test
     fun `saved password survives viewmodel recreation and reaches ssh authentication`() =
         runTest {
+            val password = "test-password"
             val backend = Backend()
             val vm = viewModel(backend)
             vm.newProfile()
@@ -188,7 +192,7 @@ class SshSettingsViewModelTest {
                     port = "22",
                     username = "root",
                     authType = SshAuthType.PASSWORD,
-                    password = "test-password",
+                    password = password,
                 )
             }
             vm.saveProfile()
@@ -199,13 +203,38 @@ class SshSettingsViewModelTest {
             assertTrue(reopenedVm.state.value.form?.credentialAlreadyStored == true)
 
             val reloadedCredentials = SshCredentialStore(load = { backend.credentials }, save = {})
-            val forwarder = RecordingForwarder()
-            val outcome = VpsRuntimeConnector(forwarder, reloadedCredentials).connect(savedProfile)
+            val forwarder =
+                RecordingForwarder(
+                    SshPortForwardResult.Failure(
+                        message = "auth() failed for $password",
+                        cause =
+                            IllegalStateException(
+                                "MINA authentication failed",
+                                java.security.NoSuchAlgorithmException("provider BC cannot load $password"),
+                            ),
+                    ),
+                )
+            val target =
+                VpsRuntimeTarget(
+                    connector = VpsRuntimeConnector(forwarder, reloadedCredentials),
+                    profiles =
+                        SshProfileStore(
+                            load = { backend.profiles },
+                            save = {},
+                            credentials = reloadedCredentials,
+                        ),
+                )
+            target.selectProfile(savedProfile)
+            target.connect()
 
-            assertTrue(outcome is VpsConnectOutcome.Failed)
+            val errorMessage = (target.state.value as? RuntimeState.Failed)?.message.orEmpty()
+            assertTrue(errorMessage.contains("auth() failed"))
+            assertTrue(errorMessage.contains("java.security.NoSuchAlgorithmException"))
+            assertTrue(errorMessage.contains("provider BC cannot load ***"))
+            assertFalse(errorMessage.contains(password))
             val auth = forwarder.capturedAuth as? SshAuth.Password
             assertTrue("password auth must reach the Remote Project SSH forward", auth != null)
-            assertTrue("stored password must be unchanged", auth?.password == "test-password")
+            assertTrue("stored password must be unchanged", auth?.password == password)
         }
 
     @Test

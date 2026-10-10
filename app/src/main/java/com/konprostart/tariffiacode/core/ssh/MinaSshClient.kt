@@ -49,25 +49,30 @@ class MinaSshClient(
             var client: MinaApacheSshClient? = null
             var hostKeyVerifier: FingerprintServerKeyVerifier? = null
             var session: ClientSession? = null
+            var phase = "clientFactory()"
             try {
                 val created = clientFactory()
                 client = created
                 hostKeyVerifier = FingerprintServerKeyVerifier(host, port, verifier)
                 created.serverKeyVerifier = hostKeyVerifier
+                phase = "start()"
                 created.start()
                 // MINA's verify(timeout) blocks until the handshake (including our host-key check)
                 // completes or throws, so no coroutine-future adapter is needed.
+                phase = "connect()"
                 session =
                     created.connect(auth.username, host, port)
                         .verify(connectTimeoutMillis)
                         .session
 
+                phase = "auth()"
                 when (auth) {
                     is SshAuth.Password -> session.addPasswordIdentity(auth.password)
                     is SshAuth.PrivateKey -> session.addPublicKeyIdentity(loadKeyPair(auth))
                 }
                 session.auth().verify(AUTH_TIMEOUT_MILLIS)
 
+                phase = "openShell()"
                 val channel = session.createShellChannel()
                 channel.setUsePty(true)
                 channel.ptyType = "xterm-256color"
@@ -93,9 +98,7 @@ class MinaSshClient(
                 if (untrusted != null) {
                     SshConnectResult.HostKeyUntrusted(untrusted)
                 } else {
-                    // Surface the real cause (class + message) instead of hiding it behind a generic
-                    // failure, so the UI can show what actually went wrong.
-                    SshConnectResult.Failure("${e::class.java.simpleName}: ${e.message ?: "SSH connection failed"}", e)
+                    SshConnectResult.Failure("$phase failed", e)
                 }
             } finally {
                 runCatching { client?.stop() }

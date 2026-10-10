@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -40,6 +41,18 @@ class SshSettingsViewModelConnectTest {
             verifier: SshHostKeyVerifier,
             connectTimeoutMillis: Long,
         ): SshConnectResult = throw NoClassDefFoundError("javax/security/auth/login/CredentialException")
+    }
+
+    private class FailingClient(
+        private val failure: SshConnectResult.Failure,
+    ) : SshConnectionClient {
+        override suspend fun connect(
+            host: String,
+            port: Int,
+            auth: SshAuth,
+            verifier: SshHostKeyVerifier,
+            connectTimeoutMillis: Long,
+        ): SshConnectResult = failure
     }
 
     @Test
@@ -75,5 +88,53 @@ class SshSettingsViewModelConnectTest {
                 "expected an error state, got ${vm.state.value.connection}",
                 vm.state.value.connection is SshConnectionStatus.Error,
             )
+            val message = (vm.state.value.connection as SshConnectionStatus.Error).message
+            assertTrue(message.contains("NoClassDefFoundError"))
+            assertTrue(message.contains("javax/security/auth/login/CredentialException"))
+            assertFalse(message.contains("secret"))
+        }
+
+    @Test
+    fun `connect displays nested SSH causes without exposing the stored password`() =
+        runTest {
+            val password = "ssh-connect-secret"
+            val profile =
+                SshProfile(
+                    id = "p1",
+                    name = "VPS",
+                    host = "example.com",
+                    username = "root",
+                    authType = SshAuthType.PASSWORD,
+                    credentialRef = "ref",
+                )
+            val credentials =
+                SshCredentialStore(
+                    load = { mapOf("ref" to SshCredentialCodec.encode(SshCredential.Password(password))) },
+                    save = {},
+                )
+            val profileStore = SshProfileStore(load = { listOf(profile) }, save = {}, credentials = credentials)
+            val failure =
+                SshConnectResult.Failure(
+                    message = "auth() failed for $password",
+                    cause =
+                        IllegalStateException(
+                            "MINA authentication failed",
+                            java.security.NoSuchAlgorithmException("provider BC cannot load $password"),
+                        ),
+                )
+            val vm =
+                SshSettingsViewModel(
+                    profiles = profileStore,
+                    credentials = credentials,
+                    connections = SshConnectionManager(client = FailingClient(failure), credentials = credentials),
+                )
+
+            vm.connect(profile.id)
+
+            val message = (vm.state.value.connection as? SshConnectionStatus.Error)?.message.orEmpty()
+            assertTrue(message.contains("auth() failed"))
+            assertTrue(message.contains("java.security.NoSuchAlgorithmException"))
+            assertTrue(message.contains("provider BC cannot load ***"))
+            assertFalse(message.contains(password))
         }
 }
