@@ -2,8 +2,7 @@
 url = https://hosted.weblate.org/api/
 
 [project]
-name = AndCode
-slug = and-code
+name = TariffiaCode
 
 [component]
 name = Android Strings
@@ -12,7 +11,7 @@ file_format = aresource
 source_language = en
 filemask = app/src/main/res/values-*/strings.xml
 template = app/src/main/res/values/strings.xml
-repo = https://github.com/yuga-hashimoto/and-code.git
+repo = https://github.com/Konprostart/TariffiaCode.git
 branch = main
 push = 
 merge_style = merge
