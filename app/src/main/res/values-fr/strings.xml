@@ -1191,6 +1191,10 @@
     <string name="app_update_installed_version">Installée : %1$s</string>
     <string name="app_update_available_version">Disponible : %1$s</string>
     <string name="app_update_download_button">Télécharger %1$s</string>
+    <string name="app_update_channel_debug">Débogage</string>
+    <string name="app_update_channel_release">Version</string>
+    <string name="app_update_metadata_unavailable">indisponible</string>
+    <string name="app_update_build_details">Canal : %1$s\nPackage : %2$s\nVersion : %3$s\nCode de version : %4$s\nCommit : %5$s\nTéléchargement : %6$s\nSHA-256 de l’APK : %7$s\nSHA-256 du signataire : %8$s</string>
 <!-- SSH connection profiles (settings). Secrets are stored encrypted; never shown back. -->
     <string name="settings_ssh_row">SSH connections</string>
     <string name="ssh_title">SSH connections</string>

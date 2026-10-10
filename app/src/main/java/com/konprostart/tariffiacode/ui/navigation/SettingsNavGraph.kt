@@ -80,19 +80,27 @@ fun NavGraphBuilder.settingsNavGraph(
             localRuntimeIdleStopEnabled = preferences().localRuntimeIdleStopEnabled,
             onToggleLocalRuntimeIdleStop = appPreferences::setLocalRuntimeIdleStopEnabled,
             appVersion = appVersion,
-            appUpdateContent = {
-                AppUpdateSectionCard(
-                    installedVersion = appVersion,
-                    // Debug builds track the dedicated `debug-latest` channel so they never offer a
-                    // production APK; release keeps the production feed unchanged.
-                    channel =
-                        if (com.konprostart.tariffiacode.BuildConfig.DEBUG) {
-                            com.konprostart.tariffiacode.feature.update.AppUpdateChannel.Debug
-                        } else {
-                            com.konprostart.tariffiacode.feature.update.AppUpdateChannel.Release
-                        },
-                )
-            },
+            appUpdateContent =
+                if (com.konprostart.tariffiacode.BuildConfig.FLAVOR == "github") {
+                    {
+                        AppUpdateSectionCard(
+                            installedVersion = appVersion,
+                            installedVersionCode = com.konprostart.tariffiacode.BuildConfig.VERSION_CODE.toLong(),
+                            githubTokenProvider = {
+                                (context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication).settings.githubToken
+                            },
+                            // Debug builds track the dedicated `debug-latest` channel; production uses releases.
+                            channel =
+                                if (com.konprostart.tariffiacode.BuildConfig.DEBUG) {
+                                    com.konprostart.tariffiacode.feature.update.AppUpdateChannel.Debug
+                                } else {
+                                    com.konprostart.tariffiacode.feature.update.AppUpdateChannel.Release
+                                },
+                        )
+                    }
+                } else {
+                    null
+                },
             devToolsContent =
                 if (com.konprostart.tariffiacode.BuildConfig.DEBUG) {
                     {

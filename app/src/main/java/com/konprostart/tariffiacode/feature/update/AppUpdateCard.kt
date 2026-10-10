@@ -38,13 +38,17 @@ import java.io.File
 @Composable
 fun AppUpdateSectionCard(
     installedVersion: String,
+    installedVersionCode: Long,
     channel: AppUpdateChannel = AppUpdateChannel.Release,
+    githubTokenProvider: () -> String? = { null },
     context: Context = LocalContext.current,
     viewModel: AppUpdateViewModel =
         viewModel(
             factory =
                 AppUpdateViewModel.factory(
                     installedVersion = installedVersion,
+                    installedVersionCode = installedVersionCode,
+                    githubTokenProvider = githubTokenProvider,
                     installer = AndroidAppUpdateInstaller(context.applicationContext),
                     apkFileProvider = { File(context.applicationContext.cacheDir, "updates/tariffiacode-update.apk") },
                     channel = channel,
@@ -143,6 +147,29 @@ fun AppUpdateCard(
             )
             Text(
                 stringResource(R.string.app_update_available_version, check.release.version),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            val channelLabel =
+                stringResource(
+                    if (check.release.channel == AppUpdateChannel.Debug) {
+                        R.string.app_update_channel_debug
+                    } else {
+                        R.string.app_update_channel_release
+                    },
+                )
+            Text(
+                stringResource(
+                    R.string.app_update_build_details,
+                    channelLabel,
+                    check.release.applicationId,
+                    check.release.version,
+                    check.release.versionCode?.toString() ?: stringResource(R.string.app_update_metadata_unavailable),
+                    check.release.commitSha ?: stringResource(R.string.app_update_metadata_unavailable),
+                    check.release.apkUrl,
+                    check.release.sha256,
+                    check.release.signerSha256 ?: stringResource(R.string.app_update_metadata_unavailable),
+                ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )

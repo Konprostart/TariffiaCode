@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import java.security.MessageDigest
 
 /** A published TariffiaCode APK update found on GitHub Releases. */
 data class AppUpdateRelease(
@@ -19,6 +20,11 @@ data class AppUpdateRelease(
     val sha256: String,
     /** Expected APK size in bytes when GitHub reports it; a cheap pre-hash truncation check. */
     val sizeBytes: Long? = null,
+    val channel: AppUpdateChannel = AppUpdateChannel.Release,
+    val applicationId: String = channel.applicationId,
+    val versionCode: Long? = null,
+    val commitSha: String? = null,
+    val signerSha256: String? = null,
 )
 
 /**
@@ -31,14 +37,20 @@ data class AppUpdateRelease(
  *   `tariffiacode-debug.apk`. Prereleases are allowed here (the channel *is* a prerelease).
  */
 enum class AppUpdateChannel(
+    val channelId: String,
+    val applicationId: String,
     val releasesEndpoint: String,
     val allowPrerelease: Boolean,
 ) {
     Release(
+        channelId = "release",
+        applicationId = "com.konprostart.tariffiacode",
         releasesEndpoint = "https://api.github.com/repos/Konprostart/TariffiaCode/releases",
         allowPrerelease = false,
     ),
     Debug(
+        channelId = "debug",
+        applicationId = "com.konprostart.tariffiacode.debug",
         // The single dedicated debug release; the client reads this tag directly.
         releasesEndpoint = "https://api.github.com/repos/Konprostart/TariffiaCode/releases/tags/debug-latest",
         allowPrerelease = true,
@@ -50,6 +62,12 @@ enum class AppUpdateChannel(
         when (this) {
             Release -> "tariffiacode-${tag.trim()}-release.apk"
             Debug -> "tariffiacode-debug.apk"
+        }
+
+    fun manifestAssetName(tag: String): String =
+        when (this) {
+            Release -> "tariffiacode-${tag.trim()}-update.json"
+            Debug -> "tariffiacode-debug-update.json"
         }
 
     /** True when [tag] belongs to this channel (guards against cross-channel assets/versions). */
@@ -88,21 +106,77 @@ sealed interface AppUpdateCheck {
  * [android.os.NetworkOnMainThreadException]. Mirrors how
  * [com.konprostart.tariffiacode.runtime.local.LocalRuntimeReleaseClient] performs its fetch.
  */
-private suspend fun defaultFetchRelease(endpoint: String): String =
+private data class DefaultReleasePayload(
+    val body: String,
+    val repositoryIsPrivate: Boolean,
+)
+
+private data class GitHubApiResponse(
+    val code: Int,
+    val body: String,
+)
+
+private suspend fun defaultFetchRelease(
+    endpoint: String,
+    githubToken: String?,
+    json: Json,
+): DefaultReleasePayload =
     withContext(Dispatchers.IO) {
-        val request =
-            Request.Builder()
-                // Metadata comes only from the GitHub API host over HTTPS.
-                .url(requireGitHubApiEndpoint(endpoint))
-                .header("Accept", "application/vnd.github+json")
-                .header("User-Agent", "TariffiaCode")
-                .get()
-                .build()
-        // HTTPS + GitHub-API-host only, enforced again per redirect hop by the client.
-        AppUpdateHttp.apiClient().newCall(request).execute().use { response ->
-            require(response.isSuccessful) { "TariffiaCode release check failed with HTTP ${response.code}" }
-            requireNotNull(response.body) { "TariffiaCode release response had no body" }.string()
-        }
+        val repositoryEndpoint = endpoint.substringBefore("/releases")
+        val anonymousRepository = fetchGitHubApiJson(repositoryEndpoint, null)
+        val isPrivate =
+            if (anonymousRepository.code in 200..299) {
+                json.decodeFromString<GitHubRepositoryDto>(anonymousRepository.body).isPrivate
+            } else if (anonymousRepository.code == 404) {
+                val token =
+                    githubToken?.trim()?.takeIf(String::isNotEmpty)
+                        ?: error("GitHub repository is private or unavailable; connect an account with repository access")
+                val authenticatedRepository = fetchGitHubApiJson(repositoryEndpoint, token)
+                require(authenticatedRepository.code in 200..299) {
+                    "GitHub repository access failed with HTTP ${authenticatedRepository.code}"
+                }
+                json.decodeFromString<GitHubRepositoryDto>(authenticatedRepository.body).isPrivate
+            } else {
+                error("GitHub repository check failed with HTTP ${anonymousRepository.code}")
+            }
+        val token = privateRepositoryToken(isPrivate, githubToken)
+        val releases = fetchGitHubApiJson(endpoint, token)
+        require(releases.code in 200..299) { "TariffiaCode release check failed with HTTP ${releases.code}" }
+        DefaultReleasePayload(releases.body, isPrivate)
+    }
+
+private fun fetchGitHubApiJson(
+    endpoint: String,
+    githubToken: String?,
+): GitHubApiResponse {
+    val request =
+        Request.Builder()
+            // Metadata comes only from the GitHub API host over HTTPS.
+            .url(requireGitHubApiEndpoint(endpoint))
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "TariffiaCode")
+            .withGitHubAuthorization(githubToken)
+            .get()
+            .build()
+    // HTTPS + GitHub-API-host only, enforced again per redirect hop by the client.
+    return AppUpdateHttp.apiClient().newCall(request).execute().use { response ->
+        GitHubApiResponse(response.code, response.body?.string().orEmpty())
+    }
+}
+
+@Serializable
+private data class GitHubRepositoryDto(
+    @SerialName("private") val isPrivate: Boolean,
+)
+
+internal fun privateRepositoryToken(
+    repositoryIsPrivate: Boolean,
+    token: String?,
+): String? =
+    if (repositoryIsPrivate) {
+        token?.trim()?.takeIf(String::isNotEmpty)
+    } else {
+        null
     }
 
 /**
@@ -117,20 +191,34 @@ private suspend fun defaultFetchRelease(endpoint: String): String =
  */
 class AppUpdateReleaseClient(
     private val channel: AppUpdateChannel = AppUpdateChannel.Release,
-    private val fetchRelease: suspend () -> String = { defaultFetchRelease(channel.releasesEndpoint) },
+    private val githubTokenProvider: () -> String? = { null },
+    private val fetchRelease: (suspend () -> String)? = null,
     private val json: Json =
         Json {
             ignoreUnknownKeys = true
             isLenient = true
         },
+    private val fetchAsset: (suspend (String) -> ByteArray)? = null,
 ) {
+    @Volatile
+    private var repositoryIsPrivate = false
+
+    internal fun tokenForPrivateAssets(): String? = privateRepositoryToken(repositoryIsPrivate, githubTokenProvider())
+
     /**
      * @return [AppUpdateCheck.Available] when a newer release on this channel, carrying the channel's
      *   expected APK asset, exists; else [AppUpdateCheck.UpToDate]. Throws on network/API/parse
      *   failures; callers surface that as an error state.
      */
-    suspend fun check(currentVersion: String): AppUpdateCheck {
-        val payload = fetchRelease()
+    suspend fun check(
+        currentVersion: String,
+        currentVersionCode: Long = 0,
+    ): AppUpdateCheck {
+        val payload =
+            fetchRelease?.invoke()
+                ?: defaultFetchRelease(channel.releasesEndpoint, githubTokenProvider(), json)
+                    .also { repositoryIsPrivate = it.repositoryIsPrivate }
+                    .body
         // The GitHub release-tag endpoint returns a single object; the list endpoint returns an array.
         // Both are handled so one client serves either channel shape.
         val releases =
@@ -159,7 +247,7 @@ class AppUpdateReleaseClient(
 
         val (dto, latestVersion) = latest
         val normalizedCurrent = normalizeRuntimeVersion(currentVersion)
-        if (compareRuntimeVersions(latestVersion, normalizedCurrent) <= 0) {
+        if (compareRuntimeVersions(latestVersion, normalizedCurrent) < 0) {
             return AppUpdateCheck.UpToDate(normalizedCurrent, latestVersion)
         }
 
@@ -180,6 +268,20 @@ class AppUpdateReleaseClient(
         val sha256 =
             sha256FromDigest(asset.digest)
                 ?: error("TariffiaCode release ${dto.tagName} asset $assetName has no sha256 digest to verify against")
+        val manifestAssetName = channel.manifestAssetName(dto.tagName)
+        val manifestAsset = dto.assets.firstOrNull { it.name == manifestAssetName }
+        val manifest = manifestAsset?.let { fetchAndValidateManifest(latestVersion, assetName, sha256, it) }
+        if (manifest == null &&
+            (channel == AppUpdateChannel.Debug || compareRuntimeVersions(latestVersion, LEGACY_RELEASE_METADATA_MAX_VERSION) > 0)
+        ) {
+            error("TariffiaCode release ${dto.tagName} is missing verified update metadata")
+        }
+        if (manifest != null && manifest.versionCode <= currentVersionCode) {
+            return AppUpdateCheck.UpToDate(normalizedCurrent, latestVersion)
+        }
+        if (manifest == null && compareRuntimeVersions(latestVersion, normalizedCurrent) <= 0) {
+            return AppUpdateCheck.UpToDate(normalizedCurrent, latestVersion)
+        }
         return AppUpdateCheck.Available(
             normalizedCurrent,
             AppUpdateRelease(
@@ -187,8 +289,44 @@ class AppUpdateReleaseClient(
                 apkUrl = withDownloadParam(downloadUrl),
                 sha256 = sha256,
                 sizeBytes = asset.sizeBytes,
+                channel = channel,
+                applicationId = manifest?.applicationId ?: channel.applicationId,
+                versionCode = manifest?.versionCode,
+                commitSha = manifest?.commitSha ?: dto.targetCommitish?.takeIf(COMMIT_SHA::matches),
+                signerSha256 = manifest?.signerSha256,
             ),
         )
+    }
+
+    private suspend fun fetchAndValidateManifest(
+        releaseVersion: String,
+        apkAssetName: String,
+        apkSha256: String,
+        manifestAsset: GitHubReleaseAssetDto,
+    ): AppUpdateManifestDto {
+        val expectedManifestDigest =
+            sha256FromDigest(manifestAsset.digest)
+                ?: error("Update manifest ${manifestAsset.name} has no GitHub SHA-256 digest")
+        val manifestUrl = manifestAsset.downloadUrl.toHttpUrl()
+        require(manifestUrl.isHttps && manifestUrl.host == AppUpdateHttp.ASSET_HOST) {
+            "Update manifest URL must be HTTPS on ${AppUpdateHttp.ASSET_HOST}"
+        }
+        val bytes =
+            fetchAsset?.invoke(withDownloadParam(manifestUrl))
+                ?: defaultFetchAsset(withDownloadParam(manifestUrl), tokenForPrivateAssets())
+        val actualManifestDigest = sha256Hex(bytes)
+        require(actualManifestDigest == expectedManifestDigest) { "Update manifest SHA-256 mismatch" }
+        val manifest = json.decodeFromString<AppUpdateManifestDto>(bytes.decodeToString())
+        require(manifest.schemaVersion == MANIFEST_SCHEMA_VERSION) { "Unsupported update manifest schema" }
+        require(manifest.channel == channel.channelId) { "Update manifest channel mismatch" }
+        require(manifest.applicationId == channel.applicationId) { "Update manifest package ID mismatch" }
+        require(manifest.apkAssetName == apkAssetName) { "Update manifest APK asset mismatch" }
+        require(sha256FromDigest("sha256:${manifest.apkSha256}") == apkSha256) { "Update manifest APK digest mismatch" }
+        require(normalizeRuntimeVersion(manifest.versionName) == releaseVersion) { "Update manifest version mismatch" }
+        require(manifest.versionCode > 0) { "Update manifest versionCode is invalid" }
+        require(COMMIT_SHA.matches(manifest.commitSha)) { "Update manifest commit SHA is invalid" }
+        require(SHA256_HEX.matches(manifest.signerSha256)) { "Update manifest signer SHA-256 is invalid" }
+        return manifest
     }
 
     /** Extracts the lowercase hex of a GitHub `digest` (`sha256:<hex>`), or null when unusable. */
@@ -209,6 +347,7 @@ class AppUpdateReleaseClient(
     private data class GitHubReleaseDto(
         @SerialName("tag_name") val tagName: String,
         @SerialName("name") val name: String? = null,
+        @SerialName("target_commitish") val targetCommitish: String? = null,
         @SerialName("draft") val draft: Boolean = false,
         @SerialName("prerelease") val prerelease: Boolean = false,
         @SerialName("assets") val assets: List<GitHubReleaseAssetDto> = emptyList(),
@@ -223,6 +362,19 @@ class AppUpdateReleaseClient(
         @SerialName("size") val sizeBytes: Long? = null,
     )
 
+    @Serializable
+    private data class AppUpdateManifestDto(
+        val schemaVersion: Int,
+        val channel: String,
+        val applicationId: String,
+        val versionName: String,
+        val versionCode: Long,
+        val commitSha: String,
+        val apkAssetName: String,
+        val apkSha256: String,
+        val signerSha256: String,
+    )
+
     private class ParsedVersion(private val version: String) : Comparable<ParsedVersion> {
         override fun compareTo(other: ParsedVersion): Int = compareRuntimeVersions(version, other.version)
     }
@@ -232,5 +384,37 @@ class AppUpdateReleaseClient(
         val RELEASES_ENDPOINT: HttpUrl = AppUpdateChannel.Release.releasesEndpoint.toHttpUrl()
 
         private val SHA256_HEX = Regex("[0-9a-f]{64}")
+        private val COMMIT_SHA = Regex("[0-9a-f]{40}|[0-9a-f]{64}")
+        private const val MANIFEST_SCHEMA_VERSION = 1
+        private const val LEGACY_RELEASE_METADATA_MAX_VERSION = "1.2.34"
     }
 }
+
+private suspend fun defaultFetchAsset(
+    url: String,
+    githubToken: String?,
+): ByteArray =
+    withContext(Dispatchers.IO) {
+        val request =
+            Request.Builder()
+                .url(url)
+                .header("User-Agent", "TariffiaCode")
+                .withGitHubAuthorization(githubToken)
+                .get()
+                .build()
+        AppUpdateHttp.assetClient().newCall(request).execute().use { response ->
+            require(response.isSuccessful) { "Update metadata download failed with HTTP ${response.code}" }
+            val body = requireNotNull(response.body) { "Update metadata response was empty" }
+            require(body.contentLength() in 1..MAX_MANIFEST_BYTES) { "Update manifest size is invalid" }
+            body.bytes()
+        }
+    }
+
+internal fun Request.Builder.withGitHubAuthorization(token: String?): Request.Builder {
+    token?.trim()?.takeIf { it.isNotEmpty() }?.let { header("Authorization", "Bearer $it") }
+    return this
+}
+
+private fun sha256Hex(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
+private const val MAX_MANIFEST_BYTES = 16 * 1024L
