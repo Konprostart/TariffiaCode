@@ -21,7 +21,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check-signing-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - name: Check F-Droid signing secrets
+        id: check
+        env:
+          F_DROID_REPO_KEYSTORE_BASE64: ${{ secrets.F_DROID_REPO_KEYSTORE_BASE64 }}
+          F_DROID_REPO_KEYSTORE_PASSWORD: ${{ secrets.F_DROID_REPO_KEYSTORE_PASSWORD }}
+          F_DROID_REPO_KEY_ALIAS: ${{ secrets.F_DROID_REPO_KEY_ALIAS }}
+          F_DROID_REPO_KEY_PASSWORD: ${{ secrets.F_DROID_REPO_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          required=(
+            F_DROID_REPO_KEYSTORE_BASE64
+            F_DROID_REPO_KEYSTORE_PASSWORD
+            F_DROID_REPO_KEY_ALIAS
+            F_DROID_REPO_KEY_PASSWORD
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::warning title=Publish F-Droid repository skipped::Signing secrets are not configured (missing: ${missing[*]}). The F-Droid repository index will not be generated or deployed."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "All F-Droid signing secrets are configured."
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
   publish:
+    needs: check-signing-secrets
+    if: needs.check-signing-secrets.outputs.ready == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -84,6 +120,8 @@ jobs:
           F_DROID_REPO_KEY_PASSWORD: ${{ secrets.F_DROID_REPO_KEY_PASSWORD }}
         run: |
           set -euo pipefail
+          # Safety net: this job only runs when check-signing-secrets reported ready=true.
+          # Reaching a failure here means the secrets changed mid-run; never publish unsigned.
           test -n "$F_DROID_REPO_KEYSTORE_BASE64"
           test -n "$F_DROID_REPO_KEYSTORE_PASSWORD"
           test -n "$F_DROID_REPO_KEY_ALIAS"
