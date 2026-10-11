@@ -125,7 +125,7 @@ jobs:
             -storepass "$DEBUG_KEYSTORE_PASSWORD" -alias "$DEBUG_KEY_ALIAS" 2>/dev/null \
             | sed -n 's/^[[:space:]]*SHA256: //p' | tr -d ':' | tr 'A-Z' 'a-z' | head -1)"
           ACTUAL="$("$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$APK" 2>/dev/null \
-            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+            | sed -n 's/^.*certificate SHA-256 digest: //p' | tr -d ':\r' | tr 'A-Z' 'a-z' | head -1)"
           echo "expected debug signer: $EXPECTED"
           echo "actual   debug signer: $ACTUAL"
           if [ -z "$EXPECTED" ] || [ "$EXPECTED" != "$ACTUAL" ]; then

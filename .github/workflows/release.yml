@@ -138,7 +138,11 @@ jobs:
           echo "----- apksigner verify --verbose --print-certs (stdout + stderr) -----"
           cat "$APKSIGNER_OUT"
           echo "----- end apksigner output -----"
-          ACTUAL="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$APKSIGNER_OUT" | head -1)"
+          # apksigner labels the digest by signature scheme ("Signer #1 certificate SHA-256 digest:"
+          # for v1/v2, "V3.0 Signer: certificate SHA-256 digest:" for an APK signed with v3), so match
+          # on the label only. GitHub's build-tools 37.0.0 reports the v3 form, which the old
+          # "Signer #1" pattern missed and turned a correctly signed APK into a failed release.
+          ACTUAL="$(sed -n 's/^.*certificate SHA-256 digest: //p' "$APKSIGNER_OUT" | tr -d ':\r' | tr 'A-Z' 'a-z' | head -1)"
           echo "apksigner APK SHA-256       : ${ACTUAL:-<empty>}"
           if [ -z "$EXPECTED" ]; then
             echo "::error title=Release keystore unreadable::keytool returned no certificate for the configured alias, so the APK cannot be checked against it. Verify RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD and RELEASE_KEY_ALIAS; the alias is case-sensitive and must exist in the keystore." >&2
