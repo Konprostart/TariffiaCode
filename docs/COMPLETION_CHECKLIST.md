@@ -15,9 +15,10 @@
 - [x] Home / Chat / Workspaces / Activity / Settingsの5画面
 - [x] RuntimeRegistryによるAndroidローカル・PCリモートの統一
 - [x] 巨大なAppViewModelを機能別ViewModelへ分割
-- [~] 日本語・英語の完全対応（UI表示文字列はほぼ resources 化。Context を持たないビジネスロジック層（LocalRuntimeManager / LocalRuntimeUpdater / LocalRuntimeCommandRunner / LocalRuntimeDiagnostics / LocalRuntimeTarget / RuntimeActivityRepository / RuntimeCatalogRepository / 一部ViewModelのフォールバックエラー文言）は日本語ハードコードのまま）
+- [x] 多言語対応（`values` を基準に values-ja / values-ar / values-es / values-fr / values-pt-rBR / values-ru / values-zh-rCN の計8言語。UI表示文字列は resources 化済みで、欠落キーは `.github/workflows/i18n-check.yml` が CI で検出する）
+- [~] Context を持たないビジネスロジック層の文字列外部化（LocalRuntimeManager / LocalRuntimeUpdater / LocalRuntimeCommandRunner / LocalRuntimeDiagnostics / LocalRuntimeTarget / RuntimeActivityRepository / RuntimeCatalogRepository / 一部ViewModelのフォールバックエラー文言）
 - [ ] 320dp・一般端末・タブレット幅のUI試験
-- [ ] Compose UI Testによる主要フロー検証
+- [x] Compose UI Testによる主要フロー検証（`app/src/androidTest` に計13本の計測テスト、うち9本が Compose ルールを使用）
 
 ## B. OpenCodeリモートクライアント
 
@@ -92,17 +93,25 @@
 - [ ] API 34実機またはエミュレーター検証
 - [x] API 36 ARM64エミュレーター検証
 - [ ] Xiaomi Android 16物理端末検証
-- [ ] バッテリー・メモリ・容量ベンチマーク
-- [~] セキュリティレビュー（NSC・app-layer cleartext gate・通知アクション）
+- [ ] バッテリー・メモリ・容量ベンチマーク（手順は `scripts/battery_benchmark.sh` に用意済み。実測値の取得と記録が未実施）
+- [~] セキュリティレビュー（NSC・app-layer cleartext gate・通知アクション。手順は `docs/DEVICE_VALIDATION.md` に定義済み。実機での確認が未実施）
 - [x] 依存ライセンス一覧・SBOM（THIRD_PARTY_NOTICES.md）
 - [x] 署名済みRelease APK/AAB手順（docs/RELEASE.md）
 - [ ] Critical / Importantゼロの独立レビュー
-- [ ] `main`へ統合
-- [ ] GitHub公開リポジトリ`TariffiaCode`作成・push
+- [x] `main`へ統合
+- [x] GitHub公開リポジトリ`TariffiaCode`作成・push
 
 ## 現在の完了判定
 
 主要機能（ローカル/リモート、承認、通知、プロバイダキー、SAF取込、構造化ツールタイムライン、
 セッション改名・削除、QR/LAN接続、実行先間ハンドオフ）は実装済み。
-残課題は実機マトリクス検証、Compose UIテスト、公開レビュー、添付ファイル対応、
-Context を持たないランタイム層に残る日本語ハードコード文言の解消。
+残課題は実機マトリクス検証（API 26 / 34 / Xiaomi Android 16 と実測ベンチマーク）、
+UI 幅の試験、Critical / Important ゼロの独立レビュー、添付ファイル対応、
+および Context を持たないランタイム層に残る文字列外部化の確認。
+
+## 更新履歴
+
+- 2026-10-11: 実装状況の実態に合わせて更新。多言語対応は日英限定ではなく
+  8言語（`values` 基準に ja / ar / es / fr / pt-rBR / ru / zh-rCN）、Compose UI テストは
+  実装済み、`main` 統合と公開リポジトリ作成も完了しているため `[x]` に変更。
+  実機検証とベンチマーク・独立レビューは未実施のため `[ ]` のまま維持。
