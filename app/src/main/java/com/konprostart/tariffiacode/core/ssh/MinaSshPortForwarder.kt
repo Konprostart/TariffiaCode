@@ -85,10 +85,7 @@ class MinaSshPortForwarder(
                     session = connectedSession
 
                     phase = "auth()"
-                    when (auth) {
-                        is SshAuth.Password -> connectedSession.addPasswordIdentity(auth.password)
-                        is SshAuth.PrivateKey -> connectedSession.addPublicKeyIdentity(SshKeyPairs.load(auth))
-                    }
+                    connectedSession.applySshAuth(auth)
                     connectedSession.auth().verify(AUTH_TIMEOUT_MILLIS)
 
                     // Bind an ephemeral port on the device's loopback; the OS assigns the real port,
