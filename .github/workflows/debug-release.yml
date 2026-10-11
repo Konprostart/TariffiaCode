@@ -105,8 +105,13 @@ jobs:
           ./gradlew :app:assembleGithubDebug
           APK="app/build/outputs/apk/github/debug/app-github-debug.apk"
           test -f "$APK" || { echo "debug APK not produced at $APK" >&2; exit 1; }
+          # Resolve the newest build-tools once, the same way release.yml does. The runner image
+          # ships several versions, so a `build-tools/*/aapt2` glob expands to multiple paths and the
+          # shell passes the extras as arguments, which fails and (behind 2>/dev/null) silently left
+          # PKG empty - the v1.2.35 debug run failed here with "Unexpected debug package id: ''".
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           # Verify the packaged applicationId is the debug one.
-          PKG="$("$ANDROID_HOME"/build-tools/*/aapt2 dump badging "$APK" 2>/dev/null | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -1 || true)"
+          PKG="$("$BUILD_TOOLS/aapt2" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -1 || true)"
           if [ "$PKG" != "com.konprostart.tariffiacode.debug" ]; then
             echo "Unexpected debug package id: '$PKG'" >&2
             exit 1
@@ -120,11 +125,12 @@ jobs:
           DEBUG_KEY_ALIAS: ${{ secrets.DEBUG_KEY_ALIAS }}
         run: |
           APK="app/build/outputs/apk/github/debug/app-github-debug.apk"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           # Expected signer cert SHA-256 taken from the configured stable debug keystore.
           EXPECTED="$("$JAVA_HOME"/bin/keytool -list -v -keystore "$DEBUG_KEYSTORE_FILE" \
             -storepass "$DEBUG_KEYSTORE_PASSWORD" -alias "$DEBUG_KEY_ALIAS" 2>/dev/null \
             | sed -n 's/^[[:space:]]*SHA256: //p' | tr -d ':' | tr 'A-Z' 'a-z' | head -1)"
-          ACTUAL="$("$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$APK" 2>/dev/null \
+          ACTUAL="$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" \
             | sed -n 's/^.*certificate SHA-256 digest: //p' | tr -d ':\r' | tr 'A-Z' 'a-z' | head -1)"
           echo "expected debug signer: $EXPECTED"
           echo "actual   debug signer: $ACTUAL"
