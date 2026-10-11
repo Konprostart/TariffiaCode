@@ -122,14 +122,25 @@ jobs:
           test -f "$APK" || { echo "Signed production APK missing: $APK" >&2; exit 1; }
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           EXPECTED="$("$JAVA_HOME/bin/keytool" -list -v -keystore "$RELEASE_KEYSTORE_FILE" \
-            -storepass "$RELEASE_KEYSTORE_PASSWORD" -alias "$RELEASE_KEY_ALIAS" 2>/dev/null \
+            -storepass "$RELEASE_KEYSTORE_PASSWORD" -alias "$RELEASE_KEY_ALIAS" \
             | sed -n 's/^[[:space:]]*SHA256: //p' | tr -d ':' | tr 'A-Z' 'a-z' | head -1)"
-          ACTUAL="$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" 2>/dev/null \
+          ACTUAL="$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" \
             | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
-          test -n "$EXPECTED" && test "$EXPECTED" = "$ACTUAL" || {
-            echo "Production APK signer does not match the configured release keystore" >&2
+          echo "keytool certificate SHA-256 : ${EXPECTED:-<empty>}"
+          echo "apksigner APK SHA-256       : ${ACTUAL:-<empty>}"
+          if [ -z "$EXPECTED" ]; then
+            echo "::error title=Release keystore unreadable::keytool returned no certificate for the configured alias, so the APK cannot be checked against it. Verify RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD and RELEASE_KEY_ALIAS; the alias is case-sensitive and must exist in the keystore." >&2
             exit 1
-          }
+          fi
+          if [ -z "$ACTUAL" ]; then
+            echo "::error title=APK signer missing::apksigner reported no signer certificate on $APK, so the production APK is not signed with the release signing config." >&2
+            exit 1
+          fi
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error title=Signer mismatch::The production APK is signed with a different key than the release keystore. keystore=$EXPECTED apk=$ACTUAL. Do not rotate the key: existing installs could no longer update." >&2
+            exit 1
+          fi
+          echo "Signer verified: $ACTUAL"
           TAG="${{ steps.tag.outputs.tag }}"
           python scripts/create_app_update_manifest.py \
             --apk "$APK" \
