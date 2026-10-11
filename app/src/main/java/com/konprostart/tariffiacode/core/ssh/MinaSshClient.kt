@@ -15,7 +15,6 @@ import org.apache.sshd.common.config.keys.PublicKeyEntry
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.net.SocketAddress
-import java.security.KeyPair
 import java.security.PublicKey
 import java.util.Base64
 import org.apache.sshd.client.SshClient as MinaApacheSshClient
@@ -66,10 +65,7 @@ class MinaSshClient(
                         .session
 
                 phase = "auth()"
-                when (auth) {
-                    is SshAuth.Password -> session.addPasswordIdentity(auth.password)
-                    is SshAuth.PrivateKey -> session.addPublicKeyIdentity(loadKeyPair(auth))
-                }
+                session.applySshAuth(auth)
                 session.auth().verify(AUTH_TIMEOUT_MILLIS)
 
                 phase = "openShell()"
@@ -104,8 +100,6 @@ class MinaSshClient(
                 runCatching { client?.stop() }
             }
         }
-
-    private fun loadKeyPair(auth: SshAuth.PrivateKey): KeyPair = SshKeyPairs.load(auth)
 
     private companion object {
         const val AUTH_TIMEOUT_MILLIS = 30_000L

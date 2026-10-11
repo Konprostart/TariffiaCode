@@ -43,10 +43,7 @@ class MinaSshShellClient(
                         .verify(connectTimeoutMillis)
                         .session
 
-                when (auth) {
-                    is SshAuth.Password -> session.addPasswordIdentity(auth.password)
-                    is SshAuth.PrivateKey -> session.addPublicKeyIdentity(SshKeyPairs.load(auth))
-                }
+                session.applySshAuth(auth)
                 session.auth().verify(AUTH_TIMEOUT_MILLIS)
 
                 val channel = session.createShellChannel()
