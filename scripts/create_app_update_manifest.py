@@ -30,10 +30,17 @@ def parse_apk_badging(output: str) -> tuple[str, int, str]:
 def parse_signer_sha256(output: str) -> str:
     if "Verifies" not in output:
         raise ValueError("apksigner did not verify the APK")
-    matches = re.findall(r"^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]{64})$", output, re.MULTILINE)
-    if len(matches) != 1:
-        raise ValueError(f"expected exactly one APK signer, found {len(matches)}")
-    return matches[0].lower()
+    # apksigner labels the digest by signature scheme: "Signer #1 certificate SHA-256 digest:" for a
+    # v1/v2 signer, and "V3.0 Signer: certificate SHA-256 digest:" for a v3 signer (which is what
+    # GitHub's build-tools 37.0.0 reports for the release APK). Match the label only so either form
+    # is read; "public key SHA-256 digest" lines are excluded by the word "certificate". An APK
+    # signed by more than one scheme with the same key is still one signer, so deduplicate the
+    # digests before requiring exactly one.
+    matches = re.findall(r"^\S.*\bcertificate SHA-256 digest: ([0-9a-fA-F]{64})$", output, re.MULTILINE)
+    unique = {match.lower() for match in matches}
+    if len(unique) != 1:
+        raise ValueError(f"expected exactly one APK signer, found {len(unique)}")
+    return unique.pop()
 
 
 def validate_package_id(channel: str, package_id: str) -> None:

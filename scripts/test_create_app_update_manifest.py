@@ -28,6 +28,40 @@ class AppUpdateManifestTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_signer_sha256("DOES NOT VERIFY")
 
+    def test_parses_v3_signer_label_and_ignores_the_public_key_digest(self) -> None:
+        # Build-tools 37.0.0 reports a v3-signed APK with a "V3.0 Signer:" prefix rather than
+        # "Signer #1", and also prints a same-shaped "public key SHA-256 digest" line that must not
+        # be mistaken for the certificate digest.
+        digest = "e" * 64
+        output = (
+            "Verifies\n"
+            "Verified using v2 scheme (APK Signature Scheme v2): true\n"
+            "Verified using v3 scheme (APK Signature Scheme v3): true\n"
+            "Number of signers: 1\n"
+            "V3.0 Signer: certificate DN: CN=TariffiaCode Release\n"
+            f"V3.0 Signer: certificate SHA-256 digest: {digest.upper()}\n"
+            f"V3.0 Signer: public key SHA-256 digest: {'b' * 64}\n"
+        )
+        self.assertEqual(digest, parse_signer_sha256(output))
+
+    def test_treats_one_key_across_schemes_as_a_single_signer(self) -> None:
+        digest = "a" * 64
+        output = (
+            "Verifies\n"
+            f"Signer #1 certificate SHA-256 digest: {digest}\n"
+            f"V3.0 Signer: certificate SHA-256 digest: {digest}\n"
+        )
+        self.assertEqual(digest, parse_signer_sha256(output))
+
+    def test_rejects_two_distinct_signers(self) -> None:
+        output = (
+            "Verifies\n"
+            f"V3.0 Signer: certificate SHA-256 digest: {'a' * 64}\n"
+            f"V3.0 Signer: certificate SHA-256 digest: {'b' * 64}\n"
+        )
+        with self.assertRaisesRegex(ValueError, "found 2"):
+            parse_signer_sha256(output)
+
     def test_rejects_wrong_channel_package_id(self) -> None:
         with self.assertRaisesRegex(ValueError, "debug APK package"):
             validate_package_id("debug", "com.konprostart.tariffiacode")
