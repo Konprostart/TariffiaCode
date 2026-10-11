@@ -20,6 +20,15 @@ import java.util.zip.Inflater
 class IconBrandingTest {
     private val tariffiaNavy = 0x142435
 
+    /** Debug-only launcher background, from `app/src/debug/res/values/colors.xml`. */
+    private val debugAmber = 0xB45309
+
+    /**
+     * Share of mark pixels that must fall in the lower-right quadrant for the silhouette to be
+     * the TC C bowl. The retired AC artwork measures ~0.29, so this threshold rejects it.
+     */
+    private val TC_LOWER_RIGHT_SHARE = 0.33
+
     @Test
     fun `release launcher icon uses TariffiaCode branding`() {
         val root = repositoryRoot()
@@ -79,7 +88,7 @@ class IconBrandingTest {
             // TC: solid C bowl dominates the lower-right; the old AC art did not.
             assertTrue(
                 "$layer lower-right mass must be the TC C bowl (was $lowerRight)",
-                lowerRight > 0.33,
+                lowerRight > TC_LOWER_RIGHT_SHARE,
             )
             // TC: the C opening leaves the upper-left lighter than the old, more even AC art.
             assertTrue(
@@ -168,6 +177,79 @@ class IconBrandingTest {
             if (mask[i]) count++
         }
         return count
+    }
+
+    /**
+     * The debug source set ships its own launcher bitmaps, and they are published as a rolling
+     * prerelease by `.github/workflows/debug-release.yml`. They carry the same TC mark as the
+     * release set, only the background differs: the debug variant bakes its amber
+     * `#B45309` (see `app/src/debug/res/values/colors.xml`) into the legacy bitmaps.
+     *
+     * Without this check a stale AC artwork in `app/src/debug/res` would ship in the prerelease
+     * while every release assertion stayed green, because the other checks only read
+     * `app/src/main/res`.
+     */
+    @Test
+    fun `debug launcher mark is the TC ligature and not the retired AC artwork`() {
+        val root = repositoryRoot()
+        for (layer in listOf("ic_launcher_foreground.png", "ic_launcher_monochrome.png")) {
+            val debug = decodePng(root.resolve("app/src/debug/res/mipmap-xxxhdpi/$layer").readBytes())
+            val mask = opaqueMask(debug)
+            val total = countMark(mask)
+            assertTrue("debug $layer must contain mark pixels", total > 0)
+
+            val lowerRight = quadrant(mask, debug, 1, 1) / total.toDouble()
+            assertTrue(
+                "debug $layer lower-right mass must be the TC C bowl (was $lowerRight)",
+                lowerRight > TC_LOWER_RIGHT_SHARE,
+            )
+        }
+    }
+
+    /** The debug legacy bitmaps keep the debug amber background, not the release navy. */
+    @Test
+    fun `debug legacy launcher icon keeps the debug amber background`() {
+        val root = repositoryRoot()
+        val image = decodePng(root.resolve("app/src/debug/res/mipmap-xxxhdpi/ic_launcher.png").readBytes())
+        assertEquals("debug launcher icon must be square 192x192", 192, image.width)
+        assertEquals("debug launcher icon must be square 192x192", 192, image.height)
+        assertEquals(
+            "debug launcher icon background must be the debug amber",
+            debugAmber,
+            dominantOpaqueColor(image),
+        )
+    }
+
+    /**
+     * The two `background_*_1024.png` brand masters are solid single-colour plates. They are the
+     * source for store backgrounds, fitters and monochrome derivatives, so baking the mark into
+     * them would silently break those uses. Only `composite_square` / `icon_master` carry the mark.
+     */
+    @Test
+    fun `brand background plates stay solid single colour fields`() {
+        val root = repositoryRoot()
+        for (name in listOf("tariffiacode_background_1024.png", "tariffiacode_background_142435_1024.png")) {
+            val image = decodePng(root.resolve("brand/$name").readBytes())
+            assertEquals("$name must be 1024x1024", 1024, image.width)
+            assertEquals("$name must be 1024x1024", 1024, image.height)
+
+            val colours = distinctOpaqueColors(image)
+            assertEquals(
+                "$name must be a solid single-colour plate, found $colours distinct colours",
+                1,
+                colours.size,
+            )
+            assertEquals("$name must be the TariffiaCode navy", tariffiaNavy, colours.first())
+        }
+    }
+
+    /** Counts the distinct fully-opaque colours in the image. */
+    private fun distinctOpaqueColors(image: RgbImage): Set<Int> {
+        val colors = HashSet<Int>()
+        for (argb in image.pixels) {
+            if ((argb ushr 24) and 0xFF >= 50) colors.add(argb and 0xFFFFFF)
+        }
+        return colors
     }
 
     /** Decodes an 8-bit truecolor (RGB or RGBA), non-interlaced PNG into ARGB pixels. */
