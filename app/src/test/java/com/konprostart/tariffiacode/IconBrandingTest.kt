@@ -27,7 +27,7 @@ class IconBrandingTest {
      * Share of mark pixels that must fall in the lower-right quadrant for the silhouette to be
      * the TC C bowl. The retired AC artwork measures ~0.29, so this threshold rejects it.
      */
-    private val TC_LOWER_RIGHT_SHARE = 0.33
+    private val tcLowerRightShare = 0.33
 
     @Test
     fun `release launcher icon uses TariffiaCode branding`() {
@@ -88,7 +88,7 @@ class IconBrandingTest {
             // TC: solid C bowl dominates the lower-right; the old AC art did not.
             assertTrue(
                 "$layer lower-right mass must be the TC C bowl (was $lowerRight)",
-                lowerRight > TC_LOWER_RIGHT_SHARE,
+                lowerRight > tcLowerRightShare,
             )
             // TC: the C opening leaves the upper-left lighter than the old, more even AC art.
             assertTrue(
@@ -201,7 +201,7 @@ class IconBrandingTest {
             val lowerRight = quadrant(mask, debug, 1, 1) / total.toDouble()
             assertTrue(
                 "debug $layer lower-right mass must be the TC C bowl (was $lowerRight)",
-                lowerRight > TC_LOWER_RIGHT_SHARE,
+                lowerRight > tcLowerRightShare,
             )
         }
     }
