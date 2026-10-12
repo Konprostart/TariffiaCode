@@ -19,6 +19,7 @@ import com.konprostart.tariffiacode.core.notification.RuntimeNotificationHelper
 import com.konprostart.tariffiacode.core.runtime.RuntimeWorkTracker
 import com.konprostart.tariffiacode.core.security.SecretRedaction
 import com.konprostart.tariffiacode.core.ssh.MinaSshPortForwarder
+import com.konprostart.tariffiacode.core.ssh.installSshUserHomeFolder
 import com.konprostart.tariffiacode.core.storage.DeviceStorage
 import com.konprostart.tariffiacode.core.storage.DeviceStorageAccess
 import com.konprostart.tariffiacode.core.util.debounceFalseEdge
@@ -265,6 +266,10 @@ class TariffiaCodeApplication : Application() {
                 Security.addProvider(bundledBc)
             }
         }
+        // Apache MINA SSHD looks up a "user home" it has no use for on Android, and the first SSH
+        // host-key render throws "No user home folder available" without one. Point it at app storage
+        // before any SSH client can be built.
+        installSshUserHomeFolder(File(filesDir, "ssh-home").apply { mkdirs() })
         // First, so a crash in the rest of this method is recorded too.
         CrashLog.install(this)
         // CrashLog records the local crash file.
