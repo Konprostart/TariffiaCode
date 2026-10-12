@@ -29,11 +29,12 @@ enum class LocalAgent(val descriptor: AgentDescriptor) {
             userland = AgentUserland.ALPINE_STAGING_ROOTFS,
             binaryPaths = listOf("/usr/local/bin/opencode"),
             instructionFile = "root/.config/opencode/tariffiacode-context.md",
-            mcp = AgentMcpProvisioning.AtConfigFile(
-                path = "root/.config/opencode/opencode.json",
-                jsonKey = "mcp",
-                entryStyle = AgentMcpEntryStyle.LOCAL_WITH_TIMEOUT,
-            ),
+            mcp =
+                AgentMcpProvisioning.AtConfigFile(
+                    path = "root/.config/opencode/opencode.json",
+                    jsonKey = "mcp",
+                    entryStyle = AgentMcpEntryStyle.LOCAL_WITH_TIMEOUT,
+                ),
             runtimeHasProviderCatalog = true,
             mcpSupportsConnectToggle = true,
             mcpSupportsOAuth = true,
@@ -58,11 +59,12 @@ enum class LocalAgent(val descriptor: AgentDescriptor) {
             userland = AgentUserland.ALPINE_STAGING_ROOTFS,
             binaryPaths = listOf("/usr/bin/claude"),
             instructionFile = "root/.claude/CLAUDE.md",
-            mcp = AgentMcpProvisioning.AtConfigFile(
-                path = "root/.claude.json",
-                jsonKey = "mcpServers",
-                entryStyle = AgentMcpEntryStyle.STDIO,
-            ),
+            mcp =
+                AgentMcpProvisioning.AtConfigFile(
+                    path = "root/.claude.json",
+                    jsonKey = "mcpServers",
+                    entryStyle = AgentMcpEntryStyle.STDIO,
+                ),
             runtimeHasProviderCatalog = false,
             mcpSupportsConnectToggle = false,
             mcpSupportsOAuth = false,
@@ -88,11 +90,12 @@ enum class LocalAgent(val descriptor: AgentDescriptor) {
             userland = AgentUserland.DEBIAN_ROOTFS,
             binaryPaths = listOf("/usr/local/bin/agy"),
             instructionFile = "root/.gemini/GEMINI.md",
-            mcp = AgentMcpProvisioning.AtConfigFile(
-                path = "root/.gemini/config/mcp_config.json",
-                jsonKey = "mcpServers",
-                entryStyle = AgentMcpEntryStyle.BARE_COMMAND,
-            ),
+            mcp =
+                AgentMcpProvisioning.AtConfigFile(
+                    path = "root/.gemini/config/mcp_config.json",
+                    jsonKey = "mcpServers",
+                    entryStyle = AgentMcpEntryStyle.BARE_COMMAND,
+                ),
             runtimeHasProviderCatalog = false,
             mcpSupportsConnectToggle = false,
             mcpSupportsOAuth = false,

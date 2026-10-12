@@ -22,8 +22,7 @@ internal fun unconfiguredProviders(
  * one-provider catalog and sign in on their own settings screens, so an "add a key" row pointing
  * at OpenCode's provider screen could never connect them.
  */
-internal fun runtimeHasProviderCatalog(agent: LocalAgent?): Boolean =
-    agent == null || agent.descriptor.runtimeHasProviderCatalog
+internal fun runtimeHasProviderCatalog(agent: LocalAgent?): Boolean = agent == null || agent.descriptor.runtimeHasProviderCatalog
 
 /** Matches a provider against the picker's search box, the way its models are matched. */
 internal fun providerMatchesQuery(
