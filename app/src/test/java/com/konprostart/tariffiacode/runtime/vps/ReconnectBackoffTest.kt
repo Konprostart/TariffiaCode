@@ -28,7 +28,8 @@ class ReconnectBackoffTest {
                 val delay = backoff.delayMillis(attempt)
                 assertTrue(
                     "attempt $attempt produced $delay, outside the band around $step",
-                    delay >= step * 0.79L && delay <= step * 1.21L,
+                    // Integer hundredths: a Long literal may not carry a fractional part.
+                    delay * 100L >= step * 79L && delay * 100L <= step * 121L,
                 )
             }
         }

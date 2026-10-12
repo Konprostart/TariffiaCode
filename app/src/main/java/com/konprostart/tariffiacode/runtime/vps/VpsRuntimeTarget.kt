@@ -179,7 +179,9 @@ class VpsRuntimeTarget(
     private fun observeNetwork() {
         val settings = recovery ?: return
         settings.scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            var previous = NetworkStatus.Unknown
+            // Explicitly typed: `= NetworkStatus.Unknown` alone would infer the singleton type and
+            // then reject every later status it has to hold.
+            var previous: NetworkStatus = NetworkStatus.Unknown
             var seeded = false
             settings.networkStatus.collect { current ->
                 val handover = seeded && shouldRebuildTunnel(previous, current)
