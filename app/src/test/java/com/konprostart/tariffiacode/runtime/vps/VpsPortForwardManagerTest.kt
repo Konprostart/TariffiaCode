@@ -73,7 +73,7 @@ class VpsPortForwardManagerTest {
         runTest {
             val forward = FakeForward()
             val forwarder = FakeForwarder(SshPortForwardResult.Listening(forward))
-            val manager = VpsPortForwardManager(forwarder, credentialStore(SshCredential.Password("s")))
+            val manager = VpsPortForwardManager(forwarder, credentialStore(SshCredential.Password("hunter2")))
 
             val outcome = manager.open(profile(), remotePort = 5173)
 
@@ -90,7 +90,7 @@ class VpsPortForwardManagerTest {
             val manager =
                 VpsPortForwardManager(
                     FakeForwarder(SshPortForwardResult.HostKeyUntrusted(key)),
-                    credentialStore(SshCredential.Password("s")),
+                    credentialStore(SshCredential.Password("hunter2")),
                 )
 
             val outcome = manager.open(profile(), remotePort = 3000)
@@ -130,7 +130,7 @@ class VpsPortForwardManagerTest {
             val manager =
                 VpsPortForwardManager(
                     FakeForwarder(SshPortForwardResult.Failure("connection refused")),
-                    credentialStore(SshCredential.Password("s")),
+                    credentialStore(SshCredential.Password("hunter2")),
                 )
 
             val outcome = manager.open(profile(), remotePort = 8080)
@@ -146,7 +146,7 @@ class VpsPortForwardManagerTest {
             val manager =
                 VpsPortForwardManager(
                     FakeForwarder(SshPortForwardResult.Listening(forward)),
-                    credentialStore(SshCredential.Password("s")),
+                    credentialStore(SshCredential.Password("hunter2")),
                 )
 
             val outcome = manager.open(profile(), remotePort = 5173) as VpsPortForwardOutcome.Connected
