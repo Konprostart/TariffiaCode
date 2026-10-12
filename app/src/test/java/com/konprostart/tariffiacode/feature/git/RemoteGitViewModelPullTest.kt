@@ -115,6 +115,7 @@ class RemoteGitViewModelPullTest {
         directoryProvider = { directory },
         puller = RemoteGitPuller(executor),
         pusher = RemoteGitPusher(executor),
+        committer = RemoteGitCommitter(executor),
         profileProvider = { profile },
     )
 

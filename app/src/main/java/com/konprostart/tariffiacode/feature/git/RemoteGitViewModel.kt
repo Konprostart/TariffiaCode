@@ -26,6 +26,10 @@ data class RemoteGitUiState(
     val pushSuccess: Boolean = false,
     val pushMessage: String? = null,
     val pushOutput: String = "",
+    val isCommitting: Boolean = false,
+    val commitSuccess: Boolean = false,
+    val commitMessage: String? = null,
+    val commitOutput: String = "",
 )
 
 /**
@@ -41,6 +45,7 @@ class RemoteGitViewModel(
     private val directoryProvider: () -> String?,
     private val puller: RemoteGitPuller,
     private val pusher: RemoteGitPusher,
+    private val committer: RemoteGitCommitter,
     private val profileProvider: () -> SshProfile?,
 ) : ViewModel() {
     private val _state = MutableStateFlow(RemoteGitUiState())
@@ -129,6 +134,42 @@ class RemoteGitViewModel(
                     }
                 is RemoteGitPushResult.Failed ->
                     _state.update { it.copy(isPushing = false, pushMessage = result.message, pushOutput = result.output) }
+            }
+        }
+    }
+
+    /** Stage every change on the mapped remote path and commit it with [message]. */
+    fun commit(message: String) {
+        if (_state.value.isCommitting) return
+        val directory = directoryProvider()?.trim()
+        if (directory.isNullOrEmpty()) {
+            _state.update { it.copy(commitMessage = "Apply a remote project before committing") }
+            return
+        }
+        if (message.isBlank()) {
+            _state.update { it.copy(commitMessage = "Enter a commit message") }
+            return
+        }
+        val profile = profileProvider()
+        if (profile == null) {
+            _state.update { it.copy(commitMessage = "Select an SSH connection first") }
+            return
+        }
+        _state.update { it.copy(isCommitting = true, commitSuccess = false, commitOutput = "", commitMessage = null) }
+        viewModelScope.launch {
+            when (val result = committer.commit(profile, directory, message)) {
+                is RemoteGitCommitResult.Success ->
+                    _state.update { it.copy(isCommitting = false, commitSuccess = true, commitOutput = result.output) }
+                is RemoteGitCommitResult.Invalid ->
+                    _state.update { it.copy(isCommitting = false, commitMessage = "Invalid commit request") }
+                RemoteGitCommitResult.MissingCredential ->
+                    _state.update { it.copy(isCommitting = false, commitMessage = "No stored SSH credential for this connection") }
+                is RemoteGitCommitResult.HostKeyUntrusted ->
+                    _state.update {
+                        it.copy(isCommitting = false, commitMessage = "SSH host key is not trusted (${result.hostKey.sha256Fingerprint})")
+                    }
+                is RemoteGitCommitResult.Failed ->
+                    _state.update { it.copy(isCommitting = false, commitMessage = result.message, commitOutput = result.output) }
             }
         }
     }
