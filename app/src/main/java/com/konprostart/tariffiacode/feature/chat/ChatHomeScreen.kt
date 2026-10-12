@@ -229,6 +229,10 @@ fun ChatHomeScreen(
     onOpenRemoteSetup: () -> Unit,
     onRefreshCatalog: () -> Unit = {},
     onOpenProviderSettings: (() -> Unit)? = null,
+    /** Catalog providers without credentials, shown in the picker as "add a key" rows. */
+    unconfiguredProviders: List<OpenCodeProvider> = emptyList(),
+    /** Opens the provider screen with that provider's key dialog already up. */
+    onConfigureProvider: ((String) -> Unit)? = null,
     onOpenDrawer: () -> Unit,
     subagents: List<SubagentInfo> = emptyList(),
     onSubagentClick: (String) -> Unit = {},
@@ -721,6 +725,15 @@ fun ChatHomeScreen(
                         showModelPicker = false
                         onModelPickerClosed()
                         open()
+                    }
+                },
+            unconfiguredProviders = unconfiguredProviders,
+            onConfigureProvider =
+                onConfigureProvider?.let { open ->
+                    { providerId ->
+                        showModelPicker = false
+                        onModelPickerClosed()
+                        open(providerId)
                     }
                 },
             onDismiss = {

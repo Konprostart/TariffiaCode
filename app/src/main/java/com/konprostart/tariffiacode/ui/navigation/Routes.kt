@@ -9,6 +9,8 @@ const val ROUTE_CHAT = "chat"
 const val ROUTE_SETTINGS = "settings"
 const val ROUTE_SETTINGS_VOICE = "settings-voice"
 const val ROUTE_SETTINGS_PROVIDERS = "settings-providers"
+const val SETTINGS_PROVIDERS_ARG_ID = "providerId"
+const val SETTINGS_PROVIDERS_ROUTE_PATTERN = "$ROUTE_SETTINGS_PROVIDERS?$SETTINGS_PROVIDERS_ARG_ID={$SETTINGS_PROVIDERS_ARG_ID}"
 const val ROUTE_SETTINGS_AGENTS = "settings-agents"
 const val ROUTE_SETTINGS_AGENT_OPENCODE = "settings-agent-opencode"
 const val ROUTE_SETTINGS_AGENT_CLAUDE = "settings-agent-claude"
@@ -62,6 +64,10 @@ fun guestBrowserRoute(url: String): String = "$ROUTE_GUEST_BROWSER?$GUEST_BROWSE
 
 /** Opens the live preview screen with a port already entered, so a chat chip can jump straight to it. */
 fun remotePreviewRoute(port: Int): String = "$ROUTE_REMOTE_PREVIEW?$PREVIEW_ARG_PORT=$port"
+
+/** Opens the provider screen with that provider's API-key dialog already up. */
+fun settingsProvidersRoute(providerId: String): String =
+    "$ROUTE_SETTINGS_PROVIDERS?$SETTINGS_PROVIDERS_ARG_ID=${encodeRouteArg(providerId)}"
 
 const val CODE_VIEWER_ROUTE_PATTERN = "$ROUTE_CODE_VIEWER/{runtimeId}/{workspacePath}/{filePath}"
 

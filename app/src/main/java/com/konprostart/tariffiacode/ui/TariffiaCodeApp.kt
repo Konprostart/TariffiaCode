@@ -82,6 +82,7 @@ import com.konprostart.tariffiacode.feature.chat.ChatHomeScreen
 import com.konprostart.tariffiacode.feature.chat.ChatViewModel
 import com.konprostart.tariffiacode.feature.chat.SubagentInfo
 import com.konprostart.tariffiacode.feature.chat.buildHandoffPrompt
+import com.konprostart.tariffiacode.feature.chat.runtimeHasProviderCatalog
 import com.konprostart.tariffiacode.feature.onboarding.AndroidSetupScreen
 import com.konprostart.tariffiacode.feature.onboarding.OnboardingChoiceScreen
 import com.konprostart.tariffiacode.feature.schedule.ScheduleEditorScreen
@@ -121,6 +122,7 @@ import com.konprostart.tariffiacode.ui.navigation.remotePreviewRoute
 import com.konprostart.tariffiacode.ui.navigation.scheduleDetailRoute
 import com.konprostart.tariffiacode.ui.navigation.scheduleEditRoute
 import com.konprostart.tariffiacode.ui.navigation.settingsNavGraph
+import com.konprostart.tariffiacode.ui.navigation.settingsProvidersRoute
 import com.konprostart.tariffiacode.ui.navigation.workspaceNavGraph
 import com.konprostart.tariffiacode.ui.theme.AppTheme
 import com.konprostart.tariffiacode.ui.theme.TariffiaCodeTheme
@@ -1067,6 +1069,14 @@ fun TariffiaCodeApp(
                                 }
                             },
                             providers = settingsState.providers,
+                            // Only OpenCode's own runtimes have a provider catalog to act on; the CLI
+                            // agents sign in on their own settings screens.
+                            unconfiguredProviders =
+                                if (runtimeHasProviderCatalog(selectedRuntime?.agent)) {
+                                    settingsState.unconfiguredProviders
+                                } else {
+                                    emptyList()
+                                },
                             agents = settingsState.agents,
                             selectedProviderId = chatState.selectedProviderId ?: fallbackProviderId,
                             selectedModelId = chatState.selectedModelId ?: fallbackModelId,
@@ -1132,6 +1142,11 @@ fun TariffiaCodeApp(
                                 // Codex's own settings screen.
                                 val codexSelected = selectedRuntime?.agent == com.konprostart.tariffiacode.runtime.LocalAgent.CODEX
                                 navController.navigate(if (codexSelected) ROUTE_SETTINGS_AGENT_CODEX else ROUTE_SETTINGS_PROVIDERS)
+                            },
+                            // Same destination, but for one named provider: the picker's "add a key"
+                            // rows send the id so the provider screen opens its dialog directly.
+                            onConfigureProvider = { providerId ->
+                                navController.navigate(settingsProvidersRoute(providerId)) { launchSingleTop = true }
                             },
                             onSelectModel = settingsViewModel::selectModel,
                             onSelectAgent = settingsViewModel::selectAgent,

@@ -478,10 +478,16 @@ fun NavGraphBuilder.settingsNavGraph(
         )
     }
 
-    composable(ROUTE_SETTINGS_PROVIDERS) {
+    composable(SETTINGS_PROVIDERS_ROUTE_PATTERN) { backStackEntry ->
         val settingsState by settingsViewModel.state.collectAsState()
         // Re-read on open: the runtime that owns providers may have started since the last look.
         androidx.compose.runtime.LaunchedEffect(Unit) { settingsViewModel.refreshProviderAuth() }
+        // An unconfigured-provider row in the model picker lands here with its id, so the API-key
+        // dialog is already up instead of asking the user to find the provider in the list first.
+        val requestedProviderId = backStackEntry.arguments?.getString(SETTINGS_PROVIDERS_ARG_ID)
+        androidx.compose.runtime.LaunchedEffect(requestedProviderId) {
+            requestedProviderId?.takeIf(String::isNotBlank)?.let(settingsViewModel::openProviderAuth)
+        }
         ProviderSettingsScreen(
             state = settingsState,
             onOpenProviderAuth = settingsViewModel::openProviderAuth,
