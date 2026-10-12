@@ -108,7 +108,9 @@ class MinaSshPortForwarder(
             opened as? MinaSshTunnelSession
                 ?: return SshPortForwardResult.Failure("Session is not a MINA session")
         val handedOffForward = AtomicReference<SshPortForward?>(null)
-        try {
+        // `return try` rather than a bare try: a try/catch is not implicitly returned as the tail
+        // expression of a block body.
+        return try {
             val bound = bindForward(session, remoteHost, remotePort, ownedSession = session)
             if (bound is SshPortForwardResult.Listening) {
                 handedOffForward.set(bound.forward)

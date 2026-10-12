@@ -160,7 +160,7 @@ class SshTunnelPool(
                 }
             }
         if (winner.session === established.session) {
-            return acquire(winner, key, established.forward)
+            return SshPortForwardResult.Listening(acquire(winner, key, established.forward))
         }
         runCatching { established.session.close() }
         runCatching { established.forward.close() }
@@ -299,7 +299,9 @@ class SshTunnelPool(
         connectTimeoutMillis: Long,
     ): Establishment {
         var session: SshTunnelSession? = null
-        try {
+        // `return try` rather than a bare try: a try/catch is not implicitly returned as the tail
+        // expression of a block body.
+        return try {
             val opened =
                 forwarder.openSession(
                     host = key.host,

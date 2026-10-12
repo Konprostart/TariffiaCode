@@ -57,7 +57,7 @@ interface SshSessionSharingForwarder : SshPortForwarder {
         port: Int,
         auth: SshAuth,
         verifier: SshHostKeyVerifier,
-        connectTimeoutMillis: Long = DEFAULT_CONNECT_TIMEOUT_MILLIS,
+        connectTimeoutMillis: Long = SshPortForwarder.DEFAULT_CONNECT_TIMEOUT_MILLIS,
     ): SshTunnelSessionResult
 
     /**

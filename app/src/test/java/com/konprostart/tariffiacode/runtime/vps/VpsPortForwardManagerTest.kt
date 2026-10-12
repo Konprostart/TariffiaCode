@@ -172,7 +172,7 @@ class VpsPortForwardManagerTest {
         runTest {
             val manager =
                 VpsPortForwardManager(
-                    SshTunnelPool(FakeForwarder(SshPortForwardResult.Failure("connection refused")),
+                    SshTunnelPool(FakeForwarder(SshPortForwardResult.Failure("connection refused"))),
                     credentialStore(SshCredential.Password("hunter2")),
                 )
 
