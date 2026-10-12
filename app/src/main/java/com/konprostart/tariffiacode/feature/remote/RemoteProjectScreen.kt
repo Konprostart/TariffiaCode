@@ -73,6 +73,7 @@ fun RemoteProjectScreen(
     onOpenTerminal: () -> Unit,
     onOpenGit: () -> Unit,
     onOpenClone: () -> Unit,
+    onOpenPreview: () -> Unit,
     onOpenChat: () -> Unit,
     onFormChange: ((RemoteProjectForm) -> RemoteProjectForm) -> Unit,
     onSave: () -> Unit,
@@ -127,6 +128,7 @@ fun RemoteProjectScreen(
                 onOpenTerminal = onOpenTerminal,
                 onOpenGit = onOpenGit,
                 onOpenClone = onOpenClone,
+                onOpenPreview = onOpenPreview,
             )
             Button(onClick = onOpenChat, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.remote_project_open_opencode))
@@ -203,6 +205,7 @@ private fun VpsConnectionCard(
     onOpenTerminal: () -> Unit,
     onOpenGit: () -> Unit,
     onOpenClone: () -> Unit,
+    onOpenPreview: () -> Unit,
 ) {
     val connecting = state is RuntimeState.Connecting
     val connected = state is RuntimeState.Connected
@@ -248,6 +251,7 @@ private fun VpsConnectionCard(
                 OutlinedButton(onClick = onOpenTerminal) { Text(stringResource(R.string.remote_terminal_title)) }
                 OutlinedButton(onClick = onOpenGit) { Text(stringResource(R.string.remote_git_title)) }
                 OutlinedButton(onClick = onOpenClone) { Text(stringResource(R.string.remote_git_clone_title)) }
+                OutlinedButton(onClick = onOpenPreview) { Text(stringResource(R.string.remote_project_preview)) }
             }
         }
     }

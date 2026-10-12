@@ -1273,6 +1273,7 @@
     <string name="remote_project_failed">Failed</string>
     <string name="remote_project_unavailable">Unavailable</string>
     <string name="remote_project_open_opencode" translatable="false">Open OpenCode</string>
+    <string name="remote_project_preview" translatable="false">Preview</string>
     <string name="remote_terminal_title">Terminal</string>
     <string name="remote_terminal_idle">Connect to open a shell on the VPS.</string>
     <string name="remote_terminal_input_hint">Type a command</string>
@@ -1293,6 +1294,14 @@
     <string name="remote_git_commit" translatable="false">Commit</string>
     <string name="remote_git_commit_message" translatable="false">Commit message</string>
     <string name="remote_git_commit_success" translatable="false">Committed.</string>
+    <string name="vps_preview_title" translatable="false">Live preview</string>
+    <string name="vps_preview_port" translatable="false">Port</string>
+    <string name="vps_preview_open" translatable="false">Open</string>
+    <string name="vps_preview_stop" translatable="false">Stop</string>
+    <string name="vps_preview_hint" translatable="false">Start a dev server on the VPS (for example Vite) and open its port to preview it here.</string>
+    <string name="vps_preview_trust" translatable="false">Trust</string>
+    <string name="vps_preview_dismiss" translatable="false">Dismiss</string>
+    <string name="vps_preview_trust_prompt" translatable="false">Untrusted SSH host key (%1$s). Trust it and retry?</string>
     <string name="adb_agent_access_title">Allow agents to use ADB</string>
     <string name="adb_agent_access_description">Off by default. When on, TariffiaCode keeps the wireless-ADB link connected so agents can install, launch or inspect apps on this device. Enable only on a device you trust.</string>
     <string name="github_share_token_title">Let agents use your GitHub token</string>

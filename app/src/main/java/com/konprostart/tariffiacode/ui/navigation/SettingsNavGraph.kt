@@ -610,6 +610,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onOpenTerminal = { navController.navigate(ROUTE_REMOTE_TERMINAL) },
             onOpenGit = { navController.navigate(ROUTE_REMOTE_GIT) },
             onOpenClone = { navController.navigate(ROUTE_REMOTE_GIT_CLONE) },
+            onOpenPreview = { navController.navigate(ROUTE_REMOTE_PREVIEW) },
             onOpenChat = {
                 app.runtimeRegistry.select(app.vpsRuntimeTarget.id)
                 navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
@@ -720,6 +721,38 @@ fun NavGraphBuilder.settingsNavGraph(
             onUrlChange = cloneViewModel::updateUrl,
             onPathChange = cloneViewModel::updatePath,
             onClone = cloneViewModel::clone,
+        )
+    }
+
+    composable(ROUTE_REMOTE_PREVIEW) {
+        val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        val previewViewModel: com.konprostart.tariffiacode.feature.preview.VpsPreviewViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel(
+                key = "remote-preview",
+                factory =
+                    com.konprostart.tariffiacode.ui.ViewModelFactory {
+                        com.konprostart.tariffiacode.feature.preview.VpsPreviewViewModel(
+                            // The tunnel uses whichever SSH connection the VPS runtime is set to, so a
+                            // dev server on the VPS can be previewed without a second connection setup.
+                            manager =
+                                com.konprostart.tariffiacode.runtime.vps.VpsPortForwardManager(
+                                    com.konprostart.tariffiacode.core.ssh.MinaSshPortForwarder(),
+                                    com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
+                                ),
+                            profiles = com.konprostart.tariffiacode.data.ssh.SshProfileStore(app.settings),
+                            profileProvider = { app.vpsRuntimeTarget.selectedProfile.value },
+                        )
+                    },
+            )
+        val previewState by previewViewModel.state.collectAsState()
+        com.konprostart.tariffiacode.feature.preview.VpsPreviewScreen(
+            state = previewState,
+            onBack = { navController.popBackStack() },
+            onPortChange = previewViewModel::setPort,
+            onOpen = previewViewModel::open,
+            onStop = previewViewModel::stop,
+            onTrustHostKey = previewViewModel::trustPendingHostKey,
+            onDismissHostKey = previewViewModel::dismissPendingHostKey,
         )
     }
 

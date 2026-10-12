@@ -1,10 +1,6 @@
 package com.konprostart.tariffiacode.feature.browser
 
-import android.annotation.SuppressLint
-import android.view.ViewGroup
-import android.webkit.WebChromeClient
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,8 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import com.konprostart.tariffiacode.BuildConfig
 import com.konprostart.tariffiacode.R
 
 /** In-app browser for pages served inside the guest runtime (e.g. http://127.0.0.1:PORT/). */
@@ -75,38 +69,21 @@ fun GuestBrowserScreen(
             GuestBrowserUrlBar(
                 urlInput = urlInput,
                 onUrlChange = { urlInput = it },
-                onGo = { webView?.loadUrl(normalizeUrl(urlInput)) },
+                onGo = { webView?.loadUrl(normalizeWebUrl(urlInput)) },
             )
             if (progress in 1..99) {
                 LinearProgressIndicator(progress = { progress / 100f })
             }
-            AndroidView(
+            GuestWebView(
+                url = initialUrl,
                 modifier = Modifier.weight(1f),
-                factory = { context ->
-                    // Lets the in-guest agent drive this WebView over CDP (the devtools abstract
-                    // socket is reachable from the guest, which shares the app's UID), so a page
-                    // can be shown to the user and operated by human and agent at the same time.
-                    WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
-                    WebView(context).apply {
-                        layoutParams =
-                            ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                            )
-                        configure(
-                            onProgress = { progress = it },
-                            onNavigationStateChange = { url, back, forward ->
-                                urlInput = url
-                                canGoBack = back
-                                canGoForward = forward
-                            },
-                        )
-                        webView = this
-                        if (initialUrl.isNotBlank()) {
-                            loadUrl(normalizeUrl(initialUrl))
-                        }
-                    }
+                onProgress = { progress = it },
+                onNavigationStateChange = { url, back, forward ->
+                    urlInput = url
+                    canGoBack = back
+                    canGoForward = forward
                 },
+                onCreated = { webView = it },
             )
         }
     }
@@ -173,43 +150,4 @@ private fun GuestBrowserUrlBar(
             Text(stringResource(R.string.guest_browser_go))
         }
     }
-}
-
-private fun normalizeUrl(raw: String): String {
-    val trimmed = raw.trim()
-    val candidate = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) trimmed else "http://$trimmed"
-    return candidate.takeIf { android.net.Uri.parse(it).scheme in setOf("http", "https") } ?: "http://127.0.0.1"
-}
-
-@SuppressLint("SetJavaScriptEnabled")
-private fun WebView.configure(
-    onProgress: (Int) -> Unit,
-    onNavigationStateChange: (url: String, canGoBack: Boolean, canGoForward: Boolean) -> Unit,
-) {
-    // Guest pages (dev servers, dashboards, tool UIs) are interactive web apps that need JS.
-    settings.javaScriptEnabled = true
-    settings.domStorageEnabled = true
-    webChromeClient =
-        object : WebChromeClient() {
-            override fun onProgressChanged(
-                view: WebView?,
-                newProgress: Int,
-            ) {
-                onProgress(newProgress)
-            }
-        }
-    webViewClient =
-        object : WebViewClient() {
-            override fun onPageFinished(
-                view: WebView?,
-                url: String?,
-            ) {
-                onProgress(100)
-                onNavigationStateChange(
-                    url.orEmpty(),
-                    view?.canGoBack() == true,
-                    view?.canGoForward() == true,
-                )
-            }
-        }
 }
