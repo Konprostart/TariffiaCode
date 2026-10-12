@@ -74,6 +74,7 @@ class MinaSshPortForwarder(
                     created.serverKeyVerifier = createdVerifier
 
                     phase = "start()"
+                    SshKeepAlive.enableOn(created)
                     created.start()
                     // MINA's verify(timeout) blocks until the handshake (including our host-key check)
                     // completes or throws, so no coroutine-future adapter is needed.

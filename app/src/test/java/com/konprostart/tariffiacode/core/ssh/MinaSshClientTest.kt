@@ -1,6 +1,7 @@
 package com.konprostart.tariffiacode.core.ssh
 
 import kotlinx.coroutines.test.runTest
+import org.apache.sshd.client.SshClient
 import org.apache.sshd.server.SshServer
 import org.apache.sshd.server.auth.password.PasswordAuthenticator
 import org.apache.sshd.server.auth.pubkey.PublickeyAuthenticator
@@ -8,6 +9,7 @@ import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider
 import org.apache.sshd.server.session.ServerSession
 import org.apache.sshd.server.shell.InteractiveProcessShellFactory
 import org.junit.After
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -25,10 +27,17 @@ import java.util.Base64
 class MinaSshClientTest {
     private var server: SshServer? = null
 
+    /** Kept so a failed assertion cannot leave a started MINA client (and its timer thread) behind. */
+    private var client: SshClient? = null
+
     @After
     fun tearDown() {
+        runCatching { client?.stop() }
         runCatching { server?.stop(true) }
     }
+
+    /** A fully-configured client, tracked for teardown. */
+    private fun recordingClient(): SshClient = SshClient.setUpDefaultClient().also { client = it }
 
     private fun trustAllVerifier(): SshHostKeyVerifier =
         object : SshHostKeyVerifier {
@@ -190,5 +199,43 @@ class MinaSshClientTest {
             val failure = result as SshConnectResult.Failure
             assertTrue(failure.message.contains("clientFactory() failed"))
             assertTrue(failure.cause is NoClassDefFoundError)
+        }
+
+    @Test
+    fun `a successful connect leaves the client running for the session to own`() =
+        runTest {
+            // Regression: connect() used to stop the MINA client in its `finally`, on the success
+            // path too. `SshClient.stop()` closes every session it owns, so the SshSession handed
+            // back was already dead. The client must stay up; the session stops it on close().
+            val s = startServer(password = "secret")
+            val mina = recordingClient()
+            val result =
+                MinaSshClient(clientFactory = { mina }).connect(
+                    host = "127.0.0.1",
+                    port = s.port,
+                    auth = SshAuth.Password("tester", "secret"),
+                    verifier = trustAllVerifier(),
+                )
+            assertTrue("expected Connected, got $result", result is SshConnectResult.Connected)
+            assertTrue("client must keep running while its session is in use", mina.isStarted)
+
+            (result as SshConnectResult.Connected).session.close()
+            assertFalse("closing the session must release the client", mina.isStarted)
+        }
+
+    @Test
+    fun `a failed connect still releases the client`() =
+        runTest {
+            val s = startServer(password = "secret")
+            val mina = recordingClient()
+            val result =
+                MinaSshClient(clientFactory = { mina }).connect(
+                    host = "127.0.0.1",
+                    port = s.port,
+                    auth = SshAuth.Password("tester", "wrong"),
+                    verifier = trustAllVerifier(),
+                )
+            assertTrue("expected Failure, got $result", result is SshConnectResult.Failure)
+            assertFalse("a failed connect must not leave the client running", mina.isStarted)
         }
 }
