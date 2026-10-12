@@ -3,6 +3,7 @@ package com.konprostart.tariffiacode.feature.settings
 import com.konprostart.tariffiacode.core.api.ProviderAuthMethod
 import com.konprostart.tariffiacode.core.api.ProviderAuthPrompt
 import com.konprostart.tariffiacode.core.api.ProviderAuthWhen
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -44,5 +45,42 @@ class ProviderAuthUiModelsTest {
         assertTrue(nonUs.promptsComplete)
         assertFalse(usWithoutTenant.promptsComplete)
         assertTrue(usComplete.promptsComplete)
+    }
+
+    @Test
+    fun `the fallback method list is replaced when the real one arrives`() {
+        val fallback =
+            ProviderAuthDialogState(
+                providerId = "github-copilot",
+                providerName = "GitHub Copilot",
+                methods = listOf(ProviderAuthMethod(type = "api", label = "API key")),
+            )
+
+        assertEquals(listOf(method), fallback.withLoadedMethods(listOf(method)).methods)
+    }
+
+    @Test
+    fun `a loaded list never replaces a method the user already picked`() {
+        val picked =
+            ProviderAuthDialogState(
+                providerId = "github-copilot",
+                providerName = "GitHub Copilot",
+                methods = listOf(ProviderAuthMethod(type = "api", label = "API key")),
+                methodIndex = 0,
+            )
+
+        assertEquals(picked, picked.withLoadedMethods(listOf(method)))
+    }
+
+    @Test
+    fun `an empty answer leaves the fallback in place`() {
+        val fallback =
+            ProviderAuthDialogState(
+                providerId = "zai",
+                providerName = "Z.AI",
+                methods = listOf(ProviderAuthMethod(type = "api", label = "API key")),
+            )
+
+        assertEquals(fallback, fallback.withLoadedMethods(emptyList()))
     }
 }

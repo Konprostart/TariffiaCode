@@ -18,6 +18,17 @@ data class ProviderAuthDialogState(
     val selectedMethod: ProviderAuthMethod?
         get() = methodIndex?.let(methods::getOrNull)
 
+    /**
+     * Fills in the server's real method list once it arrives.
+     *
+     * The model picker opens this dialog straight from an "add a key" row, before
+     * `refreshProviderAuth` has answered, so the dialog starts from the API-key-only fallback.
+     * Replacing the list is safe only while the user has not picked a method yet, and an empty
+     * answer leaves the fallback in place.
+     */
+    fun withLoadedMethods(loaded: List<ProviderAuthMethod>): ProviderAuthDialogState =
+        if (loaded.isEmpty() || methodIndex != null) this else copy(methods = loaded)
+
     val visiblePrompts
         get() = selectedMethod?.prompts.orEmpty().filter { it.isVisible(inputs) }
 

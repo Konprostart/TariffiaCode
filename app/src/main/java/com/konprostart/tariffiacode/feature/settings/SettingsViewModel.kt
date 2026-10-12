@@ -776,7 +776,16 @@ class SettingsViewModel(
                 }
             runCatching { target.providerAuthMethods() }
                 .onSuccess { methods ->
-                    oauthState.update { current -> current.copy(methods = methods, message = null) }
+                    oauthState.update { current ->
+                        // A dialog opened from the model picker's "add a key" row is already up and
+                        // holding the API-key-only fallback, so the real methods land into it here.
+                        val dialog = current.dialog
+                        current.copy(
+                            methods = methods,
+                            dialog = dialog?.withLoadedMethods(methods[dialog.providerId].orEmpty()),
+                            message = null,
+                        )
+                    }
                 }
                 .onFailure { error ->
                     oauthState.update { current ->

@@ -185,7 +185,9 @@ fun ModelAndRuntimePickerSheet(
 
             if (providers.isEmpty()) {
                 item {
-                    PickerEmptyState(unconfiguredCount = matchingUnconfigured.size)
+                    // The unfiltered count: the advice is about the catalog, not about what the
+                    // search box currently matches.
+                    PickerEmptyState(unconfiguredCount = unconfiguredProviders.size)
                 }
             } else {
                 data class FavoriteEntry(
@@ -517,7 +519,7 @@ private fun UnconfiguredProviderRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clickable {
+                .clickable(enabled = onConfigure != null || onFallback != null) {
                     val configure = onConfigure
                     if (configure != null) configure(provider.id) else onFallback?.invoke()
                 }
