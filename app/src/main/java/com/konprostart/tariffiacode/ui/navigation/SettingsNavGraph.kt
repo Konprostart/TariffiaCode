@@ -610,6 +610,10 @@ fun NavGraphBuilder.settingsNavGraph(
             onOpenTerminal = { navController.navigate(ROUTE_REMOTE_TERMINAL) },
             onOpenGit = { navController.navigate(ROUTE_REMOTE_GIT) },
             onOpenClone = { navController.navigate(ROUTE_REMOTE_GIT_CLONE) },
+            onOpenChat = {
+                app.runtimeRegistry.select(app.vpsRuntimeTarget.id)
+                navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
+            },
             onFormChange = remoteProjectViewModel::updateForm,
             onSave = remoteProjectViewModel::saveProject,
             onDismissEditor = remoteProjectViewModel::dismissEditor,
@@ -667,6 +671,13 @@ fun NavGraphBuilder.settingsNavGraph(
                                         credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
                                     ),
                                 ),
+                            committer =
+                                com.konprostart.tariffiacode.feature.git.RemoteGitCommitter(
+                                    com.konprostart.tariffiacode.feature.git.SshExecCommandExecutor(
+                                        execClient = com.konprostart.tariffiacode.core.ssh.MinaSshExecClient(),
+                                        credentials = com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
+                                    ),
+                                ),
                             profileProvider = { app.vpsRuntimeTarget.selectedProfile.value },
                         )
                     },
@@ -679,6 +690,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onRefresh = gitViewModel::refresh,
             onPull = gitViewModel::pull,
             onPush = gitViewModel::push,
+            onCommit = gitViewModel::commit,
         )
     }
 

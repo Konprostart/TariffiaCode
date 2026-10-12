@@ -73,6 +73,7 @@ fun RemoteProjectScreen(
     onOpenTerminal: () -> Unit,
     onOpenGit: () -> Unit,
     onOpenClone: () -> Unit,
+    onOpenChat: () -> Unit,
     onFormChange: ((RemoteProjectForm) -> RemoteProjectForm) -> Unit,
     onSave: () -> Unit,
     onDismissEditor: () -> Unit,
@@ -127,6 +128,9 @@ fun RemoteProjectScreen(
                 onOpenGit = onOpenGit,
                 onOpenClone = onOpenClone,
             )
+            Button(onClick = onOpenChat, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.remote_project_open_opencode))
+            }
             if (state.projects.isEmpty()) {
                 Text(stringResource(R.string.remote_project_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

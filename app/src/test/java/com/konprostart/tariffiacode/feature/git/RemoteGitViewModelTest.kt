@@ -116,6 +116,7 @@ class RemoteGitViewModelTest {
         directoryProvider = { directory },
         puller = RemoteGitPuller(NoopExecutor),
         pusher = RemoteGitPusher(NoopExecutor),
+        committer = RemoteGitCommitter(NoopExecutor),
         profileProvider = { null },
     )
 

@@ -21,12 +21,17 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -44,6 +49,7 @@ fun RemoteGitScreen(
     onRefresh: () -> Unit,
     onPull: () -> Unit,
     onPush: () -> Unit,
+    onCommit: (String) -> Unit,
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -84,6 +90,7 @@ fun RemoteGitScreen(
             }
             PullSection(state = state, onPull = onPull)
             PushSection(state = state, onPush = onPush)
+            CommitSection(state = state, onCommit = onCommit)
             if (state.isLoading) {
                 CircularProgressIndicator()
             }
@@ -153,6 +160,61 @@ private fun PushSection(
         ) {
             Text(
                 state.pushOutput,
+                modifier = Modifier.padding(12.dp),
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CommitSection(
+    state: RemoteGitUiState,
+    onCommit: (String) -> Unit,
+) {
+    var message by remember { mutableStateOf("") }
+    OutlinedTextField(
+        value = message,
+        onValueChange = { message = it },
+        label = { Text(stringResource(R.string.remote_git_commit_message)) },
+        singleLine = true,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Button(
+            onClick = { onCommit(message.trim()) },
+            enabled = !state.isCommitting && message.isNotBlank(),
+        ) {
+            if (state.isCommitting) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(stringResource(R.string.remote_git_commit))
+        }
+        state.commitMessage?.let { text ->
+            Spacer(Modifier.width(10.dp))
+            Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+        if (state.commitSuccess) {
+            Spacer(Modifier.width(10.dp))
+            Text(
+                stringResource(R.string.remote_git_commit_success),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+    if (state.commitOutput.isNotBlank()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ) {
+            Text(
+                state.commitOutput,
                 modifier = Modifier.padding(12.dp),
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,
