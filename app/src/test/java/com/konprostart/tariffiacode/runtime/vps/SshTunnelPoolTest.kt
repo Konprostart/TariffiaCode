@@ -108,8 +108,10 @@ class SshTunnelPoolTest {
 
     private val auth = SshAuth.Password("tester", "secret")
 
-    private fun key(port: Int, profileId: String = "vps-1") =
-        TunnelKey(profileId = profileId, host = "127.0.0.1", port = 22, remoteHost = "127.0.0.1", remotePort = port)
+    private fun key(
+        port: Int,
+        profileId: String = "vps-1",
+    ) = TunnelKey(profileId = profileId, host = "127.0.0.1", port = 22, remoteHost = "127.0.0.1", remotePort = port)
 
     private suspend fun SshTunnelPool.listen(k: TunnelKey): SshPortForward =
         (open(k, auth, verifier) as SshPortForwardResult.Listening).forward

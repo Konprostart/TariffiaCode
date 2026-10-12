@@ -133,7 +133,9 @@ class SshTunnelPool(
                         runCatching { forwardEntry.forward.close() }
                         null
                     }
-                    else -> acquireLocked(entry, key, forwardEntry.forward)
+                    // `retainLocked`, not `acquireLocked`: the forward here is the one already being
+                    // shared, and `acquireLocked` closes whatever it is given as redundant.
+                    else -> retainLocked(entry, key, forwardEntry)
                 }
             }
         }
@@ -179,18 +181,34 @@ class SshTunnelPool(
         // Read first rather than getOrPut: if someone registered this tunnel while we were binding,
         // the forward we just bound is redundant, and its loopback listener would otherwise stay open
         // for the life of the process with nothing holding it.
-        val existing = entry.forwards[key]
-        if (existing != null) {
+        val registered = entry.forwards[key]
+        if (registered != null && registered.forward.isOpen) {
             runCatching { forward.close() }
-            entry.holders++
-            existing.holders++
-            return lease(entry, key, existing.forward)
+            return retainLocked(entry, key, registered)
+        }
+        // A registered-but-dead channel is replaced by the one just bound.
+        if (registered != null) {
+            entry.forwards.remove(key)
+            runCatching { registered.forward.close() }
         }
         val forwardEntry = ForwardEntry(forward)
         entry.forwards[key] = forwardEntry
+        return retainLocked(entry, key, forwardEntry)
+    }
+
+    /**
+     * Adds a holder to a tunnel that is already registered and open. Must hold the lock.
+     *
+     * The single place holder arithmetic happens; [acquireLocked] and [join] both land here.
+     */
+    private fun retainLocked(
+        entry: SessionEntry,
+        key: TunnelKey,
+        forwardEntry: ForwardEntry,
+    ): SshPortForward {
         entry.holders++
         forwardEntry.holders++
-        return lease(entry, key, forward)
+        return lease(entry, key, forwardEntry.forward)
     }
 
     private fun acquire(
