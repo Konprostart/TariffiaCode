@@ -32,6 +32,7 @@ class AppUpdateViewModel(
     private val client: AppUpdateReleaseClient = AppUpdateReleaseClient(),
     private val downloader: AppUpdateApkDownloader = OkHttpAppUpdateApkDownloader(),
     private val installer: AppUpdateInstaller,
+    private val inspector: AppUpdateApkInspector,
     private val apkFileProvider: () -> File,
     private val installedVersionCode: Long = 0,
 ) : ViewModel() {
@@ -70,6 +71,13 @@ class AppUpdateViewModel(
                 destination
             }
                 .onSuccess { apk ->
+                    // Refuse an APK Android would not install over this build, with a specific reason
+                    // instead of the installer's generic "package conflicts" dialog.
+                    val blocker = appUpdateInstallBlocker(inspector.inspect(apk), inspector.installed(), release)
+                    if (blocker != null) {
+                        mutableState.update { it.copy(isDownloading = false, error = blocker) }
+                        return@onSuccess
+                    }
                     runCatching { installer.install(apk) }
                         .onSuccess { mutableState.update { it.copy(isDownloading = false, installMessage = "Starting installer…") } }
                         .onFailure { error ->
@@ -89,6 +97,7 @@ class AppUpdateViewModel(
         fun factory(
             installedVersion: String,
             installer: AppUpdateInstaller,
+            inspector: AppUpdateApkInspector,
             apkFileProvider: () -> File,
             installedVersionCode: Long = 0,
             channel: AppUpdateChannel = AppUpdateChannel.Release,
@@ -104,6 +113,7 @@ class AppUpdateViewModel(
                         client = client,
                         downloader = downloader,
                         installer = installer,
+                        inspector = inspector,
                         apkFileProvider = apkFileProvider,
                         installedVersionCode = installedVersionCode,
                     ) as T

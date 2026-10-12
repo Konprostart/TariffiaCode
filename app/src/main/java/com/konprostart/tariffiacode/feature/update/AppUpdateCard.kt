@@ -50,6 +50,7 @@ fun AppUpdateSectionCard(
                     installedVersionCode = installedVersionCode,
                     githubTokenProvider = githubTokenProvider,
                     installer = AndroidAppUpdateInstaller(context.applicationContext),
+                    inspector = AndroidAppUpdateApkInspector(context.applicationContext),
                     apkFileProvider = { File(context.applicationContext.cacheDir, "updates/tariffiacode-update.apk") },
                     channel = channel,
                 ),
