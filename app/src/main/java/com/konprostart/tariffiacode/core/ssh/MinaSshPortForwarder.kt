@@ -20,10 +20,71 @@ import org.apache.sshd.client.SshClient as MinaApacheSshClient
  * The forward listens on the device's loopback only ([LOCAL_HOST]) and targets [SshPortForward.remoteHost]:
  * [SshPortForward.remotePort] as seen from the SSH server, so a service bound to the server's own loopback
  * (e.g. `opencode serve --hostname 127.0.0.1 --port 4096`) becomes reachable through the tunnel.
+ *
+ * Also an [SshSessionSharingForwarder]: connecting and binding a port are separate steps here, so one
+ * session can carry many forwards. [openLocalForward] keeps doing both, and owns what it opens.
  */
 class MinaSshPortForwarder(
     private val clientFactory: () -> MinaApacheSshClient = { MinaApacheSshClient.setUpDefaultClient() },
-) : SshPortForwarder {
+) : SshSessionSharingForwarder {
+    override suspend fun openSession(
+        host: String,
+        port: Int,
+        auth: SshAuth,
+        verifier: SshHostKeyVerifier,
+        connectTimeoutMillis: Long,
+    ): SshTunnelSessionResult =
+        withContext(Dispatchers.IO) {
+            var client: MinaApacheSshClient? = null
+            var hostKeyVerifier: FingerprintServerKeyVerifier? = null
+            var session: ClientSession? = null
+            var phase = "clientFactory()"
+            try {
+                val created = clientFactory()
+                client = created
+                val createdVerifier = FingerprintServerKeyVerifier(host, port, verifier)
+                hostKeyVerifier = createdVerifier
+                created.serverKeyVerifier = createdVerifier
+
+                phase = "start()"
+                SshKeepAlive.enableOn(created)
+                created.start()
+                // MINA's verify(timeout) blocks until the handshake (including our host-key check)
+                // completes or throws, so no coroutine-future adapter is needed.
+                phase = "connect()"
+                val connectedSession =
+                    created.connect(auth.username, host, port)
+                        .verify(connectTimeoutMillis)
+                        .session
+                session = connectedSession
+
+                phase = "auth()"
+                connectedSession.applySshAuth(auth)
+                connectedSession.auth().verify(AUTH_TIMEOUT_MILLIS)
+
+                SshTunnelSessionResult.Opened(MinaSshTunnelSession(created, connectedSession))
+            } catch (e: CancellationException) {
+                runCatching { session?.close(false) }
+                runCatching { client?.stop() }
+                throw e
+            } catch (e: Exception) {
+                describeSessionFailure(phase, e, hostKeyVerifier, client, session)
+            } catch (e: LinkageError) {
+                // Android class-linkage failures are Errors, not Exceptions. Fatal VM errors such as
+                // OutOfMemoryError remain uncaught.
+                describeSessionFailure(phase, e, hostKeyVerifier, client, session)
+            }
+        }
+
+    override suspend fun openForwardOver(
+        session: SshTunnelSession,
+        remoteHost: String,
+        remotePort: Int,
+    ): SshPortForwardResult {
+        val mina = session as? MinaSshTunnelSession ?: return SshPortForwardResult.Failure("Session is not a MINA session")
+        return withContext(Dispatchers.IO) { bindForward(mina, remoteHost, remotePort, ownedSession = null) }
+    }
+
     override suspend fun openLocalForward(
         host: String,
         port: Int,
@@ -33,97 +94,98 @@ class MinaSshPortForwarder(
         remotePort: Int,
         connectTimeoutMillis: Long,
     ): SshPortForwardResult {
+        val session =
+            when (val opened = openSession(host, port, auth, verifier, connectTimeoutMillis)) {
+                is SshTunnelSessionResult.Opened -> opened.session
+                is SshTunnelSessionResult.HostKeyUntrusted ->
+                    return SshPortForwardResult.HostKeyUntrusted(opened.hostKey)
+                is SshTunnelSessionResult.Failure ->
+                    return SshPortForwardResult.Failure(opened.message, opened.cause)
+            }
         val handedOffForward = AtomicReference<SshPortForward?>(null)
         try {
-            return withContext(Dispatchers.IO) {
-                var client: MinaApacheSshClient? = null
-                var hostKeyVerifier: FingerprintServerKeyVerifier? = null
-                var session: ClientSession? = null
-                var tracker: ExplicitPortForwardingTracker? = null
-                var phase = "clientFactory()"
-
-                fun cleanupPartialForward() {
-                    runCatching { tracker?.close() }
-                    runCatching { session?.close(false) }
-                    runCatching { client?.stop() }
-                }
-
-                fun failure(error: Throwable): SshPortForwardResult {
-                    cleanupPartialForward()
-                    val untrusted = hostKeyVerifier?.untrustedKey
-                    if (untrusted != null) return SshPortForwardResult.HostKeyUntrusted(untrusted)
-
-                    val causeTypes =
-                        generateSequence(error) { it.cause }
-                            .take(8)
-                            .joinToString(" <- ") { it::class.java.simpleName }
-                    val missingClass =
-                        generateSequence(error) { it.cause }
-                            .filter { it is LinkageError || it is ClassNotFoundException }
-                            .mapNotNull { cause -> cause.message?.takeIf { SAFE_CLASS_NAME.matches(it) } }
-                            .firstOrNull()
-                    val missingClassDetail = missingClass?.let { " ($it)" }.orEmpty()
-                    return SshPortForwardResult.Failure("$phase failed: $causeTypes$missingClassDetail", error)
-                }
-
-                try {
-                    val created = clientFactory()
-                    client = created
-                    val createdVerifier = FingerprintServerKeyVerifier(host, port, verifier)
-                    hostKeyVerifier = createdVerifier
-                    created.serverKeyVerifier = createdVerifier
-
-                    phase = "start()"
-                    SshKeepAlive.enableOn(created)
-                    created.start()
-                    // MINA's verify(timeout) blocks until the handshake (including our host-key check)
-                    // completes or throws, so no coroutine-future adapter is needed.
-                    phase = "connect()"
-                    val connectedSession =
-                        created.connect(auth.username, host, port)
-                            .verify(connectTimeoutMillis)
-                            .session
-                    session = connectedSession
-
-                    phase = "auth()"
-                    connectedSession.applySshAuth(auth)
-                    connectedSession.auth().verify(AUTH_TIMEOUT_MILLIS)
-
-                    // Bind an ephemeral port on the device's loopback; the OS assigns the real port,
-                    // which we read back from the tracker's bound address.
-                    val local = SshdSocketAddress(LOCAL_HOST, 0)
-                    val remote = SshdSocketAddress(remoteHost, remotePort)
-                    phase = "portForward()"
-                    val createdTracker = connectedSession.createLocalPortForwardingTracker(local, remote)
-                    tracker = createdTracker
-                    val forward =
-                        MinaSshPortForward(
-                            localHost = LOCAL_HOST,
-                            localPort = createdTracker.boundAddress.port,
-                            remoteHost = remoteHost,
-                            remotePort = remotePort,
-                            client = created,
-                            session = connectedSession,
-                            tracker = createdTracker,
-                        )
-                    handedOffForward.set(forward)
-                    SshPortForwardResult.Listening(forward)
-                } catch (e: CancellationException) {
-                    cleanupPartialForward()
-                    throw e
-                } catch (e: Exception) {
-                    failure(e)
-                } catch (e: LinkageError) {
-                    // Android class-linkage failures are Errors, not Exceptions. Fatal VM errors
-                    // such as OutOfMemoryError remain uncaught.
-                    failure(e)
-                }
+            val bound = bindForward(session, remoteHost, remotePort, ownedSession = session)
+            if (bound is SshPortForwardResult.Listening) {
+                handedOffForward.set(bound.forward)
+                bound
+            } else {
+                // Nothing was bound, so the session this method opened has no owner left for it.
+                runCatching { session.close() }
+                bound
             }
         } catch (e: Throwable) {
-            // withContext can notice cancellation after blocking MINA setup returns a forward but
-            // before handing the result back to the caller. Close that orphaned ownership handle.
+            // withContext can notice cancellation after binding returns a forward but before handing
+            // the result back to the caller. Close that orphaned ownership handle.
             runCatching { handedOffForward.getAndSet(null)?.close() }
+            runCatching { session.close() }
             throw e
+        }
+    }
+
+    /** Binds a loopback port to [remoteHost]:[remotePort] on an already-open session. */
+    private suspend fun bindForward(
+        session: MinaSshTunnelSession,
+        remoteHost: String,
+        remotePort: Int,
+        ownedSession: MinaSshTunnelSession?,
+    ): SshPortForwardResult =
+        try {
+            // Bind an ephemeral port on the device's loopback; the OS assigns the real port,
+            // which we read back from the tracker's bound address.
+            val local = SshdSocketAddress(LOCAL_HOST, 0)
+            val remote = SshdSocketAddress(remoteHost, remotePort)
+            val tracker = session.connectedSession.createLocalPortForwardingTracker(local, remote)
+            SshPortForwardResult.Listening(
+                MinaSshPortForward(
+                    localHost = LOCAL_HOST,
+                    localPort = tracker.boundAddress.port,
+                    remoteHost = remoteHost,
+                    remotePort = remotePort,
+                    session = session.connectedSession,
+                    tracker = tracker,
+                    ownedSession = ownedSession,
+                ),
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            SshPortForwardResult.Failure(describe(phase = "portForward()", error = e), e)
+        } catch (e: LinkageError) {
+            SshPortForwardResult.Failure(describe(phase = "portForward()", error = e), e)
+        }
+
+    /** Builds the failure text shared by the session and forward steps. */
+    private fun describe(
+        phase: String,
+        error: Throwable,
+    ): String {
+        val causeTypes =
+            generateSequence(error) { it.cause }
+                .take(8)
+                .joinToString(" <- ") { it::class.java.simpleName }
+        val missingClass =
+            generateSequence(error) { it.cause }
+                .filter { it is LinkageError || it is ClassNotFoundException }
+                .mapNotNull { cause -> cause.message?.takeIf { SAFE_CLASS_NAME.matches(it) } }
+                .firstOrNull()
+        val missingClassDetail = missingClass?.let { " ($it)" }.orEmpty()
+        return "$phase failed: $causeTypes$missingClassDetail"
+    }
+
+    private fun describeSessionFailure(
+        phase: String,
+        error: Throwable,
+        hostKeyVerifier: FingerprintServerKeyVerifier?,
+        client: MinaApacheSshClient?,
+        session: ClientSession?,
+    ): SshTunnelSessionResult {
+        runCatching { session?.close(false) }
+        runCatching { client?.stop() }
+        val untrusted = hostKeyVerifier?.untrustedKey
+        return if (untrusted != null) {
+            SshTunnelSessionResult.HostKeyUntrusted(untrusted)
+        } else {
+            SshTunnelSessionResult.Failure(describe(phase, error), error)
         }
     }
 
@@ -139,17 +201,18 @@ class MinaSshPortForwarder(
 }
 
 /**
- * A MINA-backed forward. Holds the SSH client, session and forwarding tracker and releases all three on
- * [close], so the forward's lifetime is tied to the session that carries it.
+ * A MINA-backed forward over an existing session. Releases the tracker and its session on [close], plus
+ * [ownedSession] when this forward is the one that opened it - so a pooled forward leaves the shared
+ * session running while an owned one takes everything it opened down with it.
  */
 private class MinaSshPortForward(
     override val localHost: String,
     override val localPort: Int,
     override val remoteHost: String,
     override val remotePort: Int,
-    private val client: MinaApacheSshClient,
     private val session: ClientSession,
     private val tracker: ExplicitPortForwardingTracker,
+    private val ownedSession: MinaSshTunnelSession?,
 ) : SshPortForward {
     @Volatile
     private var closed = false
@@ -172,9 +235,30 @@ private class MinaSshPortForward(
         if (closed) return
         closed = true
         // Order matters: stop forwarding first (closes the listener and any in-flight channels), then the
-        // session, then the client that owns it.
+        // session, then whatever opened that session.
         runCatching { tracker.close() }
         runCatching { session.close(false) }
+        runCatching { ownedSession?.close() }
+    }
+}
+
+/** A MINA client + session held together so a pool can share one across many forwards. */
+internal class MinaSshTunnelSession(
+    private val client: MinaApacheSshClient,
+    /** The live MINA session, used to open further forwards on this connection. */
+    val connectedSession: ClientSession,
+) : SshTunnelSession {
+    @Volatile
+    private var closed = false
+
+    override val isOpen: Boolean
+        get() = !closed && connectedSession.isOpen
+
+    @Synchronized
+    override fun close() {
+        if (closed) return
+        closed = true
+        runCatching { connectedSession.close(false) }
         runCatching { client.stop() }
     }
 }

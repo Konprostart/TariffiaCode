@@ -76,7 +76,7 @@ class VpsSshConnectInstrumentedTest {
 
                 val activeTarget =
                     VpsRuntimeTarget(
-                        connector = VpsRuntimeConnector(MinaSshPortForwarder(), reopenedCredentials),
+                        connector = VpsRuntimeConnector(SshTunnelPool(MinaSshPortForwarder()), reopenedCredentials),
                         remotePort = TEST_OPENCODE_PORT,
                         profiles = reopenedProfiles,
                     )

@@ -83,7 +83,7 @@ class VpsConnectionLifecycleTest {
     private fun target(
         store: SshCredentialStore,
         remotePort: Int,
-    ) = VpsRuntimeTarget(VpsRuntimeConnector(MinaSshPortForwarder(), store), remotePort = remotePort)
+    ) = VpsRuntimeTarget(VpsRuntimeConnector(SshTunnelPool(MinaSshPortForwarder()), store), remotePort = remotePort)
 
     @Test
     fun `connect success leaves a connected state with an open forward`() =

@@ -5,13 +5,16 @@ import com.konprostart.tariffiacode.core.ssh.SshConnectResult
 import com.konprostart.tariffiacode.core.ssh.SshConnectionClient
 import com.konprostart.tariffiacode.core.ssh.SshHostKeyVerifier
 import com.konprostart.tariffiacode.core.ssh.SshPortForwardResult
-import com.konprostart.tariffiacode.core.ssh.SshPortForwarder
+import com.konprostart.tariffiacode.core.ssh.SshSessionSharingForwarder
+import com.konprostart.tariffiacode.core.ssh.SshTunnelSession
+import com.konprostart.tariffiacode.core.ssh.SshTunnelSessionResult
 import com.konprostart.tariffiacode.data.ssh.SshAuthType
 import com.konprostart.tariffiacode.data.ssh.SshCredential
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.data.ssh.SshProfileStore
 import com.konprostart.tariffiacode.runtime.RuntimeState
+import com.konprostart.tariffiacode.runtime.vps.SshTunnelPool
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeConnector
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeTarget
 import kotlinx.coroutines.test.runTest
@@ -55,10 +58,32 @@ class SshSettingsViewModelTest {
         ): SshConnectResult = SshConnectResult.Failure("unused in this test")
     }
 
+    /**
+     * Fails the *session* step, because the VPS runtime now opens its tunnel through the pool: the
+     * connector asks for a session first and only binds a forward once one exists. Recording the auth
+     * here keeps this test asserting what it is about - that a password never reaches the error text.
+     */
     private class RecordingForwarder(
         private val failure: SshPortForwardResult.Failure = SshPortForwardResult.Failure("test forwarder reached"),
-    ) : SshPortForwarder {
+    ) : SshSessionSharingForwarder {
         var capturedAuth: SshAuth? = null
+
+        override suspend fun openSession(
+            host: String,
+            port: Int,
+            auth: SshAuth,
+            verifier: SshHostKeyVerifier,
+            connectTimeoutMillis: Long,
+        ): SshTunnelSessionResult {
+            capturedAuth = auth
+            return SshTunnelSessionResult.Failure(failure.message, failure.cause)
+        }
+
+        override suspend fun openForwardOver(
+            session: SshTunnelSession,
+            remoteHost: String,
+            remotePort: Int,
+        ): SshPortForwardResult = failure
 
         override suspend fun openLocalForward(
             host: String,
@@ -216,7 +241,7 @@ class SshSettingsViewModelTest {
                 )
             val target =
                 VpsRuntimeTarget(
-                    connector = VpsRuntimeConnector(forwarder, reloadedCredentials),
+                    connector = VpsRuntimeConnector(SshTunnelPool(forwarder), reloadedCredentials),
                     profiles =
                         SshProfileStore(
                             load = { backend.profiles },
