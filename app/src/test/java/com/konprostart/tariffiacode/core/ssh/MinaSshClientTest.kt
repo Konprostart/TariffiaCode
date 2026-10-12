@@ -1,6 +1,7 @@
 package com.konprostart.tariffiacode.core.ssh
 
 import kotlinx.coroutines.test.runTest
+import org.apache.sshd.client.SshClient
 import org.apache.sshd.server.SshServer
 import org.apache.sshd.server.auth.password.PasswordAuthenticator
 import org.apache.sshd.server.auth.pubkey.PublickeyAuthenticator
@@ -191,4 +192,52 @@ class MinaSshClientTest {
             assertTrue(failure.message.contains("clientFactory() failed"))
             assertTrue(failure.cause is NoClassDefFoundError)
         }
+
+    @Test
+    fun `a successful connect leaves the client running for the session to own`() =
+        runTest {
+            // Regression: connect() used to stop the MINA client in its `finally`, on the success
+            // path too. `SshClient.stop()` closes every session it owns, so the SshSession handed
+            // back was already dead. The client must stay up; the session stops it on close().
+            val s = startServer(password = "secret")
+            val recording = RecordingSshClient()
+            val result =
+                MinaSshClient(clientFactory = { recording }).connect(
+                    host = "127.0.0.1",
+                    port = s.port,
+                    auth = SshAuth.Password("tester", "secret"),
+                    verifier = trustAllVerifier(),
+                )
+            assertTrue("expected Connected, got $result", result is SshConnectResult.Connected)
+            assertTrue("client must not be stopped while its session is in use", recording.stopCalls == 0)
+
+            (result as SshConnectResult.Connected).session.close()
+            assertTrue("closing the session must release the client", recording.stopCalls == 1)
+        }
+
+    @Test
+    fun `a failed connect still releases the client`() =
+        runTest {
+            val s = startServer(password = "secret")
+            val recording = RecordingSshClient()
+            val result =
+                MinaSshClient(clientFactory = { recording }).connect(
+                    host = "127.0.0.1",
+                    port = s.port,
+                    auth = SshAuth.Password("tester", "wrong"),
+                    verifier = trustAllVerifier(),
+                )
+            assertTrue("expected Failure, got $result", result is SshConnectResult.Failure)
+            assertTrue("a failed connect must not leak the client", recording.stopCalls == 1)
+        }
+
+    /** Real client that counts [stop] calls, so ownership handoff can be asserted. */
+    private class RecordingSshClient : SshClient() {
+        var stopCalls = 0
+
+        override fun stop() {
+            stopCalls++
+            super.stop()
+        }
+    }
 }

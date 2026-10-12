@@ -49,12 +49,17 @@ class MinaSshClient(
             var hostKeyVerifier: FingerprintServerKeyVerifier? = null
             var session: ClientSession? = null
             var phase = "clientFactory()"
+            // The connected path hands the client over to the session (which stops it on close);
+            // only the failure paths release it here. Stopping it on success - as this class used to
+            // do in its `finally` - tears down the very session it just returned.
+            var handedOff = false
             try {
                 val created = clientFactory()
                 client = created
                 hostKeyVerifier = FingerprintServerKeyVerifier(host, port, verifier)
                 created.serverKeyVerifier = hostKeyVerifier
                 phase = "start()"
+                SshKeepAlive.enableOn(created)
                 created.start()
                 // MINA's verify(timeout) blocks until the handshake (including our host-key check)
                 // completes or throws, so no coroutine-future adapter is needed.
@@ -76,12 +81,13 @@ class MinaSshClient(
 
                 // Bind our own stdin/stdout/stderr pipes BEFORE opening the channel so no remote
                 // output is missed once the shell starts.
-                val sshSession = MinaSshSession(session, channel)
+                val sshSession = MinaSshSession(created, session, channel)
                 channel.setIn(sshSession.remoteInput)
                 channel.setOut(sshSession.remoteOutput)
                 channel.setErr(sshSession.remoteError)
                 channel.open().verify(connectTimeoutMillis)
 
+                handedOff = true
                 SshConnectResult.Connected(sshSession)
             } catch (e: CancellationException) {
                 runCatching { session?.close() }
@@ -97,7 +103,9 @@ class MinaSshClient(
                     SshConnectResult.Failure("$phase failed", e)
                 }
             } finally {
-                runCatching { client?.stop() }
+                if (!handedOff) {
+                    runCatching { client?.stop() }
+                }
             }
         }
 
@@ -141,13 +149,17 @@ internal class FingerprintServerKeyVerifier(
 }
 
 /**
- * A live interactive shell backed by a MINA [ChannelShell].
+ * A live interactive shell backed by a MINA [ChannelShell], owning the client that carries it.
  *
  * MINA writes remote stdout/stderr into the [PipedOutputStream]s we hand to `setOut`/`setErr`; the
  * paired [PipedInputStream]s are drained here. stdin is the opposite direction: bytes written to
  * [writeStandardInput] go into a pipe whose read side MINA consumes via `setIn`.
+ *
+ * [close] releases the channel, the session and finally the client, so the caller of
+ * [MinaSshClient.connect] never has to keep a handle on the MINA objects.
  */
 private class MinaSshSession(
+    private val client: MinaApacheSshClient,
     private val session: ClientSession,
     private val channel: ChannelShell,
 ) : SshSession {
@@ -216,6 +228,7 @@ private class MinaSshSession(
     override val isOpen: Boolean
         get() = open
 
+    @Synchronized
     override fun close() {
         if (!open) return
         open = false
@@ -224,6 +237,8 @@ private class MinaSshSession(
         runCatching { stderrPipe.close() }
         runCatching { channel.close(false) }
         runCatching { session.close(false) }
+        // Last, like the owned shell session: the client owns the session, so it goes after it.
+        runCatching { client.stop() }
     }
 
     private companion object {

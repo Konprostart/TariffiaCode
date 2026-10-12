@@ -37,6 +37,7 @@ class MinaSshShellClient(
             client.serverKeyVerifier = hostKeyVerifier
             var session: ClientSession? = null
             try {
+                SshKeepAlive.enableOn(client)
                 client.start()
                 session =
                     client.connect(auth.username, host, port)

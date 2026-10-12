@@ -37,6 +37,7 @@ class MinaSshExecClient(
             var session: ClientSession? = null
             var channel: ChannelExec? = null
             try {
+                SshKeepAlive.enableOn(client)
                 client.start()
                 session =
                     client.connect(auth.username, host, port)
