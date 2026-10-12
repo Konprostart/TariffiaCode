@@ -15,6 +15,11 @@ import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
 
+private const val TEST_INSTALLED_PACKAGE = "com.konprostart.tariffiacode"
+
+/** 64 lowercase-hex characters, standing in for a signer certificate's SHA-256. */
+private const val TEST_SIGNER = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 class AppUpdateViewModelTest {
     private val sha = "a".repeat(64)
 
@@ -61,6 +66,15 @@ class AppUpdateViewModelTest {
         }
     }
 
+    private class FakeApkInspector(
+        var apkInfo: AppUpdateApkInfo? = AppUpdateApkInfo(TEST_INSTALLED_PACKAGE, 9999L, TEST_SIGNER),
+        var installedInfo: AppUpdateApkInfo = AppUpdateApkInfo(TEST_INSTALLED_PACKAGE, 74L, TEST_SIGNER),
+    ) : AppUpdateApkInspector {
+        override fun inspect(apk: File): AppUpdateApkInfo? = apkInfo
+
+        override fun installed(): AppUpdateApkInfo = installedInfo
+    }
+
     private val manifests = mutableMapOf<String, ByteArray>()
 
     private fun releaseJson(tag: String = "v9.9.9"): String {
@@ -89,6 +103,7 @@ class AppUpdateViewModelTest {
         downloader: AppUpdateApkDownloader,
         installer: AppUpdateInstaller,
         apkFile: File,
+        inspector: AppUpdateApkInspector = FakeApkInspector(),
     ) = AppUpdateViewModel(
         installedVersion = "1.2.29",
         client =
@@ -98,6 +113,7 @@ class AppUpdateViewModelTest {
             ),
         downloader = downloader,
         installer = installer,
+        inspector = inspector,
         apkFileProvider = { apkFile },
     )
 
@@ -167,5 +183,31 @@ class AppUpdateViewModelTest {
             assertTrue(downloader.downloads.isEmpty())
             assertTrue(installer.installed.isEmpty())
             assertNotNull(vm.state.value.installMessage)
+        }
+
+    @Test
+    fun `an update signed with a different key than the installed app is not installed`() =
+        runTest {
+            val installer = FakeInstaller()
+            val inspector = FakeApkInspector(apkInfo = AppUpdateApkInfo(TEST_INSTALLED_PACKAGE, 9999L, "b".repeat(64)))
+            val vm = viewModel(releaseJson(), FakeDownloader(), installer, File.createTempFile("apk", ".apk"), inspector)
+
+            vm.downloadAndInstall(release())
+
+            assertNotNull(vm.state.value.error)
+            assertTrue(installer.installed.isEmpty())
+        }
+
+    @Test
+    fun `an update for a different package than the installed app is not installed`() =
+        runTest {
+            val installer = FakeInstaller()
+            val inspector = FakeApkInspector(apkInfo = AppUpdateApkInfo("$TEST_INSTALLED_PACKAGE.debug", 9999L, TEST_SIGNER))
+            val vm = viewModel(releaseJson(), FakeDownloader(), installer, File.createTempFile("apk", ".apk"), inspector)
+
+            vm.downloadAndInstall(release())
+
+            assertNotNull(vm.state.value.error)
+            assertTrue(installer.installed.isEmpty())
         }
 }
