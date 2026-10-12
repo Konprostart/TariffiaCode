@@ -17,7 +17,7 @@ enum class AgentInstallMechanism {
     /** A tarball from the npm registry, with SRI verification (Codex). */
     NPM_TARBALL,
 
-    /** A GitHub release tarball, installed into its own userland (Antigravity). */
+    /** A GitHub release tarball (Antigravity). */
     GITHUB_RELEASE_TARBALL,
 }
 
@@ -41,7 +41,13 @@ enum class AgentUserland {
     DEBIAN_ROOTFS,
 }
 
-/** How an MCP server entry is spelled in an agent's own config file. */
+/**
+ * How an MCP server entry is spelled in an agent's own config file.
+ *
+ * This is the format the installer writes into [AgentMcpProvisioning.AtConfigFile.path], nothing
+ * more. It is deliberately not the shape of the JSON body sent to a runtime's MCP API at runtime,
+ * which is a separate question a runtime's own target answers.
+ */
 enum class AgentMcpEntryStyle {
     /** `{"type":"local","command":[…],"enabled":…,"timeout":…}` - OpenCode's shape. */
     LOCAL_WITH_TIMEOUT,
@@ -65,10 +71,10 @@ sealed interface AgentMcpProvisioning {
     data object None : AgentMcpProvisioning
 
     /**
-     * The agent reads MCP servers from [path], a JSON object on the guest filesystem, under
-     * [jsonKey], with each entry spelled [entryStyle].
+     * The JSON object holding this agent's MCP servers, and how one entry in it is spelled.
      */
     data class AtConfigFile(
+        /** Path of the file, relative to the agent rootfs (as opposed to guest-absolute like [AgentDescriptor.binaryPaths]). */
         val path: String,
         val jsonKey: String,
         val entryStyle: AgentMcpEntryStyle,
@@ -89,8 +95,11 @@ sealed interface AgentMcpProvisioning {
  * until it has answered all of them - which is the entire point of the type.
  *
  * This is declaration only: it records what is already true and changes no behaviour. Acting on
- * `installMechanism` and `binaryPaths` is a later step; today the installers still hold those
- * constants, and a test pins the two together so they cannot drift.
+ * `installMechanism`, `binaryPaths`, `userland`, `instructionFile` and the [mcp] provisioning is a
+ * later step - the installers, the provisioning writer and the userland switch still hold those
+ * facts themselves. What this change does wire up are the decisions the UI asks at runtime, which
+ * are read through the descriptor now. A test pins the not-yet-wired fields to the constants they
+ * will replace, so the declaration cannot drift from the code that acts on it.
  */
 data class AgentDescriptor(
     /** Stable identifier, persisted in installed-component metadata and passed across process boundaries. */
@@ -120,10 +129,11 @@ data class AgentDescriptor(
      */
     val binaryPaths: List<String>,
     /**
-     * Guest path of the file the app writes its shared agent context into, if any.
+     * Path of the file the app writes its shared agent context into, if any.
      *
-     * `null` means this agent has no such file and receives none; it is not a default to be filled
-     * in later.
+     * Relative to the agent rootfs, not guest-absolute like [binaryPaths]: it is resolved against
+     * whichever rootfs the agent runs in. `null` means this agent has no such file and receives
+     * none; it is not a default to be filled in later.
      */
     val instructionFile: String?,
     /** Where MCP servers are declared for this agent, if anywhere. */

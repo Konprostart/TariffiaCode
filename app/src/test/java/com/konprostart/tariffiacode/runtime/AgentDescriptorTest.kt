@@ -5,7 +5,6 @@ import com.konprostart.tariffiacode.runtime.local.ClaudeCodeInstaller
 import com.konprostart.tariffiacode.runtime.local.CodexInstaller
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,36 +25,37 @@ import org.junit.Test
  */
 class AgentDescriptorTest {
     @Test
-    fun `every agent is reachable by the id its descriptor declares`() {
-        LocalAgent.entries.forEach { agent ->
-            assertEquals(
-                "descriptor id must match the entry it is attached to",
-                agent.descriptor.id,
-                agent.id,
-            )
-            assertEquals("fromId must round-trip ${agent.id}", agent, LocalAgent.fromId(agent.id))
-        }
+    fun `agent ids are the ones persisted and restored across process boundaries`() {
+        // Ids are written into installed-component metadata and passed back through a service Intent,
+        // so they are part of the on-disk contract; renaming one silently reinstalls nothing.
+        assertEquals(
+            listOf("opencode", "claude-code", "antigravity", "codex"),
+            LocalAgent.entries.map { it.descriptor.id },
+        )
     }
 
     @Test
-    fun `agent ids are distinct`() {
-        val ids = LocalAgent.entries.map { it.id }
-        assertEquals("two agents share an id, so metadata could not tell them apart", ids.size, ids.distinct().size)
+    fun `target ids match the ones the runtimes are registered under`() {
+        assertEquals(
+            listOf("local-android", "claude-code-local", "antigravity-local", "codex-local"),
+            LocalAgent.entries.map { it.descriptor.targetId },
+        )
     }
 
     @Test
     fun `every descriptor carries the resources and paths a row needs`() {
         LocalAgent.entries.forEach { agent ->
             val descriptor = agent.descriptor
-            assertNotNull(descriptor.displayNameRes)
-            assertNotNull(descriptor.iconRes)
+            // 0 is not a real resource id, so a zeroed field means the descriptor was filled in
+            // with a placeholder rather than an answer.
+            assertTrue("${agent.id} has no display name", descriptor.displayNameRes != 0)
+            assertTrue("${agent.id} has no icon", descriptor.iconRes != 0)
             assertTrue("${agent.id} has no target id", descriptor.targetId.isNotBlank())
             assertTrue("${agent.id} declares no binaries", descriptor.binaryPaths.isNotEmpty())
             descriptor.binaryPaths.forEach { path ->
                 assertTrue("${agent.id} binary '$path' must be guest-absolute", path.startsWith("/"))
                 assertFalse("${agent.id} binary '$path' must not be directory-only", path.endsWith("/"))
             }
-            assertEquals("${agent.id} target id must be the one its runtime is registered under", agent.targetId, descriptor.targetId)
         }
     }
 
@@ -72,13 +72,20 @@ class AgentDescriptorTest {
     }
 
     @Test
-    fun `proprietary is declared per agent, and the gate reads that declaration`() {
-        LocalAgent.entries.forEach { agent ->
+    fun `the F-Droid gate withholds exactly the agents declared proprietary`() {
+        val previous = ProprietaryAgents.enabled
+        try {
+            ProprietaryAgents.enabled = false
+            // This is the failure mode the descriptor removes: the gate used to ask "is this the
+            // free one", so an agent added anywhere but first would be withheld on this flavour
+            // whether or not that was ever decided. It now follows what each agent declares.
             assertEquals(
-                "${agent.id} is classified by something other than its descriptor",
-                agent.descriptor.proprietary,
-                ProprietaryAgents.isProprietary(agent),
+                LocalAgent.entries.filter { !it.descriptor.proprietary }.map { it.id },
+                ProprietaryAgents.selectable().map { it.id },
             )
+            assertTrue(LocalAgent.OPEN_CODE in ProprietaryAgents.selectable())
+        } finally {
+            ProprietaryAgents.enabled = previous
         }
     }
 
@@ -164,13 +171,15 @@ class AgentDescriptorTest {
             listOf(ClaudeCodeInstaller.CLAUDE_BINARY),
             LocalAgent.CLAUDE_CODE.descriptor.binaryPaths,
         )
+        // Compared as full guest-absolute paths, not bare names: the directory is half of what the
+        // descriptor asserts, and a bare-name comparison would keep passing if it moved to /opt.
         assertEquals(
-            CodexInstaller.INSTALLED_BINARIES,
-            LocalAgent.CODEX.descriptor.binaryPaths.map { it.substringAfterLast('/') },
+            CodexInstaller.INSTALLED_BINARIES.map { "/${CodexInstaller.BIN_DIR}/$it" },
+            LocalAgent.CODEX.descriptor.binaryPaths,
         )
         assertEquals(
-            listOf(AntigravityManifest.BINARY_NAME),
-            LocalAgent.ANTIGRAVITY.descriptor.binaryPaths.map { it.substringAfterLast('/') },
+            listOf("/${CodexInstaller.BIN_DIR}/${AntigravityManifest.BINARY_NAME}"),
+            LocalAgent.ANTIGRAVITY.descriptor.binaryPaths,
         )
         // OpenCode has no shared constant yet - its path is written literally at each of the two
         // places that launch or update it - so there is nothing here to compare against.
