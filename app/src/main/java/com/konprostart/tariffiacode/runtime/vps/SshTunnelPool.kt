@@ -36,7 +36,7 @@ data class TunnelKey(
  *
  * Pooling is two-level because the two resources cost very different amounts:
  *
- *  - a **session** per [profileId] *and endpoint* is the expensive half - one handshake, one
+ *  - a **session** per endpoint ([TunnelKey.profileId] plus its host and port) is the expensive half - one handshake, one
  *    authentication, one keep-alive - and is shared by every tunnel to that server;
  *  - a **forward** per [TunnelKey] is one channel on it, cheap to add, and is what a caller holds.
  *
@@ -133,11 +133,7 @@ class SshTunnelPool(
                         runCatching { forwardEntry.forward.close() }
                         null
                     }
-                    else -> {
-                        entry.holders++
-                        forwardEntry.holders++
-                        lease(entry, key, forwardEntry.forward)
-                    }
+                    else -> acquireLocked(entry, key, forwardEntry.forward)
                 }
             }
         }
@@ -180,10 +176,21 @@ class SshTunnelPool(
         key: TunnelKey,
         forward: SshPortForward,
     ): SshPortForward {
-        val forwardEntry = entry.forwards.getOrPut(key) { ForwardEntry(forward) }
+        // Read first rather than getOrPut: if someone registered this tunnel while we were binding,
+        // the forward we just bound is redundant, and its loopback listener would otherwise stay open
+        // for the life of the process with nothing holding it.
+        val existing = entry.forwards[key]
+        if (existing != null) {
+            runCatching { forward.close() }
+            entry.holders++
+            existing.holders++
+            return lease(entry, key, existing.forward)
+        }
+        val forwardEntry = ForwardEntry(forward)
+        entry.forwards[key] = forwardEntry
         entry.holders++
         forwardEntry.holders++
-        return lease(entry, key, forwardEntry.forward)
+        return lease(entry, key, forward)
     }
 
     private fun acquire(
@@ -310,11 +317,17 @@ class SshTunnelPool(
                 }
             return when (val bound = bind(session, key)) {
                 is SshPortForwardResult.Listening -> Establishment.Established(session, bound.forward)
-                is SshPortForwardResult.Failure -> Establishment.Failure(bound)
+                // Both failure paths leave the `try`, so neither `catch` below runs: the connection
+                // that was just opened and authenticated has to be released here or it - the MINA
+                // client, its threads and the live session - would leak for the life of the process.
+                is SshPortForwardResult.Failure ->
+                    Establishment.Failure(bound).also { runCatching { session?.close() } }
                 // The handshake already happened, so a key prompt cannot appear here; report it rather
                 // than inventing a failure type the caller would have to special-case.
                 is SshPortForwardResult.HostKeyUntrusted ->
-                    Establishment.Failure(SshPortForwardResult.Failure("Unexpected host-key prompt while binding a forward"))
+                    Establishment
+                        .Failure(SshPortForwardResult.Failure("Unexpected host-key prompt while binding a forward"))
+                        .also { runCatching { session?.close() } }
             }
         } catch (e: CancellationException) {
             runCatching { session?.close() }

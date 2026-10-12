@@ -16,7 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The pool's contract: one session per profile shared by every tunnel, a forward per tunnel, and both
+ * The pool's contract: one session per endpoint shared by every tunnel, a forward per tunnel, and both
  * released only when their last holder lets go.
  *
  * Driven through a fake transport so the counts are exact - a real MINA server cannot tell how many
@@ -259,6 +259,40 @@ class SshTunnelPoolTest {
             assertEquals("the session is still alive, so no new handshake is needed", 1, transport.sessionOpens)
             assertEquals("the dead channel is replaced", 3, transport.forwardOpens)
             assertTrue("the dead channel is closed off", dying.closed)
+        }
+
+    @Test
+    fun `a connection that cannot bind a tunnel is released`() =
+        runTest {
+            // The handshake and authentication succeeded, so this connection is real and expensive;
+            // failing to bind must not leave it behind.
+            val transport =
+                FakeTransport(
+                    forwardResult = { _, _ -> SshPortForwardResult.Failure("direct-tcpip refused") },
+                )
+            val pool = SshTunnelPool(transport)
+
+            val result = pool.open(key(4096), auth, verifier)
+
+            assertTrue(result is SshPortForwardResult.Failure)
+            assertEquals("the connection must be handed back", 1, transport.sessions.size)
+            assertTrue(transport.sessions.all { it.closed })
+            assertEquals(0, pool.holders("vps-1"))
+        }
+
+    @Test
+    fun `a profile whose endpoint changed never reuses the old connection`() =
+        runTest {
+            // Same profile id, different host: the old connection was trusted for the old host, so
+            // reusing it would reach the wrong machine without the verifier being consulted again.
+            val transport = FakeTransport()
+            val pool = SshTunnelPool(transport)
+
+            pool.listen(key(4096))
+            pool.listen(key(4096).copy(host = "other.example", port = 2222))
+
+            assertEquals("a new endpoint needs its own connection", 2, transport.sessionOpens)
+            assertEquals("both are still held", 2, pool.holders("vps-1"))
         }
 
     @Test

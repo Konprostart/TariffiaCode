@@ -55,7 +55,6 @@ class VpsPortForwardManagerTest {
         private val result: SshPortForwardResult,
     ) : SshSessionSharingForwarder {
         var requestedRemotePort: Int? = null
-        var calls: Int = 0
 
         override suspend fun openSession(
             host: String,
@@ -64,7 +63,6 @@ class VpsPortForwardManagerTest {
             verifier: SshHostKeyVerifier,
             connectTimeoutMillis: Long,
         ): SshTunnelSessionResult {
-            calls++
             return when (result) {
                 is SshPortForwardResult.Failure -> SshTunnelSessionResult.Failure(result.message, result.cause)
                 is SshPortForwardResult.HostKeyUntrusted -> SshTunnelSessionResult.HostKeyUntrusted(result.hostKey)
@@ -91,7 +89,6 @@ class VpsPortForwardManagerTest {
             connectTimeoutMillis: Long,
         ): SshPortForwardResult {
             requestedRemotePort = remotePort
-            calls++
             return result
         }
     }
