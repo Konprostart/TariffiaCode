@@ -154,6 +154,16 @@ private class MinaSshPortForward(
     @Volatile
     private var closed = false
 
+    /**
+     * Open only while the local listener is up *and* the SSH session behind it is still open.
+     *
+     * [ExplicitPortForwardingTracker.isOpen] is our own bookkeeping: a forward whose binding was
+     * dropped without a close keeps reporting true, so this is still a statement about the listener,
+     * not a probe of the far end. The session's own state is what MINA clears when the transport
+     * goes away; a dead peer that never sends anything (the silent NAT case) is only detected by
+     * actually talking to the server - see the runtime's health check and its network-handover
+     * recovery, which exist precisely because this cannot tell.
+     */
     override val isOpen: Boolean
         get() = !closed && tracker.isOpen && session.isOpen
 

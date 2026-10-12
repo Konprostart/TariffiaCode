@@ -15,6 +15,7 @@ import com.konprostart.tariffiacode.core.lifecycle.AppForeground
 import com.konprostart.tariffiacode.core.lifecycle.ForegroundReturnDetector
 import com.konprostart.tariffiacode.core.lifecycle.ProcessLifecycleAppForeground
 import com.konprostart.tariffiacode.core.locale.AppLanguage
+import com.konprostart.tariffiacode.core.network.NetworkMonitor
 import com.konprostart.tariffiacode.core.notification.RuntimeNotificationHelper
 import com.konprostart.tariffiacode.core.runtime.RuntimeWorkTracker
 import com.konprostart.tariffiacode.core.security.SecretRedaction
@@ -84,6 +85,7 @@ import com.konprostart.tariffiacode.runtime.local.RuntimeCredentialPolicy
 import com.konprostart.tariffiacode.runtime.local.SystemPromptStore
 import com.konprostart.tariffiacode.runtime.local.VerifiedRuntimeDownloader
 import com.konprostart.tariffiacode.runtime.local.applyOpenCodeSystemPrompt
+import com.konprostart.tariffiacode.runtime.vps.VpsRecovery
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeConnector
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeTarget
 import com.konprostart.tariffiacode.startup.CatalogReconcileInitializer
@@ -522,6 +524,9 @@ class TariffiaCodeApplication : Application() {
         // runs through RemoteOpenCodeBackend, only the endpoint is a loopback forward instead of a URL
         // the user typed. Selecting an SSH profile for it is a later step; with none it stays unavailable.
         val sshProfileStore = SshProfileStore(settings)
+        // Watching which network the phone is on is what lets the VPS tunnel notice a Wi-Fi <-> cellular
+        // handover, which strands every open socket without either end noticing.
+        val networkMonitor = NetworkMonitor(this).also { it.start() }
         vpsRuntimeTarget =
             VpsRuntimeTarget(
                 connector = VpsRuntimeConnector(MinaSshPortForwarder(), SshCredentialStore(settings)),
@@ -530,6 +535,7 @@ class TariffiaCodeApplication : Application() {
                 profiles = sshProfileStore,
                 projects = RemoteProjectStore(settings, sshProfileStore),
                 selection = VpsSelectionStore(settings),
+                recovery = VpsRecovery(scope = applicationScope, networkStatus = networkMonitor.status),
             )
         runtimeRegistry =
             RuntimeRegistry(

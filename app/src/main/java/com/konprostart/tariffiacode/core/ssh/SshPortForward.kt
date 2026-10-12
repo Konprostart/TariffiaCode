@@ -22,7 +22,14 @@ interface SshPortForward : AutoCloseable {
     /** Remote port the tunnel targets. */
     val remotePort: Int
 
-    /** True while the underlying SSH session and local listener are still open. */
+    /**
+     * True while this forward still holds its resources: the local listener is up and the SSH session
+     * behind it is open.
+     *
+     * This is not a liveness probe. A transport dropped without a close can still look open from
+     * here, so callers that need to know whether the far end is actually reachable must ask it - a
+     * health check over the forward, or the runtime's connection recovery.
+     */
     val isOpen: Boolean
 
     /** Stop forwarding and close the listener and its SSH session. Idempotent. */
