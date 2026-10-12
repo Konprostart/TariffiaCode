@@ -500,7 +500,6 @@
     <string name="section_favorites">Favoritos</string>
     <string name="section_recent">Recentes</string>
     <string name="this_android">Este Android</string>
-    <string name="picker_no_providers">Nenhum provedor conectado ainda</string>
     <string name="picker_connect_provider">Conectar um provedor</string>
 
     <string name="onboarding_welcome_title">Bem-vindo ao %1$s</string>

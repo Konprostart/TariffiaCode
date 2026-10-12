@@ -498,7 +498,6 @@
     <string name="section_favorites">收藏</string>
     <string name="section_recent">最近</string>
     <string name="this_android">此 Android</string>
-    <string name="picker_no_providers">暂无已连接的提供商</string>
     <string name="picker_connect_provider">连接提供商</string>
 
     <string name="onboarding_welcome_title">欢迎使用 %1$s</string>

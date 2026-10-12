@@ -488,8 +488,15 @@
     <string name="section_favorites">Favorites</string>
     <string name="section_recent">Recent</string>
     <string name="this_android">This Android</string>
-    <string name="picker_no_providers">No connected providers yet</string>
     <string name="picker_connect_provider">Connect a provider</string>
+    <!-- English-only: the picker's empty state and "add a key" rows for a server whose catalog has
+         providers but no credentials. Translatable=false keeps the i18n check green; the copy falls
+         back to English in every locale, like the other new strings. -->
+    <string name="picker_no_connected_providers" translatable="false">No active providers</string>
+    <string name="picker_no_connected_providers_hint" translatable="false">Add an API key under Settings → Providers, or configure opencode.json on the server (Ollama, GLM, custom endpoints).</string>
+    <string name="picker_no_connected_providers_generic" translatable="false">Connect a provider under Settings, then pick a model here.</string>
+    <string name="section_unconfigured" translatable="false">Not configured (%1$d)</string>
+    <string name="picker_add_key" translatable="false">Add key</string>
 
     <!-- Model visibility settings -->
     <string name="model_visibility_row">Visible models</string>

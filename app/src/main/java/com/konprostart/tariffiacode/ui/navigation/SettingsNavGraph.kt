@@ -13,7 +13,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.core.UrlLauncher
 import com.konprostart.tariffiacode.data.settings.AppPreferences
@@ -478,10 +480,29 @@ fun NavGraphBuilder.settingsNavGraph(
         )
     }
 
-    composable(ROUTE_SETTINGS_PROVIDERS) {
+    composable(
+        route = SETTINGS_PROVIDERS_ROUTE_PATTERN,
+        arguments =
+            listOf(
+                navArgument(SETTINGS_PROVIDERS_ARG_ID) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+    ) { backStackEntry ->
         val settingsState by settingsViewModel.state.collectAsState()
         // Re-read on open: the runtime that owns providers may have started since the last look.
         androidx.compose.runtime.LaunchedEffect(Unit) { settingsViewModel.refreshProviderAuth() }
+        // An unconfigured-provider row in the model picker lands here with its id, so the API-key
+        // dialog is already up instead of asking the user to find the provider in the list first.
+        val requestedProviderId =
+            backStackEntry.arguments?.getString(SETTINGS_PROVIDERS_ARG_ID)
+                ?.takeIf(String::isNotBlank)
+                ?.let(::decodeRouteArg)
+        androidx.compose.runtime.LaunchedEffect(requestedProviderId) {
+            requestedProviderId?.let(settingsViewModel::openProviderAuth)
+        }
         ProviderSettingsScreen(
             state = settingsState,
             onOpenProviderAuth = settingsViewModel::openProviderAuth,

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -78,10 +79,16 @@ fun ModelAndRuntimePickerSheet(
     onToggleFavorite: (String, String) -> Unit = { _, _ -> },
     showLocalSuffix: Boolean = true,
     onConnectProvider: (() -> Unit)? = null,
+    /** Catalog providers without credentials, rendered as "add a key" rows under the connected ones. */
+    unconfiguredProviders: List<OpenCodeProvider> = emptyList(),
+    onConfigureProvider: ((String) -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     var runtimesExpanded by remember { mutableStateOf(false) }
+    // A server with nothing connected is exactly when the unconfigured list matters, so it starts
+    // open there and collapsed once there are real models to scroll through.
+    var unconfiguredExpanded by remember { mutableStateOf(providers.isEmpty()) }
     val listState = rememberLazyListState()
     val sheetState =
         rememberModalBottomSheetState(
@@ -174,14 +181,13 @@ fun ModelAndRuntimePickerSheet(
                 }
             }
 
+            val matchingUnconfigured = unconfiguredProviders.filter { providerMatchesQuery(it, query) }
+
             if (providers.isEmpty()) {
                 item {
-                    Text(
-                        text = stringResource(R.string.picker_no_providers),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 12.dp),
-                    )
+                    // The unfiltered count: the advice is about the catalog, not about what the
+                    // search box currently matches.
+                    PickerEmptyState(unconfiguredCount = unconfiguredProviders.size)
                 }
             } else {
                 data class FavoriteEntry(
@@ -288,6 +294,14 @@ fun ModelAndRuntimePickerSheet(
                 }
             }
 
+            unconfiguredSection(
+                providers = matchingUnconfigured,
+                expanded = unconfiguredExpanded,
+                onToggleExpanded = { unconfiguredExpanded = !unconfiguredExpanded },
+                onConfigureProvider = onConfigureProvider,
+                onConnectProvider = onConnectProvider,
+            )
+
             if (onConnectProvider != null) {
                 item {
                     TextButton(
@@ -315,6 +329,78 @@ private fun SheetSectionHeader(text: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
     )
+}
+
+/** The sheet's empty state: a heading plus the advice that fits what the catalog actually offers. */
+@Composable
+private fun PickerEmptyState(unconfiguredCount: Int) {
+    Column(modifier = Modifier.padding(vertical = 12.dp)) {
+        Text(
+            text = stringResource(R.string.picker_no_connected_providers),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        // Only the OpenCode runtimes expose a catalog to act on; a CLI agent that is signed out
+        // gets the neutral line instead of server-configuration advice.
+        val hint =
+            if (unconfiguredCount > 0) {
+                R.string.picker_no_connected_providers_hint
+            } else {
+                R.string.picker_no_connected_providers_generic
+            }
+        Text(
+            text = stringResource(hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+/**
+ * The "not configured" block: a collapsible header and one row per provider, or nothing at all
+ * when the catalog has none. A `LazyListScope` extension keeps the sheet's own body flat, which is
+ * also what keeps its complexity within detekt's limit.
+ */
+private fun LazyListScope.unconfiguredSection(
+    providers: List<OpenCodeProvider>,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    onConfigureProvider: ((String) -> Unit)?,
+    onConnectProvider: (() -> Unit)?,
+) {
+    if (providers.isEmpty()) return
+    item(key = "section_unconfigured") {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggleExpanded)
+                    .padding(top = 12.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                contentDescription = stringResource(R.string.cd_expand_collapse),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = stringResource(R.string.section_unconfigured, providers.size),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+    if (!expanded) return
+    items(providers, key = { "unconfigured-${it.id}" }) { provider ->
+        UnconfiguredProviderRow(
+            provider = provider,
+            onConfigure = onConfigureProvider,
+            onFallback = onConnectProvider,
+        )
+    }
 }
 
 @Composable
@@ -416,5 +502,50 @@ private fun ModelRow(
             )
         }
         RadioButton(selected = selected, onClick = onClick)
+    }
+}
+
+/**
+ * One provider the server lists but cannot run yet. Muted on purpose: it is an action ("add the
+ * missing key"), not a model that can be selected, so it carries no radio button.
+ */
+@Composable
+private fun UnconfiguredProviderRow(
+    provider: OpenCodeProvider,
+    onConfigure: ((String) -> Unit)?,
+    onFallback: (() -> Unit)?,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = onConfigure != null || onFallback != null) {
+                    val configure = onConfigure
+                    if (configure != null) configure(provider.id) else onFallback?.invoke()
+                }
+                .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = provider.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = provider.id,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        Text(
+            text = stringResource(R.string.picker_add_key),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }

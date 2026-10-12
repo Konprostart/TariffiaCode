@@ -14,6 +14,7 @@ import com.konprostart.tariffiacode.data.settings.AppPreferences
 import com.konprostart.tariffiacode.data.settings.AppPreferencesRepository
 import com.konprostart.tariffiacode.feature.assistant.TtsSettings
 import com.konprostart.tariffiacode.feature.assistant.ttsSettings
+import com.konprostart.tariffiacode.feature.chat.unconfiguredProviders
 import com.konprostart.tariffiacode.feature.wakeword.VoskModelCatalog
 import com.konprostart.tariffiacode.feature.wakeword.VoskModelLanguage
 import com.konprostart.tariffiacode.feature.wakeword.VoskModelState
@@ -46,6 +47,12 @@ import java.util.Locale
 data class SettingsUiState(
     val providers: List<OpenCodeProvider> = emptyList(),
     val availableProviders: List<OpenCodeProvider> = emptyList(),
+    /**
+     * Providers the selected runtime's catalog lists without credentials, for the model picker's
+     * "add a key" rows. A server that has none connected still answers with its whole catalog, so
+     * this is what keeps the picker actionable instead of empty.
+     */
+    val unconfiguredProviders: List<OpenCodeProvider> = emptyList(),
     val connectedProviderIds: Set<String> = emptySet(),
     val agents: List<OpenCodeAgent> = emptyList(),
     val providerId: String? = null,
@@ -203,6 +210,7 @@ class SettingsViewModel(
             SettingsUiState(
                 providers = core.runtime.providers.all.filter { it.id in chatConnected },
                 availableProviders = managed.all,
+                unconfiguredProviders = unconfiguredProviders(core.runtime.providers.all, chatConnected),
                 connectedProviderIds = (managed.connected.toSet() + oauth.locallyConnected) - oauth.locallyDisconnected,
                 agents = core.runtime.agents.filter { it.mode == null || it.mode == "primary" },
                 providerId = core.preferences.providerId,
@@ -768,7 +776,16 @@ class SettingsViewModel(
                 }
             runCatching { target.providerAuthMethods() }
                 .onSuccess { methods ->
-                    oauthState.update { current -> current.copy(methods = methods, message = null) }
+                    oauthState.update { current ->
+                        // A dialog opened from the model picker's "add a key" row is already up and
+                        // holding the API-key-only fallback, so the real methods land into it here.
+                        val dialog = current.dialog
+                        current.copy(
+                            methods = methods,
+                            dialog = dialog?.withLoadedMethods(methods[dialog.providerId].orEmpty()),
+                            message = null,
+                        )
+                    }
                 }
                 .onFailure { error ->
                     oauthState.update { current ->
