@@ -310,26 +310,31 @@ class SshTunnelPool(
                     verifier = verifier,
                     connectTimeoutMillis = connectTimeoutMillis,
                 )
-            session =
+            // A non-null local rather than reading `session` back: the two early returns above make
+            // `session` keep its nullable type, and a mutable local captured in the failure handlers
+            // below cannot be smart cast. Assigning it here also means both `catch` blocks can see a
+            // connection to close if anything from here on throws.
+            val openedSession =
                 when (opened) {
                     is SshTunnelSessionResult.HostKeyUntrusted -> return Establishment.HostKeyUntrusted(opened.hostKey)
                     is SshTunnelSessionResult.Failure ->
                         return Establishment.Failure(SshPortForwardResult.Failure(opened.message, opened.cause))
                     is SshTunnelSessionResult.Opened -> opened.session
                 }
-            return when (val bound = bind(session, key)) {
-                is SshPortForwardResult.Listening -> Establishment.Established(session, bound.forward)
+            session = openedSession
+            return when (val bound = bind(openedSession, key)) {
+                is SshPortForwardResult.Listening -> Establishment.Established(openedSession, bound.forward)
                 // Both failure paths leave the `try`, so neither `catch` below runs: the connection
                 // that was just opened and authenticated has to be released here or it - the MINA
                 // client, its threads and the live session - would leak for the life of the process.
                 is SshPortForwardResult.Failure ->
-                    Establishment.Failure(bound).also { runCatching { session?.close() } }
+                    Establishment.Failure(bound).also { runCatching { openedSession.close() } }
                 // The handshake already happened, so a key prompt cannot appear here; report it rather
                 // than inventing a failure type the caller would have to special-case.
                 is SshPortForwardResult.HostKeyUntrusted ->
                     Establishment
                         .Failure(SshPortForwardResult.Failure("Unexpected host-key prompt while binding a forward"))
-                        .also { runCatching { session?.close() } }
+                        .also { runCatching { openedSession.close() } }
             }
         } catch (e: CancellationException) {
             runCatching { session?.close() }
