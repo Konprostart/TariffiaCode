@@ -9,6 +9,7 @@ import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider
 import org.apache.sshd.server.session.ServerSession
 import org.apache.sshd.server.shell.InteractiveProcessShellFactory
 import org.junit.After
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -200,44 +201,34 @@ class MinaSshClientTest {
             // path too. `SshClient.stop()` closes every session it owns, so the SshSession handed
             // back was already dead. The client must stay up; the session stops it on close().
             val s = startServer(password = "secret")
-            val recording = RecordingSshClient()
+            val mina = SshClient.setUpDefaultClient()
             val result =
-                MinaSshClient(clientFactory = { recording }).connect(
+                MinaSshClient(clientFactory = { mina }).connect(
                     host = "127.0.0.1",
                     port = s.port,
                     auth = SshAuth.Password("tester", "secret"),
                     verifier = trustAllVerifier(),
                 )
             assertTrue("expected Connected, got $result", result is SshConnectResult.Connected)
-            assertTrue("client must not be stopped while its session is in use", recording.stopCalls == 0)
+            assertTrue("client must keep running while its session is in use", mina.isStarted)
 
             (result as SshConnectResult.Connected).session.close()
-            assertTrue("closing the session must release the client", recording.stopCalls == 1)
+            assertFalse("closing the session must release the client", mina.isStarted)
         }
 
     @Test
     fun `a failed connect still releases the client`() =
         runTest {
             val s = startServer(password = "secret")
-            val recording = RecordingSshClient()
+            val mina = SshClient.setUpDefaultClient()
             val result =
-                MinaSshClient(clientFactory = { recording }).connect(
+                MinaSshClient(clientFactory = { mina }).connect(
                     host = "127.0.0.1",
                     port = s.port,
                     auth = SshAuth.Password("tester", "wrong"),
                     verifier = trustAllVerifier(),
                 )
             assertTrue("expected Failure, got $result", result is SshConnectResult.Failure)
-            assertTrue("a failed connect must not leak the client", recording.stopCalls == 1)
+            assertFalse("a failed connect must not leave the client running", mina.isStarted)
         }
-
-    /** Real client that counts [stop] calls, so ownership handoff can be asserted. */
-    private class RecordingSshClient : SshClient() {
-        var stopCalls = 0
-
-        override fun stop() {
-            stopCalls++
-            super.stop()
-        }
-    }
 }

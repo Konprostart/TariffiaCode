@@ -1,5 +1,6 @@
 package com.konprostart.tariffiacode.core.ssh
 
+import android.util.Log
 import org.apache.sshd.common.CommonModuleProperties
 import org.apache.sshd.common.session.SessionHeartbeatController
 import java.time.Duration
@@ -41,6 +42,10 @@ internal object SshKeepAlive {
                 SessionHeartbeatController.HeartbeatType.IGNORE,
             )
             CommonModuleProperties.SESSION_HEARTBEAT_INTERVAL.set(client, interval)
+        }.onFailure {
+            // Never fatal - keep-alive is an optimisation - but silent here would mean a session
+            // that quietly ages out again, so say so.
+            Log.w("SshKeepAlive", "SSH keep-alive not enabled", it)
         }
     }
 }
