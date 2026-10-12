@@ -27,10 +27,17 @@ import java.util.Base64
 class MinaSshClientTest {
     private var server: SshServer? = null
 
+    /** Kept so a failed assertion cannot leave a started MINA client (and its timer thread) behind. */
+    private var client: SshClient? = null
+
     @After
     fun tearDown() {
+        runCatching { client?.stop() }
         runCatching { server?.stop(true) }
     }
+
+    /** A fully-configured client, tracked for teardown. */
+    private fun recordingClient(): SshClient = SshClient.setUpDefaultClient().also { client = it }
 
     private fun trustAllVerifier(): SshHostKeyVerifier =
         object : SshHostKeyVerifier {
@@ -201,7 +208,7 @@ class MinaSshClientTest {
             // path too. `SshClient.stop()` closes every session it owns, so the SshSession handed
             // back was already dead. The client must stay up; the session stops it on close().
             val s = startServer(password = "secret")
-            val mina = SshClient.setUpDefaultClient()
+            val mina = recordingClient()
             val result =
                 MinaSshClient(clientFactory = { mina }).connect(
                     host = "127.0.0.1",
@@ -220,7 +227,7 @@ class MinaSshClientTest {
     fun `a failed connect still releases the client`() =
         runTest {
             val s = startServer(password = "secret")
-            val mina = SshClient.setUpDefaultClient()
+            val mina = recordingClient()
             val result =
                 MinaSshClient(clientFactory = { mina }).connect(
                     host = "127.0.0.1",
