@@ -76,16 +76,12 @@ class ClaudeCodeTarget(
     override val kind = BackendKind.LOCAL
     override val type = RuntimeType.LOCAL
 
+    // Starts from what the descriptor declares and overrides only the two flags that depend on
+    // whether the permission bridge actually came up, which is not known until runtime.
     override val capabilities: RuntimeCapabilities
         get() {
             val bridge = runtime.permissionBridgeReady()
-            return RuntimeCapabilities(
-                permissions = bridge,
-                questions = bridge,
-                toolEvents = true,
-                resume = true,
-                diffCapable = true,
-            )
+            return agent.descriptor.capabilities.copy(permissions = bridge, questions = bridge)
         }
 
     private val mutableState = MutableStateFlow<RuntimeState>(RuntimeState.Disconnected)

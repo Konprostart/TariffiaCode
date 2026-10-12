@@ -22,7 +22,6 @@ import com.konprostart.tariffiacode.runtime.BackendKind
 import com.konprostart.tariffiacode.runtime.LocalAgent
 import com.konprostart.tariffiacode.runtime.LocalRuntimeStatus
 import com.konprostart.tariffiacode.runtime.PermissionResponse
-import com.konprostart.tariffiacode.runtime.RuntimeCapabilities
 import com.konprostart.tariffiacode.runtime.RuntimeState
 import com.konprostart.tariffiacode.runtime.RuntimeTarget
 import com.konprostart.tariffiacode.runtime.RuntimeType
@@ -50,14 +49,7 @@ class LocalRuntimeTarget(
     override val agent: LocalAgent = LocalAgent.OPEN_CODE
     override val type: RuntimeType = RuntimeType.LOCAL
     override val kind: BackendKind = BackendKind.LOCAL
-    override val capabilities =
-        RuntimeCapabilities(
-            permissions = true,
-            providerModelList = true,
-            abortsBeforeInterrupt = true,
-            editMessages = true,
-            diffCapable = true,
-        )
+    override val capabilities = agent.descriptor.capabilities
 
     // The cached flow value, not status(): this runs during composition (main thread) and status()
     // probes the port, which is a blocking socket connect.

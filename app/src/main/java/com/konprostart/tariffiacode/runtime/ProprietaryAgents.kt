@@ -13,6 +13,10 @@ import com.konprostart.tariffiacode.BuildConfig
  * are removed from setup selections and install requests before any provisioning begins, so no
  * proprietary download can start; OpenCode, SSH/VPS and the remote workflow are untouched.
  *
+ * Which agents those are is declared per agent in [AgentDescriptor.proprietary] rather than worked
+ * out here, so an agent cannot be classified as non-free - or as free - by accident of where it sits
+ * in the enum.
+ *
  * [enabled] mirrors the build flag but is writable so tests can exercise both flavors from a single
  * compiled variant.
  */
@@ -20,8 +24,8 @@ object ProprietaryAgents {
     @Volatile
     var enabled: Boolean = BuildConfig.PROPRIETARY_AGENTS_ENABLED
 
-    /** The only free agent; everything else is a non-free third-party CLI. */
-    fun isProprietary(agent: LocalAgent): Boolean = agent != LocalAgent.OPEN_CODE
+    /** Whether [agent] is a non-free third-party CLI, as declared by its descriptor. */
+    fun isProprietary(agent: LocalAgent): Boolean = agent.descriptor.proprietary
 
     /** Whether [agent] may be offered or installed in this build. */
     fun isAvailable(agent: LocalAgent): Boolean = enabled || !isProprietary(agent)
