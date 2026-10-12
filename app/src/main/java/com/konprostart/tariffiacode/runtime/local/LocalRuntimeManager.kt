@@ -97,26 +97,28 @@ class LocalRuntimeManager(
     private val mutableState = MutableStateFlow(computeStatus(probe = false))
     val state: StateFlow<LocalRuntimeStatus> = mutableState.asStateFlow()
 
+    /**
+     * Snapshot the constructor published. [publishProbedStatus] may only refine THIS state: once an
+     * operation (start/stop/update/rollback) moves [mutableState] off it, that state is authoritative
+     * and the probe must not overwrite it.
+     */
+    private val bootstrapState = mutableState.value
+
     init {
         statusScope.launch { publishProbedStatus() }
     }
 
     /**
-     * Runs the blocking port probe on [statusScope] and publishes the result, unless an operation the
-     * user just started has already taken over the state.
+     * Runs the blocking port probe on [statusScope] and publishes the result, but only while nothing
+     * else has taken over [mutableState] since the constructor.
      */
     private fun publishProbedStatus() {
         // Runs on [statusScope] (IO by default), so the blocking probe is off the main thread.
         val probed = computeStatus(probe = true)
-        val current = mutableState.value
-        if (
-            current is LocalRuntimeStatus.Installing ||
-            current is LocalRuntimeStatus.Starting ||
-            current is LocalRuntimeStatus.Updating
-        ) {
-            return
-        }
-        mutableState.value = probed
+        // Compare-and-set rather than an unconditional write: the blocking probe can outlive a user
+        // operation that has already published its own state, and a stale probe must not clobber that
+        // state - e.g. republishing Stopped right after a rollback finished as Ready.
+        mutableState.compareAndSet(bootstrapState, probed)
     }
 
     private val mutableLastOperation = MutableStateFlow<LocalRuntimeOperationResult?>(null)
