@@ -159,8 +159,8 @@ android {
         applicationId = "com.konprostart.tariffiacode"
         minSdk = 26
         targetSdk = 35
-        versionCode = 79
-        versionName = "1.2.40"
+        versionCode = 80
+        versionName = "1.2.41"
         buildConfigField("String", "GITHUB_CLIENT_ID", "\"$githubClientId\"")
         // Proprietary agent CLIs (Claude Code, Antigravity, Codex) are downloaded at runtime only when
         // the user opts in. The official F-Droid catalog forbids that, so the `fdroid` flavor turns
