@@ -140,6 +140,15 @@ class VpsRuntimeTarget(
      */
     private val connectionEpoch = AtomicLong(0)
 
+    /**
+     * The epoch that installed the current forward.
+     *
+     * Recovery reads this to tell "the tunnel my own attempt created" from "one the user
+     * established after their disconnect", so a cancelled recovery never tears down a connection
+     * that now belongs to the user.
+     */
+    private val forwardEpoch = AtomicLong(0)
+
     init {
         // Restore the persisted selection before anything can read it, so reopening the app or coming
         // back from process death re-points the VPS runtime at the same server and folder. A
@@ -169,7 +178,7 @@ class VpsRuntimeTarget(
      */
     private fun observeNetwork() {
         val settings = recovery ?: return
-        settings.scope.launch {
+        settings.scope.launch(start = CoroutineStart.UNDISPATCHED) {
             var previous = NetworkStatus.Unknown
             var seeded = false
             settings.networkStatus.collect { current ->
@@ -201,9 +210,15 @@ class VpsRuntimeTarget(
                     val rebuilt = reconnectInternal().isSuccess
                     // Re-checked after the attempt: the user can disconnect while a connect is in
                     // flight, and that connect would otherwise install a fresh tunnel behind their
-                    // back. Give it back rather than keeping a connection nobody asked for.
+                    // back. Give back only what this attempt installed, and only while the user has
+                    // not reconnected in the meantime - a tunnel they established is theirs.
                     if (connectionEpoch.get() != epoch) {
-                        closeResources()
+                        if (forwardEpoch.get() == epoch) {
+                            closeResources()
+                            if (mutableState.value is RuntimeState.Connected) {
+                                mutableState.value = disconnectedState()
+                            }
+                        }
                         return@launch
                     }
                     if (rebuilt) return@launch
@@ -277,6 +292,9 @@ class VpsRuntimeTarget(
         return when (val outcome = connector.connect(profile, remoteHost = remoteHost, remotePort = remotePort)) {
             is VpsConnectOutcome.Connected -> {
                 forward = outcome.forward
+                // Tag the tunnel with the epoch that installed it, so a recovery that is cancelled
+                // later can tell this one from the user's own.
+                forwardEpoch.set(connectionEpoch.get())
                 backend = RemoteOpenCodeBackend(outcome.profile)
                 mutablePendingHostKey.value = null
                 val result = healthResult()
@@ -326,13 +344,16 @@ class VpsRuntimeTarget(
         connectionEpoch.incrementAndGet()
         closeResources()
         mutablePendingHostKey.value = null
-        mutableState.value =
-            if (mutableSelectedProfile.value == null) {
-                RuntimeState.Unavailable("No SSH connection selected")
-            } else {
-                RuntimeState.Disconnected
-            }
+        mutableState.value = disconnectedState()
     }
+
+    /** The state a target with no connection should show, given whether a profile is selected. */
+    private fun disconnectedState(): RuntimeState =
+        if (mutableSelectedProfile.value == null) {
+            RuntimeState.Unavailable("No SSH connection selected")
+        } else {
+            RuntimeState.Disconnected
+        }
 
     /** Close the SSH forward/session and drop the backend. Safe to call repeatedly. Does not touch state. */
     private fun closeResources() {

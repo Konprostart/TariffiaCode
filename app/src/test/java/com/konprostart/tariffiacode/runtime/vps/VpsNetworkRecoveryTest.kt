@@ -93,7 +93,7 @@ class VpsNetworkRecoveryTest {
         assertTrue("setup connect failed", connect().isSuccess)
     }
 
-    /** A target wired for recovery. [initialDelayMillis] of 0 makes the rebuild happen immediately. */
+    /** A target wired for recovery. A 0 ms initial delay makes the rebuild happen on the first tick. */
     private fun target(
         sshPort: Int,
         network: MutableStateFlow<NetworkStatus>,
@@ -179,22 +179,30 @@ class VpsNetworkRecoveryTest {
     fun `an explicit disconnect wins over a recovery already under way`() =
         runBlocking {
             val ssh = startSshServer()
-            RecordingOpenCode().also { openCode = it }
+            val service = RecordingOpenCode().also { openCode = it }
             val network = MutableStateFlow<NetworkStatus>(NetworkStatus.Connected("wifi"))
             // A backoff long enough that the loop is parked in its first wait when the user acts.
-            val target = target(ssh.port, network, initialDelayMillis = 1_500L)
+            val target = target(ssh.port, network, initialDelayMillis = 2_000L)
             target.trustAndConnect(ssh.port)
 
             network.value = NetworkStatus.Connected("cell")
             Thread.sleep(300)
             target.disconnect()
-            Thread.sleep(2_000)
+            val probesAfterDisconnect = service.healthRequests.get()
+
+            // Wait past the backoff, then a margin for a loopback handshake that a recovery would
+            // have needed. Long enough that a slow runner cannot turn this into a false pass.
+            Thread.sleep(6_000)
 
             assertTrue(
                 "recovery must not resurrect a connection the user ended, got ${target.state.value}",
                 target.state.value is RuntimeState.Disconnected,
             )
             assertFalse("recovery must not leave a tunnel open behind the user", target.isForwardOpen)
+            assertTrue(
+                "recovery must not re-probe a connection the user ended",
+                service.healthRequests.get() == probesAfterDisconnect,
+            )
         }
 
     /** Minimal OpenCode HTTP server: `global/health`, so a tunnel re-probe can succeed. */

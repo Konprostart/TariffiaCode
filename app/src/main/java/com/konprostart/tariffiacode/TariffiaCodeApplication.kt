@@ -85,8 +85,8 @@ import com.konprostart.tariffiacode.runtime.local.RuntimeCredentialPolicy
 import com.konprostart.tariffiacode.runtime.local.SystemPromptStore
 import com.konprostart.tariffiacode.runtime.local.VerifiedRuntimeDownloader
 import com.konprostart.tariffiacode.runtime.local.applyOpenCodeSystemPrompt
-import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeConnector
 import com.konprostart.tariffiacode.runtime.vps.VpsRecovery
+import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeConnector
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeTarget
 import com.konprostart.tariffiacode.startup.CatalogReconcileInitializer
 import com.konprostart.tariffiacode.startup.RuntimeAutoStartInitializer
