@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.core.ProvideSafeUriHandler
 import com.konprostart.tariffiacode.core.api.PermissionRequest
+import com.konprostart.tariffiacode.feature.preview.DevServerPreview
 import com.konprostart.tariffiacode.runtime.PermissionResponse
 import com.konprostart.tariffiacode.ui.theme.LocalThemeColors
 import java.io.File
@@ -167,10 +168,14 @@ fun TimelineEntryRow(
     onOpenActivity: (String) -> Unit = {},
     onImageClick: (ChatImageSource) -> Unit = {},
     onOpenProviderSettings: (() -> Unit)? = null,
+    onOpenDevPreview: (Int) -> Unit = {},
 ) {
     when (entry) {
         is TimelineEntry.UserMessage -> MessageBubble(entry.message, onImageClick)
-        is TimelineEntry.Body -> MarkdownText(entry.part.text, onImageClick = onImageClick)
+        is TimelineEntry.Body -> {
+            MarkdownText(entry.part.text, onImageClick = onImageClick)
+            DevServerPreviewChips(text = entry.part.text, onOpenDevPreview = onOpenDevPreview)
+        }
         is TimelineEntry.Image -> ImagePartView(entry.part, onImageClick)
         is TimelineEntry.Error -> ErrorPartCard(entry.part, onOpenProviderSettings)
         is TimelineEntry.Activity ->
@@ -180,6 +185,30 @@ fun TimelineEntryRow(
             )
         is TimelineEntry.Todo -> TodoTimelineCard(entry.todos)
         is TimelineEntry.Footer -> MessageFooter(entry)
+    }
+}
+
+/**
+ * Offers a one-tap live preview for every dev-server port the message advertises. Renders nothing
+ * when the message names none, so ordinary prose is unaffected.
+ */
+@Composable
+private fun DevServerPreviewChips(
+    text: String,
+    onOpenDevPreview: (Int) -> Unit,
+) {
+    val ports = remember(text) { DevServerPreview.detectPorts(text) }
+    if (ports.isNotEmpty()) {
+        Row(
+            modifier = Modifier.padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ports.forEach { port ->
+                OutlinedButton(onClick = { onOpenDevPreview(port) }) {
+                    Text(stringResource(R.string.chat_open_preview_port, port))
+                }
+            }
+        }
     }
 }
 

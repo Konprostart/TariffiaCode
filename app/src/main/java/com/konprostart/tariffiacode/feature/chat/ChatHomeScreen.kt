@@ -235,6 +235,7 @@ fun ChatHomeScreen(
     onReturnToParentSession: () -> Unit = {},
     githubRefs: List<GitHubReference> = emptyList(),
     onOpenUrl: (String) -> Unit = {},
+    onOpenDevPreview: (Int) -> Unit = {},
     onImageAttachment: (Bitmap) -> Unit = {},
     /** Fetches and opens the diff dialog for a tapped [ChatPart.Patch] card. */
     onOpenPatchDiff: (ChatPart.Patch) -> Unit = {},
@@ -478,6 +479,7 @@ fun ChatHomeScreen(
                                         onOpenActivity = { activityGroupId = it },
                                         onImageClick = { selectedImage = it },
                                         onOpenProviderSettings = onOpenProviderSettings,
+                                        onOpenDevPreview = onOpenDevPreview,
                                     )
                                 }
                             }

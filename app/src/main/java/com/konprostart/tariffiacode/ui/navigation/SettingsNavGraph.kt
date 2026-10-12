@@ -724,11 +724,18 @@ fun NavGraphBuilder.settingsNavGraph(
         )
     }
 
-    composable(ROUTE_REMOTE_PREVIEW) {
+    composable(REMOTE_PREVIEW_ROUTE_PATTERN) { backStackEntry ->
         val app = context.applicationContext as com.konprostart.tariffiacode.TariffiaCodeApplication
+        // A chat chip opens this route with a port; the port field pre-fills and the tunnel opens at
+        // once. Opened from Remote projects it stays a manual, empty form.
+        val initialPort =
+            backStackEntry.arguments
+                ?.getString(PREVIEW_ARG_PORT)
+                ?.toIntOrNull()
+                ?.takeIf { it in 1..65535 }
         val previewViewModel: com.konprostart.tariffiacode.feature.preview.VpsPreviewViewModel =
             androidx.lifecycle.viewmodel.compose.viewModel(
-                key = "remote-preview",
+                key = "remote-preview:${initialPort ?: 0}",
                 factory =
                     com.konprostart.tariffiacode.ui.ViewModelFactory {
                         com.konprostart.tariffiacode.feature.preview.VpsPreviewViewModel(
@@ -741,6 +748,7 @@ fun NavGraphBuilder.settingsNavGraph(
                                 ),
                             profiles = com.konprostart.tariffiacode.data.ssh.SshProfileStore(app.settings),
                             profileProvider = { app.vpsRuntimeTarget.selectedProfile.value },
+                            initialPort = initialPort,
                         )
                     },
             )
