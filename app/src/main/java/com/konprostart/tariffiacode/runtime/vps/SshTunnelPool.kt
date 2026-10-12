@@ -15,8 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Identifies one tunnel: where the SSH connection goes, and where on the server it points.
  *
  * [host]/[port] are the profile's SSH endpoint, [remoteHost]/[remotePort] the service behind the
- * tunnel. The SSH endpoint is part of the key so two profiles that happen to share an id can never be
- * pooled onto one connection.
+ * tunnel.
  */
 data class TunnelKey(
     val profileId: String,
@@ -27,7 +26,7 @@ data class TunnelKey(
 )
 
 /**
- * Shares one SSH session per profile across every tunnel that needs it.
+ * Shares one SSH session per endpoint across every tunnel that needs it.
  *
  * The app talks to the same VPS from several places at once: the OpenCode chat tunnel (the server's
  * 127.0.0.1:4096) and the live preview of whatever dev server the user started (a different port), and
@@ -37,25 +36,27 @@ data class TunnelKey(
  *
  * Pooling is two-level because the two resources cost very different amounts:
  *
- *  - a **session** per profile is the expensive half - one handshake, one authentication, one
- *    keep-alive - shared by every tunnel to that profile;
- *  - a **forward** per [TunnelKey] is one channel on that session, cheap to add, and is what a caller
- *    actually holds.
+ *  - a **session** per [profileId] *and endpoint* is the expensive half - one handshake, one
+ *    authentication, one keep-alive - and is shared by every tunnel to that server;
+ *  - a **forward** per [TunnelKey] is one channel on it, cheap to add, and is what a caller holds.
  *
- * Both are reference-counted, so the session is torn down only when the last tunnel lets go. Callers
- * treat the returned forward as their own [AutoCloseable] and need not know it is shared: closing it
- * releases their share and, at zero, the tunnel goes, and at zero tunnels the session goes with it.
+ * Both are reference-counted, so a session survives until its last tunnel lets go. Callers treat what
+ * they are given as their own [AutoCloseable] and need not know it is shared: closing it releases their
+ * share, and at zero the tunnel goes, and at zero tunnels the session goes with it.
  *
- * Safe to call from any thread. A tunnel that died on its own is dropped and rebuilt on the next
+ * The endpoint is part of the session key, not just the profile id: editing a profile's host must not
+ * let a tunnel reach the old host on a session that was trusted for it.
+ *
+ * Safe to call from any thread. A tunnel or connection that died on its own is rebuilt on the next
  * acquire instead of being handed out again, and a failed connect is never cached - so an untrusted
  * host key keeps being reported until the user trusts it.
  */
 class SshTunnelPool(
     private val forwarder: SshSessionSharingForwarder,
 ) {
-    private val lock = Any()
-
+    /** One connection, shared by every tunnel to the same endpoint. */
     private class SessionEntry(
+        val id: SessionId,
         val session: SshTunnelSession,
     ) {
         var holders: Int = 0
@@ -68,13 +69,20 @@ class SshTunnelPool(
         var holders: Int = 0
     }
 
-    private val sessions = mutableMapOf<String, SessionEntry>()
+    private data class SessionId(
+        val profileId: String,
+        val host: String,
+        val port: Int,
+    )
+
+    private val lock = Any()
+    private val sessions = mutableMapOf<SessionId, SessionEntry>()
 
     /**
-     * Open (or join) the tunnel described by [key] on the profile's SSH endpoint.
+     * Open (or join) the tunnel described by [key].
      *
-     * [auth] and [verifier] are only consulted when a session actually has to be established; joining
-     * an existing one costs nothing, which is the whole point.
+     * [auth] and [verifier] are only consulted when a connection actually has to be established; binding
+     * on a connection that is already up costs nothing, which is the whole point.
      */
     suspend fun open(
         key: TunnelKey,
@@ -82,85 +90,110 @@ class SshTunnelPool(
         verifier: SshHostKeyVerifier,
         connectTimeoutMillis: Long = DEFAULT_CONNECT_TIMEOUT_MILLIS,
     ): SshPortForwardResult {
-        join(key)?.let { return SshPortForwardResult.Listening(it) }
+        val id = key.sessionId()
+        join(id, key)?.let { return SshPortForwardResult.Listening(it) }
+
+        // A live connection to this endpoint is worth far more than a fresh handshake: bind on it.
+        val existing = synchronized(lock) { sessions[id]?.takeIf { it.session.isOpen } }
+        if (existing != null) {
+            return when (val bound = bind(existing.session, key)) {
+                is SshPortForwardResult.Listening ->
+                    SshPortForwardResult.Listening(acquire(existing, key, bound.forward))
+                else -> bound
+            }
+        }
+
         return when (val established = establish(key, auth, verifier, connectTimeoutMillis)) {
             is Establishment.Failure -> established.result
             is Establishment.HostKeyUntrusted -> SshPortForwardResult.HostKeyUntrusted(established.hostKey)
-            is Establishment.Established -> register(key, established)
+            is Establishment.Established -> adopt(id, key, established)
         }
     }
 
-    /** Returns a share of an already-open tunnel, or null when one has to be established. */
-    private fun join(key: TunnelKey): SshPortForward? =
+    /** A share of an already-open tunnel, or null when one has to be opened. */
+    private fun join(
+        id: SessionId,
+        key: TunnelKey,
+    ): SshPortForward? =
         synchronized(lock) {
-            val entry = sessions[key.profileId]
+            val entry = sessions[id]
             if (entry == null) {
                 null
             } else if (!entry.session.isOpen) {
                 // A connection that died is rebuilt on the next acquire, never handed out again.
-                sessions.remove(key.profileId)
+                sessions.remove(id)
                 runCatching { entry.session.close() }
                 null
             } else {
                 val forwardEntry = entry.forwards[key]
-                if (forwardEntry != null && !forwardEntry.forward.isOpen) {
-                    entry.forwards.remove(key)
-                    runCatching { forwardEntry.forward.close() }
-                    null
-                } else if (forwardEntry != null) {
-                    entry.holders++
-                    forwardEntry.holders++
-                    lease(key, forwardEntry.forward)
-                } else {
-                    null
+                when {
+                    forwardEntry == null -> null
+                    !forwardEntry.forward.isOpen -> {
+                        entry.forwards.remove(key)
+                        runCatching { forwardEntry.forward.close() }
+                        null
+                    }
+                    else -> {
+                        entry.holders++
+                        forwardEntry.holders++
+                        lease(entry, key, forwardEntry.forward)
+                    }
                 }
             }
         }
 
-    /** Adds an established session/forward to the pool, or adopts one a concurrent caller won. */
-    private suspend fun register(
+    /**
+     * Adds a freshly bound forward to [entry], or to the connection that won a race.
+     *
+     * The losing session is closed and its tunnel rebound on the winner's, rather than leaving two
+     * live connections to one host.
+     */
+    private suspend fun adopt(
+        id: SessionId,
         key: TunnelKey,
         established: Establishment.Established,
     ): SshPortForwardResult {
         val winner =
             synchronized(lock) {
-                val existing = sessions[key.profileId]
-                if (existing == null || !existing.session.isOpen) {
-                    if (existing != null) runCatching { existing.session.close() }
-                    SessionEntry(established.session).also { sessions[key.profileId] = it }
-                } else {
+                val existing = sessions[id]
+                if (existing != null && existing.session.isOpen) {
                     existing
+                } else {
+                    if (existing != null) runCatching { existing.session.close() }
+                    SessionEntry(id, established.session).also { sessions[id] = it }
                 }
             }
         if (winner.session === established.session) {
-            return synchronized(lock) {
-                val entry = sessions.getValue(key.profileId)
-                val forwardEntry = entry.forwards.getOrPut(key) { ForwardEntry(established.forward) }
-                entry.holders++
-                forwardEntry.holders++
-                SshPortForwardResult.Listening(lease(key, forwardEntry.forward))
-            }
+            return acquire(winner, key, established.forward)
         }
-        // A concurrent open established this profile's session first. Ours is redundant, so release it
-        // and bind the tunnel on the session that won rather than leaving two live connections.
         runCatching { established.session.close() }
-        return when (val bound = forwarder.openForwardOver(winner.session, key.remoteHost, key.remotePort)) {
-            is SshPortForwardResult.Listening ->
-                synchronized(lock) {
-                    val entry = sessions[key.profileId]
-                    val forwardEntry = entry.forwards.getOrPut(key) { ForwardEntry(bound.forward) }
-                    entry.holders++
-                    forwardEntry.holders++
-                    SshPortForwardResult.Listening(lease(key, forwardEntry.forward))
-                }
-            is SshPortForwardResult.Failure -> bound
-            is SshPortForwardResult.HostKeyUntrusted ->
-                SshPortForwardResult.Failure("Forward reported an unexpected host-key prompt")
+        runCatching { established.forward.close() }
+        return when (val bound = bind(winner.session, key)) {
+            is SshPortForwardResult.Listening -> SshPortForwardResult.Listening(acquire(winner, key, bound.forward))
+            else -> bound
         }
     }
 
-    /** A handle on one caller's share of a tunnel. */
+    /** Registers a forward against [entry] and returns the caller's handle. Must hold the lock. */
+    private fun acquireLocked(
+        entry: SessionEntry,
+        key: TunnelKey,
+        forward: SshPortForward,
+    ): SshPortForward {
+        val forwardEntry = entry.forwards.getOrPut(key) { ForwardEntry(forward) }
+        entry.holders++
+        forwardEntry.holders++
+        return lease(entry, key, forwardEntry.forward)
+    }
+
+    private fun acquire(
+        entry: SessionEntry,
+        key: TunnelKey,
+        forward: SshPortForward,
+    ): SshPortForward = synchronized(lock) { acquireLocked(entry, key, forward) }
+
     private fun lease(
+        entry: SessionEntry,
         key: TunnelKey,
         forward: SshPortForward,
     ): SshPortForward =
@@ -169,17 +202,23 @@ class SshTunnelPool(
 
             override fun close() {
                 if (!released.compareAndSet(false, true)) return
-                release(key, forward)
+                release(entry, key, forward)
             }
         }
 
-    /** Drops one holder: the tunnel at zero, and the session when its last tunnel goes. */
+    /**
+     * Drops one holder: the tunnel at zero, and the connection when its last tunnel goes.
+     *
+     * The entry is passed by reference so a lease that outlives its connection - only possible after
+     * [closeAll] - cannot decrement a connection someone else opened in the meantime.
+     */
     private fun release(
+        entry: SessionEntry,
         key: TunnelKey,
         forward: SshPortForward,
     ) {
         synchronized(lock) {
-            val entry = sessions[key.profileId] ?: return
+            if (sessions[entry.id] !== entry) return
             entry.holders = (entry.holders - 1).coerceAtLeast(0)
             val forwardEntry = entry.forwards[key]
             if (forwardEntry != null && forwardEntry.forward === forward) {
@@ -190,19 +229,28 @@ class SshTunnelPool(
                 }
             }
             if (entry.holders <= 0) {
-                sessions.remove(key.profileId)
+                sessions.remove(entry.id)
                 runCatching { entry.session.close() }
             }
         }
     }
 
-    /** How many callers currently hold a tunnel on this profile. Exposed for tests and diagnostics. */
-    fun holders(profileId: String): Int = synchronized(lock) { sessions[profileId]?.holders ?: 0 }
+    /** How many callers currently hold a tunnel to this profile. Exposed for tests and diagnostics. */
+    fun holders(profileId: String): Int =
+        synchronized(lock) {
+            sessions.entries.filter { it.key.profileId == profileId }.sumOf { it.value.holders }
+        }
 
-    /** How many distinct tunnels are open on this profile. Exposed for tests and diagnostics. */
-    fun openTunnels(profileId: String): Int = synchronized(lock) { sessions[profileId]?.forwards?.size ?: 0 }
+    /** How many distinct tunnels are open for this profile. Exposed for tests and diagnostics. */
+    fun openTunnels(profileId: String): Int =
+        synchronized(lock) {
+            sessions.entries.filter { it.key.profileId == profileId }.sumOf { it.value.forwards.size }
+        }
 
-    /** Closes every tunnel and session. Safe to call repeatedly. */
+    /**
+     * Drops every connection and tunnel, whatever still holds them. Leases handed out earlier become
+     * no-ops on close rather than affecting whatever opens next.
+     */
     fun closeAll() {
         synchronized(lock) {
             val live = sessions.values.toList()
@@ -213,6 +261,13 @@ class SshTunnelPool(
             }
         }
     }
+
+    private fun TunnelKey.sessionId() = SessionId(profileId = profileId, host = host, port = port)
+
+    private suspend fun bind(
+        session: SshTunnelSession,
+        key: TunnelKey,
+    ): SshPortForwardResult = forwarder.openForwardOver(session, key.remoteHost, key.remotePort)
 
     private sealed interface Establishment {
         class Established(
@@ -229,7 +284,7 @@ class SshTunnelPool(
         ) : Establishment
     }
 
-    /** Opens a session and one forward on it, outside the lock because it does real IO. */
+    /** Opens a connection and one forward on it, outside the lock because it does real IO. */
     private suspend fun establish(
         key: TunnelKey,
         auth: SshAuth,
@@ -253,7 +308,7 @@ class SshTunnelPool(
                         return Establishment.Failure(SshPortForwardResult.Failure(opened.message, opened.cause))
                     is SshTunnelSessionResult.Opened -> opened.session
                 }
-            return when (val bound = forwarder.openForwardOver(session, key.remoteHost, key.remotePort)) {
+            return when (val bound = bind(session, key)) {
                 is SshPortForwardResult.Listening -> Establishment.Established(session, bound.forward)
                 is SshPortForwardResult.Failure -> Establishment.Failure(bound)
                 // The handshake already happened, so a key prompt cannot appear here; report it rather

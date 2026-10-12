@@ -177,7 +177,6 @@ class TariffiaCodeApplication : Application() {
      */
     lateinit var sshTunnelPool: SshTunnelPool
         private set
-        private set
 
     lateinit var catalogRepository: RuntimeCatalogRepository
         private set

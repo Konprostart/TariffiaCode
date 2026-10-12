@@ -94,14 +94,19 @@ class MinaSshPortForwarder(
         remotePort: Int,
         connectTimeoutMillis: Long,
     ): SshPortForwardResult {
-        val session =
-            when (val opened = openSession(host, port, auth, verifier, connectTimeoutMillis)) {
-                is SshTunnelSessionResult.Opened -> opened.session
+        val opened =
+            when (val result = openSession(host, port, auth, verifier, connectTimeoutMillis)) {
+                is SshTunnelSessionResult.Opened -> result.session
                 is SshTunnelSessionResult.HostKeyUntrusted ->
-                    return SshPortForwardResult.HostKeyUntrusted(opened.hostKey)
+                    return SshPortForwardResult.HostKeyUntrusted(result.hostKey)
                 is SshTunnelSessionResult.Failure ->
-                    return SshPortForwardResult.Failure(opened.message, opened.cause)
+                    return SshPortForwardResult.Failure(result.message, result.cause)
             }
+        // Only sessions this class opens reach here, so the cast cannot fail in practice; it is checked
+        // rather than assumed so a foreign implementation fails loudly instead of crashing later.
+        val session =
+            opened as? MinaSshTunnelSession
+                ?: return SshPortForwardResult.Failure("Session is not a MINA session")
         val handedOffForward = AtomicReference<SshPortForward?>(null)
         try {
             val bound = bindForward(session, remoteHost, remotePort, ownedSession = session)

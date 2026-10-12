@@ -5,6 +5,9 @@ import com.konprostart.tariffiacode.core.ssh.SshHostKey
 import com.konprostart.tariffiacode.core.ssh.SshHostKeyVerifier
 import com.konprostart.tariffiacode.core.ssh.SshPortForward
 import com.konprostart.tariffiacode.core.ssh.SshPortForwardResult
+import com.konprostart.tariffiacode.core.ssh.SshSessionSharingForwarder
+import com.konprostart.tariffiacode.core.ssh.SshTunnelSession
+import com.konprostart.tariffiacode.core.ssh.SshTunnelSessionResult
 import com.konprostart.tariffiacode.data.ssh.SshAuthType
 import com.konprostart.tariffiacode.data.ssh.SshCredential
 import com.konprostart.tariffiacode.data.ssh.SshCredentialCodec
@@ -53,7 +56,6 @@ class VpsPortForwardManagerTest {
     ) : SshSessionSharingForwarder {
         var requestedRemotePort: Int? = null
         var calls: Int = 0
-        var session: FakeSession? = null
 
         override suspend fun openSession(
             host: String,
@@ -66,8 +68,7 @@ class VpsPortForwardManagerTest {
             return when (result) {
                 is SshPortForwardResult.Failure -> SshTunnelSessionResult.Failure(result.message, result.cause)
                 is SshPortForwardResult.HostKeyUntrusted -> SshTunnelSessionResult.HostKeyUntrusted(result.hostKey)
-                is SshPortForwardResult.Listening ->
-                    FakeSession().also { session = it }.let { SshTunnelSessionResult.Opened(it) }
+                is SshPortForwardResult.Listening -> SshTunnelSessionResult.Opened(FakeSession())
             }
         }
 

@@ -12,8 +12,6 @@ import com.konprostart.tariffiacode.core.ssh.SshTunnelSessionResult
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotSame
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -139,10 +137,14 @@ class SshTunnelPoolTest {
             val first = pool.listen(key(4096))
             val second = pool.listen(key(4096))
 
-            assertSame("same tunnel must be shared, not rebuilt", first.localPort, second.localPort)
+            // No second channel was opened, and releasing one holder left the shared forward up.
             assertEquals(1, transport.sessionOpens)
             assertEquals(1, transport.forwardOpens)
             assertEquals(2, pool.holders("vps-1"))
+            first.close()
+            assertFalse("one release must not tear down a tunnel another holder is using", transport.forwards[0].closed)
+            second.close()
+            assertTrue(transport.forwards[0].closed)
         }
 
     @Test
@@ -231,13 +233,13 @@ class SshTunnelPoolTest {
             val transport = FakeTransport()
             val pool = SshTunnelPool(transport)
 
-            val first = pool.listen(key(4096))
-            (transport.sessions[0]).isOpen = false
+            pool.listen(key(4096))
+            transport.sessions[0].isOpen = false
 
-            val second = pool.listen(key(4096))
+            pool.listen(key(4096))
 
             assertEquals("a dead connection must be re-established", 2, transport.sessionOpens)
-            assertNotSame(first.localPort, second.localPort)
+            assertEquals("a dead connection means a new channel too", 2, transport.forwardOpens)
         }
 
     @Test
