@@ -25,6 +25,7 @@ class AntigravityTarget(internal val runtime: AntigravityRuntime) : RuntimeTarge
     override val agent = LocalAgent.ANTIGRAVITY
     override val kind = BackendKind.LOCAL
     override val type = RuntimeType.LOCAL
+
     // Declared by the descriptor, which carries the reasoning: the one-shot --print bridge streams
     // tool calls as parts, permission prompts and questions are no-ops, and each turn is a fresh
     // process so a send during a running turn has to queue.

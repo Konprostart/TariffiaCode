@@ -147,8 +147,7 @@ class AgentDescriptorTest {
 
     @Test
     fun `each MCP config path is the file the installer writes`() {
-        fun mcpConfigFile(agent: LocalAgent): String? =
-            (agent.descriptor.mcp as? AgentMcpProvisioning.AtConfigFile)?.path
+        fun mcpConfigFile(agent: LocalAgent): String? = (agent.descriptor.mcp as? AgentMcpProvisioning.AtConfigFile)?.path
 
         assertEquals("root/.config/opencode/opencode.json", mcpConfigFile(LocalAgent.OPEN_CODE))
         assertEquals("root/.claude.json", mcpConfigFile(LocalAgent.CLAUDE_CODE))

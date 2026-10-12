@@ -25,6 +25,7 @@ import java.util.Base64
  */
 object CodexInstaller {
     const val CODEX_BINARY = "codex"
+
     /**
      * Directory the binaries land in, relative to the rootfs.
      *
