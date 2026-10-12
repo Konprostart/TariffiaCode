@@ -154,8 +154,16 @@ private class MinaSshPortForward(
     @Volatile
     private var closed = false
 
+    /**
+     * Open only while the local listener is up *and* the SSH session behind it is still open and
+     * authenticated.
+     *
+     * `closed`/`tracker.isOpen` are our own bookkeeping: after a mobile handover drops the binding
+     * without a FIN they keep reporting true, so a forward that has died could be mistaken for a
+     * live one and never be rebuilt. The session's own state is the real signal available here.
+     */
     override val isOpen: Boolean
-        get() = !closed && tracker.isOpen && session.isOpen
+        get() = !closed && tracker.isOpen && session.isOpen && session.isAuthenticated
 
     @Synchronized
     override fun close() {

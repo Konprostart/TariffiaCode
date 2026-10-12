@@ -12,6 +12,7 @@ import com.konprostart.tariffiacode.core.diagnostics.AnalyticsReporter
 import com.konprostart.tariffiacode.core.diagnostics.CrashLog
 import com.konprostart.tariffiacode.core.diagnostics.CrashReporter
 import com.konprostart.tariffiacode.core.lifecycle.AppForeground
+import com.konprostart.tariffiacode.core.network.NetworkMonitor
 import com.konprostart.tariffiacode.core.lifecycle.ForegroundReturnDetector
 import com.konprostart.tariffiacode.core.lifecycle.ProcessLifecycleAppForeground
 import com.konprostart.tariffiacode.core.locale.AppLanguage
@@ -522,6 +523,9 @@ class TariffiaCodeApplication : Application() {
         // runs through RemoteOpenCodeBackend, only the endpoint is a loopback forward instead of a URL
         // the user typed. Selecting an SSH profile for it is a later step; with none it stays unavailable.
         val sshProfileStore = SshProfileStore(settings)
+        // Watching which network the phone is on is what lets the VPS tunnel notice a Wi-Fi <-> cellular
+        // handover, which strands every open socket without either end noticing.
+        val networkMonitor = NetworkMonitor(this).also { it.start() }
         vpsRuntimeTarget =
             VpsRuntimeTarget(
                 connector = VpsRuntimeConnector(MinaSshPortForwarder(), SshCredentialStore(settings)),
@@ -530,6 +534,8 @@ class TariffiaCodeApplication : Application() {
                 profiles = sshProfileStore,
                 projects = RemoteProjectStore(settings, sshProfileStore),
                 selection = VpsSelectionStore(settings),
+                recoveryScope = applicationScope,
+                networkStatus = networkMonitor.status,
             )
         runtimeRegistry =
             RuntimeRegistry(

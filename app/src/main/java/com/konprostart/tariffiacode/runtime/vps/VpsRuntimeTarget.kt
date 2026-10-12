@@ -18,6 +18,8 @@ import com.konprostart.tariffiacode.core.api.ProviderAuthAuthorization
 import com.konprostart.tariffiacode.core.api.ProviderAuthMethod
 import com.konprostart.tariffiacode.core.api.ProviderCatalog
 import com.konprostart.tariffiacode.core.api.QuestionRequest
+import com.konprostart.tariffiacode.core.network.NetworkStatus
+import com.konprostart.tariffiacode.core.network.shouldRebuildTunnel
 import com.konprostart.tariffiacode.core.ssh.SshHostKey
 import com.konprostart.tariffiacode.core.ssh.SshPortForward
 import com.konprostart.tariffiacode.data.remote.RemoteProject
@@ -36,12 +38,17 @@ import com.konprostart.tariffiacode.runtime.WorkspaceRef
 import com.konprostart.tariffiacode.runtime.mergeSessionLists
 import com.konprostart.tariffiacode.runtime.mergeWorkspaceRefs
 import com.konprostart.tariffiacode.runtime.remote.RemoteOpenCodeBackend
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * A remote OpenCode runtime reached over SSH.
@@ -75,6 +82,15 @@ class VpsRuntimeTarget(
             loadProjectId = { null },
             saveProjectId = {},
         ),
+    /**
+     * Scope the automatic recovery runs in. Left null in tests that drive connect/disconnect
+     * directly; without it there is nothing to hang a network watcher on, so the target simply does
+     * not self-heal.
+     */
+    private val recoveryScope: CoroutineScope? = null,
+    /** Network transitions that should rebuild the tunnel. See [observeNetwork]. */
+    private val networkStatus: Flow<NetworkStatus>? = null,
+    private val backoff: ReconnectBackoff = ReconnectBackoff(),
 ) : RuntimeTarget,
     VpsConnectionController {
     override val displayName: String = "OpenCode VPS"
@@ -117,6 +133,16 @@ class VpsRuntimeTarget(
     override val isForwardOpen: Boolean
         get() = forward?.isOpen == true
 
+    /** Set while an automatic recovery loop is running, so handovers cannot stack up. */
+    private val reconnecting = AtomicBoolean(false)
+
+    /**
+     * Bumped whenever the user takes the connection over (disconnect or an explicit reconnect), so a
+     * recovery loop that is still waiting notices it is no longer wanted and stops.
+     */
+    @Volatile
+    private var connectionEpoch = 0L
+
     init {
         // Restore the persisted selection before anything can read it, so reopening the app or coming
         // back from process death re-points the VPS runtime at the same server and folder. A
@@ -128,6 +154,55 @@ class VpsRuntimeTarget(
         selection.selectedProjectId()?.let { id ->
             val restored = projects?.project(id)
             if (restored != null) selectRemoteProject(restored) else selection.selectProject(null)
+        }
+        observeNetwork()
+    }
+
+    /**
+     * Rebuild the tunnel when the device moves to a different network.
+     *
+     * A handover (Wi-Fi to cellular and back) leaves the SSH session looking connected while every
+     * packet it sends is dropped on a network it can no longer use, and nothing on either end
+     * notices until a request times out. Watching for the handover is what turns that silence into a
+     * rebuild.
+     *
+     * Recovery is deliberately not attempted for a target that was not connected: if the user
+     * disconnected, reconnecting behind their back is the wrong answer, and
+     * [connectionEpoch] stops a pending retry from doing exactly that if they disconnect while it
+     * is waiting.
+     */
+    private fun observeNetwork() {
+        val changes = networkStatus ?: return
+        val scope = recoveryScope ?: return
+        scope.launch {
+            var previous = NetworkStatus.Unknown
+            changes.collect { current ->
+                val handover = shouldRebuildTunnel(previous, current)
+                previous = current
+                if (handover) scheduleReconnect()
+            }
+        }
+    }
+
+    /** Runs at most one recovery loop at a time, and only for a target that is currently connected. */
+    private fun scheduleReconnect() {
+        val scope = recoveryScope ?: return
+        if (!isConnected()) return
+        if (!reconnecting.compareAndSet(false, true)) return
+        // Captured so a disconnect or an explicit reconnect while we are waiting wins over us.
+        val epoch = connectionEpoch
+        scope.launch {
+            try {
+                var attempt = 0
+                while (isActive && attempt < MAX_RECONNECT_ATTEMPTS) {
+                    delay(backoff.delayMillis(attempt))
+                    if (connectionEpoch != epoch) return@launch
+                    if (reconnectInternal().isSuccess) return@launch
+                    attempt++
+                }
+            } finally {
+                reconnecting.set(false)
+            }
         }
     }
 
@@ -228,11 +303,18 @@ class VpsRuntimeTarget(
 
     /** Fresh connection: drop any existing forward/session, then connect again. */
     override suspend fun reconnect(): Result<OpenCodeHealth> {
-        disconnect()
+        connectionEpoch++
+        return reconnectInternal()
+    }
+
+    /** Rebuild without touching [connectionEpoch]: used both by the user and by recovery. */
+    private suspend fun reconnectInternal(): Result<OpenCodeHealth> {
+        closeResources()
         return connect()
     }
 
     override fun disconnect() {
+        connectionEpoch++
         closeResources()
         mutablePendingHostKey.value = null
         mutableState.value =
@@ -499,5 +581,12 @@ class VpsRuntimeTarget(
 
     companion object {
         const val DEFAULT_ID = "vps"
+
+        /**
+         * Bounded on purpose: recovery is for a radio that dropped a still-good connection, not for
+         * a VPS that is down. Past this the target stays in its failed state and the user is better
+         * served by an explicit Reconnect than by a silently spinning loop.
+         */
+        const val MAX_RECONNECT_ATTEMPTS = 5
     }
 }
