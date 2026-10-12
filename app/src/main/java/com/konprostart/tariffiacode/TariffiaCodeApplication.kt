@@ -12,10 +12,10 @@ import com.konprostart.tariffiacode.core.diagnostics.AnalyticsReporter
 import com.konprostart.tariffiacode.core.diagnostics.CrashLog
 import com.konprostart.tariffiacode.core.diagnostics.CrashReporter
 import com.konprostart.tariffiacode.core.lifecycle.AppForeground
-import com.konprostart.tariffiacode.core.network.NetworkMonitor
 import com.konprostart.tariffiacode.core.lifecycle.ForegroundReturnDetector
 import com.konprostart.tariffiacode.core.lifecycle.ProcessLifecycleAppForeground
 import com.konprostart.tariffiacode.core.locale.AppLanguage
+import com.konprostart.tariffiacode.core.network.NetworkMonitor
 import com.konprostart.tariffiacode.core.notification.RuntimeNotificationHelper
 import com.konprostart.tariffiacode.core.runtime.RuntimeWorkTracker
 import com.konprostart.tariffiacode.core.security.SecretRedaction
@@ -86,6 +86,7 @@ import com.konprostart.tariffiacode.runtime.local.SystemPromptStore
 import com.konprostart.tariffiacode.runtime.local.VerifiedRuntimeDownloader
 import com.konprostart.tariffiacode.runtime.local.applyOpenCodeSystemPrompt
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeConnector
+import com.konprostart.tariffiacode.runtime.vps.VpsRecovery
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeTarget
 import com.konprostart.tariffiacode.startup.CatalogReconcileInitializer
 import com.konprostart.tariffiacode.startup.RuntimeAutoStartInitializer
@@ -534,8 +535,7 @@ class TariffiaCodeApplication : Application() {
                 profiles = sshProfileStore,
                 projects = RemoteProjectStore(settings, sshProfileStore),
                 selection = VpsSelectionStore(settings),
-                recoveryScope = applicationScope,
-                networkStatus = networkMonitor.status,
+                recovery = VpsRecovery(scope = applicationScope, networkStatus = networkMonitor.status),
             )
         runtimeRegistry =
             RuntimeRegistry(

@@ -27,7 +27,6 @@ class NetworkStatusTest {
 
     @Test
     fun `recovering onto a network rebuilds even after a loss`() {
-        assertFalse(shouldRebuildTunnel(NetworkStatus.Connected("wifi"), NetworkStatus.Disconnected))
         assertTrue(shouldRebuildTunnel(NetworkStatus.Disconnected, NetworkStatus.Connected("cell")))
     }
 

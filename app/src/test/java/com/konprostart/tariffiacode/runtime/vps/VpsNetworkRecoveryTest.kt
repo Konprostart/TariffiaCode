@@ -8,16 +8,20 @@ import com.konprostart.tariffiacode.data.ssh.SshCredentialCodec
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.runtime.RuntimeState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import org.apache.sshd.server.SshServer
 import org.apache.sshd.server.auth.password.PasswordAuthenticator
 import org.apache.sshd.server.forward.AcceptAllForwardingFilter
 import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider
 import org.junit.After
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import java.io.BufferedReader
 import java.io.File
@@ -25,6 +29,9 @@ import java.io.InputStreamReader
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Recovery from a network handover: the phone moves to a different network and the SSH session it was
@@ -32,13 +39,19 @@ import java.net.Socket
  *
  * Runs against a real MINA server and a real loopback OpenCode, like the lifecycle tests, because what
  * is under test is what a real session does when it stops answering.
+ *
+ * These use a real dispatcher rather than the test scheduler on purpose. Opening a forward suspends in
+ * `withContext(Dispatchers.IO)` for a real SSH handshake, which virtual time cannot wait for, so the
+ * assertions wait on observable state instead.
  */
 class VpsNetworkRecoveryTest {
     private var sshServer: SshServer? = null
     private var openCode: RecordingOpenCode? = null
+    private var recoveryScope: CoroutineScope? = null
 
     @After
     fun tearDown() {
+        runCatching { recoveryScope?.cancel() }
         runCatching { openCode?.close() }
         runCatching { sshServer?.stop(true) }
     }
@@ -80,44 +93,74 @@ class VpsNetworkRecoveryTest {
         assertTrue("setup connect failed", connect().isSuccess)
     }
 
-    /** A target wired for recovery, with no waiting so it is observable as soon as time advances. */
-    private fun TestScope.target(network: MutableStateFlow<NetworkStatus>): VpsRuntimeTarget =
-        VpsRuntimeTarget(
+    /** A target wired for recovery. [initialDelayMillis] of 0 makes the rebuild happen immediately. */
+    private fun target(
+        sshPort: Int,
+        network: MutableStateFlow<NetworkStatus>,
+        initialDelayMillis: Long = 0L,
+    ): VpsRuntimeTarget {
+        val scope = CoroutineScope(Job() + Dispatchers.IO)
+        recoveryScope = scope
+        return VpsRuntimeTarget(
             connector = VpsRuntimeConnector(MinaSshPortForwarder(), credentialStore()),
             remotePort = openCode!!.port,
-            recoveryScope = backgroundScope,
-            networkStatus = network,
-            backoff = ReconnectBackoff(initialDelayMillis = 1L, maxDelayMillis = 1L, jitterTenths = 0),
+            recovery =
+                VpsRecovery(
+                    scope = scope,
+                    networkStatus = network,
+                    backoff = ReconnectBackoff(initialDelayMillis = initialDelayMillis, jitterTenths = 0),
+                ),
         )
+    }
+
+    /** Waits for [condition] against the wall clock, with a message that says what never happened. */
+    private fun awaitTrue(
+        what: String,
+        timeoutMillis: Long = 15_000,
+        condition: () -> Boolean,
+    ) {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+        while (System.nanoTime() < deadline) {
+            if (condition()) return
+            Thread.sleep(20)
+        }
+        fail("timed out after ${timeoutMillis}ms waiting for: $what")
+    }
 
     @Test
     fun `a network handover rebuilds the tunnel without the user doing anything`() =
-        runTest {
+        runBlocking {
             val ssh = startSshServer()
             val service = RecordingOpenCode().also { openCode = it }
             val network = MutableStateFlow<NetworkStatus>(NetworkStatus.Connected("wifi"))
-            val target = target(network)
+            val target = target(ssh.port, network)
             target.trustAndConnect(ssh.port)
             assertTrue(target.state.value is RuntimeState.Connected)
+            val probesBefore = service.healthRequests.get()
 
+            // The handover the radio never reports as a disconnect: the old socket is gone, but the
+            // app's own bookkeeping still says connected.
             network.value = NetworkStatus.Connected("cell")
-            advanceUntilIdle()
 
-            assertTrue(
-                "expected the tunnel to still be usable after a handover, got ${target.state.value}",
-                target.state.value is RuntimeState.Connected,
-            )
+            // Proving a rebuild rather than "still looks fine": only a fresh tunnel asks the server
+            // about its health again.
+            awaitTrue("the tunnel to be re-probed after the handover") {
+                service.healthRequests.get() > probesBefore
+            }
+            awaitTrue("the rebuilt tunnel to report connected") {
+                target.state.value is RuntimeState.Connected
+            }
             assertTrue("expected a live forward after the handover", target.isForwardOpen)
             target.disconnect()
         }
 
     @Test
     fun `the recovery is a real reconnect - a dead service is noticed`() =
-        runTest {
+        runBlocking {
             val ssh = startSshServer()
             val service = RecordingOpenCode().also { openCode = it }
             val network = MutableStateFlow<NetworkStatus>(NetworkStatus.Connected("wifi"))
-            val target = target(network)
+            val target = target(ssh.port, network)
             target.trustAndConnect(ssh.port)
             assertTrue(target.state.value is RuntimeState.Connected)
 
@@ -125,40 +168,46 @@ class VpsNetworkRecoveryTest {
             // tunnel and asking again - which is exactly what the handover triggers.
             service.close()
             network.value = NetworkStatus.Connected("cell")
-            advanceUntilIdle()
 
-            assertTrue(
-                "recovery should have re-probed and surfaced the failure, got ${target.state.value}",
-                target.state.value is RuntimeState.Failed,
-            )
+            awaitTrue("recovery to re-probe and surface the failure") {
+                target.state.value is RuntimeState.Failed
+            }
             target.disconnect()
         }
 
     @Test
-    fun `an explicit disconnect wins over a pending recovery`() =
-        runTest {
+    fun `an explicit disconnect wins over a recovery already under way`() =
+        runBlocking {
             val ssh = startSshServer()
-            val service = RecordingOpenCode().also { openCode = it }
+            RecordingOpenCode().also { openCode = it }
             val network = MutableStateFlow<NetworkStatus>(NetworkStatus.Connected("wifi"))
-            val target = target(network)
+            // A backoff long enough that the loop is parked in its first wait when the user acts.
+            val target = target(ssh.port, network, initialDelayMillis = 1_500L)
             target.trustAndConnect(ssh.port)
 
             network.value = NetworkStatus.Connected("cell")
+            Thread.sleep(300)
             target.disconnect()
-            advanceUntilIdle()
+            Thread.sleep(2_000)
 
             assertTrue(
                 "recovery must not resurrect a connection the user ended, got ${target.state.value}",
                 target.state.value is RuntimeState.Disconnected,
             )
+            assertFalse("recovery must not leave a tunnel open behind the user", target.isForwardOpen)
         }
 
     /** Minimal OpenCode HTTP server: `global/health`, so a tunnel re-probe can succeed. */
     private class RecordingOpenCode : AutoCloseable {
         private val server = ServerSocket().apply { bind(InetSocketAddress("127.0.0.1", 0)) }
+        private val started = CountDownLatch(1)
+
+        /** How many health probes reached the server; a rebuilt tunnel shows up as a new one. */
+        val healthRequests = AtomicInteger(0)
 
         private val accepting =
             Thread {
+                started.countDown()
                 while (!server.isClosed) {
                     val client =
                         try {
@@ -178,24 +227,35 @@ class VpsNetworkRecoveryTest {
         private fun handle(client: Socket) {
             client.use { socket ->
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
-                reader.readLine() ?: return
+                val requestLine = reader.readLine() ?: return
                 while (true) {
                     val line = reader.readLine() ?: break
                     if (line.isEmpty()) break
                 }
-                val payload = """{"healthy":true,"version":"9.9.9"}""".toByteArray()
+                // Anything that is not the health route is a 404, so a probe aimed at the wrong
+                // endpoint shows up as a failure instead of a false positive.
+                val isHealth = requestLine.contains("/global/health")
+                if (isHealth) healthRequests.incrementAndGet()
+                val payload =
+                    if (isHealth) {
+                        """{"healthy":true,"version":"9.9.9"}"""
+                    } else {
+                        ""
+                    }
+                val status = if (isHealth) "200 OK" else "404 Not Found"
                 val response =
-                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n" +
-                        "Content-Length: ${payload.size}\r\nConnection: close\r\n\r\n"
+                    "HTTP/1.1 $status\r\nContent-Type: application/json\r\n" +
+                        "Content-Length: ${payload.length}\r\nConnection: close\r\n\r\n"
                 socket.getOutputStream().apply {
                     write(response.toByteArray())
-                    write(payload)
+                    write(payload.toByteArray())
                     flush()
                 }
             }
         }
 
         override fun close() {
+            runCatching { started.await(1, TimeUnit.SECONDS) }
             runCatching { server.close() }
             runCatching { accepting.interrupt() }
         }

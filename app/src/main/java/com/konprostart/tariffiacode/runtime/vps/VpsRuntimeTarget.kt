@@ -38,7 +38,7 @@ import com.konprostart.tariffiacode.runtime.WorkspaceRef
 import com.konprostart.tariffiacode.runtime.mergeSessionLists
 import com.konprostart.tariffiacode.runtime.mergeWorkspaceRefs
 import com.konprostart.tariffiacode.runtime.remote.RemoteOpenCodeBackend
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,6 +49,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * A remote OpenCode runtime reached over SSH.
@@ -83,14 +84,10 @@ class VpsRuntimeTarget(
             saveProjectId = {},
         ),
     /**
-     * Scope the automatic recovery runs in. Left null in tests that drive connect/disconnect
-     * directly; without it there is nothing to hang a network watcher on, so the target simply does
-     * not self-heal.
+     * Enables rebuilding the tunnel after a network handover. Null in tests that drive
+     * connect/disconnect directly, and anywhere the target has no long-lived scope to recover in.
      */
-    private val recoveryScope: CoroutineScope? = null,
-    /** Network transitions that should rebuild the tunnel. See [observeNetwork]. */
-    private val networkStatus: Flow<NetworkStatus>? = null,
-    private val backoff: ReconnectBackoff = ReconnectBackoff(),
+    private val recovery: VpsRecovery? = null,
 ) : RuntimeTarget,
     VpsConnectionController {
     override val displayName: String = "OpenCode VPS"
@@ -138,10 +135,10 @@ class VpsRuntimeTarget(
 
     /**
      * Bumped whenever the user takes the connection over (disconnect or an explicit reconnect), so a
-     * recovery loop that is still waiting notices it is no longer wanted and stops.
+     * recovery loop that is still running notices it is no longer wanted and stands down. Atomic
+     * because the bump happens on whichever thread the user acted on, while recovery runs elsewhere.
      */
-    @Volatile
-    private var connectionEpoch = 0L
+    private val connectionEpoch = AtomicLong(0)
 
     init {
         // Restore the persisted selection before anything can read it, so reopening the app or coming
@@ -166,38 +163,50 @@ class VpsRuntimeTarget(
      * notices until a request times out. Watching for the handover is what turns that silence into a
      * rebuild.
      *
-     * Recovery is deliberately not attempted for a target that was not connected: if the user
-     * disconnected, reconnecting behind their back is the wrong answer, and
-     * [connectionEpoch] stops a pending retry from doing exactly that if they disconnect while it
-     * is waiting.
+     * The first emission is only a baseline, never a trigger: `registerDefaultNetworkCallback`
+     * delivers the current network immediately, and treating that as a handover could tear down a
+     * healthy tunnel that the user had already connected.
      */
     private fun observeNetwork() {
-        val changes = networkStatus ?: return
-        val scope = recoveryScope ?: return
-        scope.launch {
+        val settings = recovery ?: return
+        settings.scope.launch {
             var previous = NetworkStatus.Unknown
-            changes.collect { current ->
-                val handover = shouldRebuildTunnel(previous, current)
+            var seeded = false
+            settings.networkStatus.collect { current ->
+                val handover = seeded && shouldRebuildTunnel(previous, current)
                 previous = current
-                if (handover) scheduleReconnect()
+                seeded = true
+                if (handover) scheduleReconnect(settings)
             }
         }
     }
 
-    /** Runs at most one recovery loop at a time, and only for a target that is currently connected. */
-    private fun scheduleReconnect() {
-        val scope = recoveryScope ?: return
-        if (!isConnected()) return
+    /** Runs at most one recovery loop at a time, and only for a target the user has connected. */
+    private fun scheduleReconnect(settings: VpsRecovery) {
+        // Gated on what the user believes, not on whether the tunnel still works: a handover is
+        // precisely the case where it does not, and waiting for a healthy forward to look healthy
+        // is what let this go unrecovered.
+        if (mutableState.value !is RuntimeState.Connected) return
         if (!reconnecting.compareAndSet(false, true)) return
-        // Captured so a disconnect or an explicit reconnect while we are waiting wins over us.
-        val epoch = connectionEpoch
-        scope.launch {
+        val epoch = connectionEpoch.get()
+        // UNDISPATCHED so the flag is cleared by this coroutine's own finally even when the scope is
+        // cancelled before it would otherwise have started; otherwise one dead scope would latch
+        // `reconnecting` on and refuse every later recovery for the life of the process.
+        settings.scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
                 var attempt = 0
                 while (isActive && attempt < MAX_RECONNECT_ATTEMPTS) {
-                    delay(backoff.delayMillis(attempt))
-                    if (connectionEpoch != epoch) return@launch
-                    if (reconnectInternal().isSuccess) return@launch
+                    delay(settings.backoff.delayMillis(attempt))
+                    if (connectionEpoch.get() != epoch) return@launch
+                    val rebuilt = reconnectInternal().isSuccess
+                    // Re-checked after the attempt: the user can disconnect while a connect is in
+                    // flight, and that connect would otherwise install a fresh tunnel behind their
+                    // back. Give it back rather than keeping a connection nobody asked for.
+                    if (connectionEpoch.get() != epoch) {
+                        closeResources()
+                        return@launch
+                    }
+                    if (rebuilt) return@launch
                     attempt++
                 }
             } finally {
@@ -303,7 +312,7 @@ class VpsRuntimeTarget(
 
     /** Fresh connection: drop any existing forward/session, then connect again. */
     override suspend fun reconnect(): Result<OpenCodeHealth> {
-        connectionEpoch++
+        connectionEpoch.incrementAndGet()
         return reconnectInternal()
     }
 
@@ -314,7 +323,7 @@ class VpsRuntimeTarget(
     }
 
     override fun disconnect() {
-        connectionEpoch++
+        connectionEpoch.incrementAndGet()
         closeResources()
         mutablePendingHostKey.value = null
         mutableState.value =

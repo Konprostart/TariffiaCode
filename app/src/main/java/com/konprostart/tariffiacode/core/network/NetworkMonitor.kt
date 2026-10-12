@@ -27,6 +27,7 @@ class NetworkMonitor(context: Context) {
     /** Latest observed network; starts as [NetworkStatus.Unknown] until [start] reports one. */
     val status: StateFlow<NetworkStatus> = mutableStatus.asStateFlow()
 
+    /** Not synchronised: there is one caller (the application), and it calls this once at startup. */
     private var started = false
 
     private val callback =
@@ -36,9 +37,11 @@ class NetworkMonitor(context: Context) {
             }
 
             override fun onLost(network: Network) {
-                // Only the default network losing us is a change; a secondary network going away
-                // is not an event this listener reports for the default network anyway.
-                if (mutableStatus.value is NetworkStatus.Connected) {
+                // Only the network we are actually reporting being lost clears the status. During a
+                // handover Android may deliver onAvailable(new) before onLost(old), and treating
+                // that late onLost as current would overwrite the new network with "disconnected"
+                // and hide the very handover this exists to catch.
+                if (mutableStatus.value == NetworkStatus.Connected(network.networkHandle.toString())) {
                     mutableStatus.value = NetworkStatus.Disconnected
                 }
             }

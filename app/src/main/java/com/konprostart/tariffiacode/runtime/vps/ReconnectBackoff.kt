@@ -12,7 +12,7 @@ import kotlin.random.Random
  *
  * Pure and injectable, so the schedule can be asserted without a clock.
  */
-internal class ReconnectBackoff(
+class ReconnectBackoff(
     private val initialDelayMillis: Long = DEFAULT_INITIAL_DELAY_MILLIS,
     private val maxDelayMillis: Long = DEFAULT_MAX_DELAY_MILLIS,
     private val multiplier: Int = DEFAULT_MULTIPLIER,
@@ -20,14 +20,16 @@ internal class ReconnectBackoff(
     private val jitterTenths: Int = DEFAULT_JITTER_TENTHS,
     private val random: Random = Random.Default,
 ) {
-    /** Delay before attempt number [attempt], counting from zero. */
+    /** Delay before attempt number [attempt], counting from zero. Never above [maxDelayMillis]. */
     fun delayMillis(attempt: Int): Long {
         require(attempt >= 0) { "attempt must not be negative" }
         val step = exponentialStep(attempt)
         if (jitterTenths <= 0) return step
         val spread = (step * jitterTenths) / 10
         if (spread <= 0) return step
-        return (step - spread / 2 + random.nextLong(spread)).coerceAtLeast(1L)
+        // The cap is a ceiling on the result, not just on the step: jitter centred on the cap would
+        // otherwise hand out delays a fifth larger than the cap this class advertises.
+        return (step - spread / 2 + random.nextLong(spread)).coerceIn(1L, maxDelayMillis)
     }
 
     /** The un-jittered, capped step for [attempt]. */

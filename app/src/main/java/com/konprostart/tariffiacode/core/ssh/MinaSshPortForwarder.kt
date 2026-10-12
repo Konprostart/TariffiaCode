@@ -155,15 +155,17 @@ private class MinaSshPortForward(
     private var closed = false
 
     /**
-     * Open only while the local listener is up *and* the SSH session behind it is still open and
-     * authenticated.
+     * Open only while the local listener is up *and* the SSH session behind it is still open.
      *
-     * `closed`/`tracker.isOpen` are our own bookkeeping: after a mobile handover drops the binding
-     * without a FIN they keep reporting true, so a forward that has died could be mistaken for a
-     * live one and never be rebuilt. The session's own state is the real signal available here.
+     * [ExplicitPortForwardingTracker.isOpen] is our own bookkeeping: a forward whose binding was
+     * dropped without a close keeps reporting true, so this is still a statement about the listener,
+     * not a probe of the far end. The session's own state is what MINA clears when the transport
+     * goes away; a dead peer that never sends anything (the silent NAT case) is only detected by
+     * actually talking to the server - see the runtime's health check and its network-handover
+     * recovery, which exist precisely because this cannot tell.
      */
     override val isOpen: Boolean
-        get() = !closed && tracker.isOpen && session.isOpen && session.isAuthenticated
+        get() = !closed && tracker.isOpen && session.isOpen
 
     @Synchronized
     override fun close() {

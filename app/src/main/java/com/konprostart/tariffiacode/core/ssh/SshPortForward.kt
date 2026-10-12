@@ -23,12 +23,12 @@ interface SshPortForward : AutoCloseable {
     val remotePort: Int
 
     /**
-     * True while this forward can still carry traffic: the local listener is up and the SSH session
-     * behind it is open and authenticated.
+     * True while this forward still holds its resources: the local listener is up and the SSH session
+     * behind it is open.
      *
-     * Implementations must not answer from local bookkeeping alone. A forward whose network binding
-     * was dropped without a close still has a running tracker, so "not closed" is not the same as
-     * "alive" - a caller that trusts the optimistic answer will keep using a dead tunnel.
+     * This is not a liveness probe. A transport dropped without a close can still look open from
+     * here, so callers that need to know whether the far end is actually reachable must ask it - a
+     * health check over the forward, or the runtime's connection recovery.
      */
     val isOpen: Boolean
 

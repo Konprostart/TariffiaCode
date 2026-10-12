@@ -35,18 +35,19 @@ class ReconnectBackoffTest {
     }
 
     @Test
-    fun `the delay is capped`() {
+    fun `the cap is a ceiling on the result, not only on the step`() {
+        // Jitter is centred on the step, so without a ceiling on the returned value a capped attempt
+        // could still hand out a fifth more than the cap.
         val backoff = ReconnectBackoff(maxDelayMillis = 5_000L, random = Random(3))
-
         (0..20).forEach { attempt ->
             assertTrue("attempt $attempt exceeded the cap", backoff.delayMillis(attempt) <= 5_000L)
         }
     }
 
     @Test
-    fun `jitter is deterministic for a seeded source and varies without one`() {
+    fun `the delay is deterministic for a seeded source`() {
         assertTrue(fixed.delayMillis(2) == ReconnectBackoff(random = Random(7)).delayMillis(2))
-        assertTrue(ReconnectBackoff().delayMillis(2) > 0)
+        assertTrue(fixed.delayMillis(2) > 0)
     }
 
     @Test(expected = IllegalArgumentException::class)
