@@ -33,11 +33,22 @@ class VpsPreviewViewModel(
     private val manager: VpsPortForwardManager,
     private val profiles: SshProfileStore,
     private val profileProvider: () -> SshProfile?,
+    initialPort: Int? = null,
 ) : ViewModel() {
-    private val mutableState = MutableStateFlow(VpsPreviewUiState())
+    private val mutableState =
+        MutableStateFlow(
+            VpsPreviewUiState(
+                portInput = (initialPort ?: VpsPortForwardManager.DEFAULT_REMOTE_PORT).toString(),
+            ),
+        )
     val state: StateFlow<VpsPreviewUiState> = mutableState.asStateFlow()
 
     private var forward: SshPortForward? = null
+
+    init {
+        // A port carried in from a chat chip previews immediately; the manual form opens empty.
+        if (initialPort != null && initialPort in 1..MAX_PORT) open()
+    }
 
     fun setPort(value: String) {
         val digits = value.filter(Char::isDigit).take(MAX_PORT_DIGITS)

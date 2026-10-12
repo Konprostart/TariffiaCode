@@ -117,6 +117,7 @@ import com.konprostart.tariffiacode.ui.navigation.SCHEDULE_EDIT_ARG_ID
 import com.konprostart.tariffiacode.ui.navigation.SCHEDULE_EDIT_ROUTE_PATTERN
 import com.konprostart.tariffiacode.ui.navigation.decodeRouteArg
 import com.konprostart.tariffiacode.ui.navigation.guestBrowserRoute
+import com.konprostart.tariffiacode.ui.navigation.remotePreviewRoute
 import com.konprostart.tariffiacode.ui.navigation.scheduleDetailRoute
 import com.konprostart.tariffiacode.ui.navigation.scheduleEditRoute
 import com.konprostart.tariffiacode.ui.navigation.settingsNavGraph
@@ -1054,6 +1055,17 @@ fun TariffiaCodeApp(
                         }
                         ChatHomeScreen(
                             state = chatState,
+                            onOpenDevPreview = { port ->
+                                if (selectedRuntime is com.konprostart.tariffiacode.runtime.vps.VpsRuntimeTarget) {
+                                    navController.navigate(remotePreviewRoute(port)) { launchSingleTop = true }
+                                } else {
+                                    // A local runtime shares the device loopback, so its dev server is
+                                    // reachable directly, without an SSH tunnel.
+                                    navController.navigate(guestBrowserRoute("http://127.0.0.1:$port/")) {
+                                        launchSingleTop = true
+                                    }
+                                }
+                            },
                             providers = settingsState.providers,
                             agents = settingsState.agents,
                             selectedProviderId = chatState.selectedProviderId ?: fallbackProviderId,

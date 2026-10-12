@@ -21,6 +21,8 @@ const val ROUTE_REMOTE_TERMINAL = "remote-terminal"
 const val ROUTE_REMOTE_GIT = "remote-git"
 const val ROUTE_REMOTE_GIT_CLONE = "remote-git-clone"
 const val ROUTE_REMOTE_PREVIEW = "remote-preview"
+const val PREVIEW_ARG_PORT = "port"
+const val REMOTE_PREVIEW_ROUTE_PATTERN = "$ROUTE_REMOTE_PREVIEW?$PREVIEW_ARG_PORT={$PREVIEW_ARG_PORT}"
 const val ROUTE_SETTINGS_MCP = "settings-mcp"
 const val ROUTE_SETTINGS_MCP_CLAUDE = "settings-mcp-claude"
 const val ROUTE_SETTINGS_MCP_ANTIGRAVITY = "settings-mcp-antigravity"
@@ -57,6 +59,9 @@ const val GUEST_BROWSER_ARG_URL = "url"
 const val GUEST_BROWSER_ROUTE_PATTERN = "$ROUTE_GUEST_BROWSER?$GUEST_BROWSER_ARG_URL={$GUEST_BROWSER_ARG_URL}"
 
 fun guestBrowserRoute(url: String): String = "$ROUTE_GUEST_BROWSER?$GUEST_BROWSER_ARG_URL=${encodeRouteArg(url)}"
+
+/** Opens the live preview screen with a port already entered, so a chat chip can jump straight to it. */
+fun remotePreviewRoute(port: Int): String = "$ROUTE_REMOTE_PREVIEW?$PREVIEW_ARG_PORT=$port"
 
 const val CODE_VIEWER_ROUTE_PATTERN = "$ROUTE_CODE_VIEWER/{runtimeId}/{workspacePath}/{filePath}"
 
