@@ -102,7 +102,7 @@ class VpsNetworkRecoveryTest {
         val scope = CoroutineScope(Job() + Dispatchers.IO)
         recoveryScope = scope
         return VpsRuntimeTarget(
-            connector = VpsRuntimeConnector(MinaSshPortForwarder(), credentialStore()),
+            connector = VpsRuntimeConnector(SshTunnelPool(MinaSshPortForwarder()), credentialStore()),
             remotePort = openCode!!.port,
             recovery =
                 VpsRecovery(

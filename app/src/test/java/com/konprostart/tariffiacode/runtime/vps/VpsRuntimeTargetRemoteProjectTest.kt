@@ -85,7 +85,7 @@ class VpsRuntimeTargetRemoteProjectTest {
             val ssh = startSshServer()
             val service = RecordingOpenCode().also { openCode = it }
             val target =
-                VpsRuntimeTarget(VpsRuntimeConnector(MinaSshPortForwarder(), credentialStore()), remotePort = service.port)
+                VpsRuntimeTarget(VpsRuntimeConnector(SshTunnelPool(MinaSshPortForwarder()), credentialStore()), remotePort = service.port)
 
             target.trustServer(ssh.port)
             target.selectRemoteProject(
@@ -111,7 +111,7 @@ class VpsRuntimeTargetRemoteProjectTest {
             val ssh = startSshServer()
             val service = RecordingOpenCode().also { openCode = it }
             val target =
-                VpsRuntimeTarget(VpsRuntimeConnector(MinaSshPortForwarder(), credentialStore()), remotePort = service.port)
+                VpsRuntimeTarget(VpsRuntimeConnector(SshTunnelPool(MinaSshPortForwarder()), credentialStore()), remotePort = service.port)
 
             target.trustServer(ssh.port)
             target.selectRemoteProject(
@@ -136,7 +136,7 @@ class VpsRuntimeTargetRemoteProjectTest {
             val ssh = startSshServer()
             val service = RecordingOpenCode().also { openCode = it }
             val target =
-                VpsRuntimeTarget(VpsRuntimeConnector(MinaSshPortForwarder(), credentialStore()), remotePort = service.port)
+                VpsRuntimeTarget(VpsRuntimeConnector(SshTunnelPool(MinaSshPortForwarder()), credentialStore()), remotePort = service.port)
 
             target.trustServer(ssh.port)
             target.selectRemoteProject(

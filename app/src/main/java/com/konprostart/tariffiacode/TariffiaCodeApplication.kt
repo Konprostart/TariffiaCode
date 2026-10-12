@@ -85,6 +85,7 @@ import com.konprostart.tariffiacode.runtime.local.RuntimeCredentialPolicy
 import com.konprostart.tariffiacode.runtime.local.SystemPromptStore
 import com.konprostart.tariffiacode.runtime.local.VerifiedRuntimeDownloader
 import com.konprostart.tariffiacode.runtime.local.applyOpenCodeSystemPrompt
+import com.konprostart.tariffiacode.runtime.vps.SshTunnelPool
 import com.konprostart.tariffiacode.runtime.vps.VpsRecovery
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeConnector
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeTarget
@@ -169,6 +170,12 @@ class TariffiaCodeApplication : Application() {
      * reports itself unavailable rather than failing, so it never disturbs existing runtimes.
      */
     lateinit var vpsRuntimeTarget: VpsRuntimeTarget
+
+    /**
+     * The process-wide SSH tunnel pool, so every surface that reaches a VPS shares one session per
+     * profile instead of opening its own. Live Preview reaches it through `VpsPortForwardManager`.
+     */
+    lateinit var sshTunnelPool: SshTunnelPool
         private set
 
     lateinit var catalogRepository: RuntimeCatalogRepository
@@ -527,9 +534,12 @@ class TariffiaCodeApplication : Application() {
         // Watching which network the phone is on is what lets the VPS tunnel notice a Wi-Fi <-> cellular
         // handover, which strands every open socket without either end noticing.
         val networkMonitor = NetworkMonitor(this).also { it.start() }
+        // One SSH session per profile, shared by every tunnel that needs it: the chat tunnel and the
+        // live preview used to open a connection each, paying the handshake twice over one VPS.
+        sshTunnelPool = SshTunnelPool(MinaSshPortForwarder())
         vpsRuntimeTarget =
             VpsRuntimeTarget(
-                connector = VpsRuntimeConnector(MinaSshPortForwarder(), SshCredentialStore(settings)),
+                connector = VpsRuntimeConnector(sshTunnelPool, SshCredentialStore(settings)),
                 // Restore the selected SSH profile and applied Remote Project mapping on startup, and
                 // persist changes, so the VPS runtime survives a restart / process death.
                 profiles = sshProfileStore,

@@ -4,7 +4,6 @@ import com.konprostart.tariffiacode.core.ssh.SshFailureDiagnostic
 import com.konprostart.tariffiacode.core.ssh.SshHostKey
 import com.konprostart.tariffiacode.core.ssh.SshPortForward
 import com.konprostart.tariffiacode.core.ssh.SshPortForwardResult
-import com.konprostart.tariffiacode.core.ssh.SshPortForwarder
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.data.ssh.SshProfileHostKeyVerifier
@@ -39,12 +38,13 @@ sealed interface VpsPortForwardOutcome {
  * Opens an SSH local port forward from the device's loopback to a service bound to the VPS's own
  * loopback - a dev server such as Vite on 5173 - so the in-app browser can preview it.
  *
- * Reuses the same [SshPortForwarder] transport and credential/TOFU path as [VpsRuntimeConnector];
- * unlike it, this build no OpenCode [com.konprostart.tariffiacode.data.connection.ConnectionProfile]
- * and so works for any remote port. It adds no transport or credential logic of its own.
+ * Shares its SSH session with the chat tunnel through [SshTunnelPool] rather than opening a second
+ * connection to the same host, and reuses the same credential/TOFU path as [VpsRuntimeConnector];
+ * unlike it, this builds no OpenCode
+ * [com.konprostart.tariffiacode.data.connection.ConnectionProfile] and so works for any remote port.
  */
 class VpsPortForwardManager(
-    private val forwarder: SshPortForwarder,
+    private val pool: SshTunnelPool,
     private val credentials: SshCredentialStore,
 ) {
     suspend fun open(
@@ -60,13 +60,17 @@ class VpsPortForwardManager(
         val verifier = SshProfileHostKeyVerifier(profile)
         return when (
             val result =
-                forwarder.openLocalForward(
-                    host = profile.host,
-                    port = profile.port,
+                pool.open(
+                    key =
+                        TunnelKey(
+                            profileId = profile.id,
+                            host = profile.host,
+                            port = profile.port,
+                            remoteHost = remoteHost,
+                            remotePort = remotePort,
+                        ),
                     auth = auth,
                     verifier = verifier,
-                    remoteHost = remoteHost,
-                    remotePort = remotePort,
                     connectTimeoutMillis = connectTimeoutMillis,
                 )
         ) {

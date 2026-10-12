@@ -35,7 +35,7 @@ class VpsRuntimeTargetPersistenceTest {
         profileId: String,
     ) = RemoteProject(id = id, projectRef = "proj-$id", sshProfileId = profileId, remotePath = "/srv/$id")
 
-    private fun connector() = VpsRuntimeConnector(MinaSshPortForwarder(), credentialStore())
+    private fun connector() = VpsRuntimeConnector(SshTunnelPool(MinaSshPortForwarder()), credentialStore())
 
     private fun profileStore(profiles: MutableList<SshProfile>) =
         SshProfileStore(

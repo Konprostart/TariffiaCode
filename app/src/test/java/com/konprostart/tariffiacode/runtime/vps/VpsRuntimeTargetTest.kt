@@ -83,7 +83,7 @@ class VpsRuntimeTargetTest {
     private fun target(
         store: SshCredentialStore,
         remotePort: Int = VpsRuntimeConnector.DEFAULT_REMOTE_PORT,
-    ) = VpsRuntimeTarget(VpsRuntimeConnector(MinaSshPortForwarder(), store), remotePort = remotePort)
+    ) = VpsRuntimeTarget(VpsRuntimeConnector(SshTunnelPool(MinaSshPortForwarder()), store), remotePort = remotePort)
 
     /** Establishes trust for the test server so the host-key check passes on the next connect. */
     private suspend fun VpsRuntimeTarget.trustServer(sshPort: Int): SshProfile {

@@ -764,7 +764,7 @@ fun NavGraphBuilder.settingsNavGraph(
                             // dev server on the VPS can be previewed without a second connection setup.
                             manager =
                                 com.konprostart.tariffiacode.runtime.vps.VpsPortForwardManager(
-                                    com.konprostart.tariffiacode.core.ssh.MinaSshPortForwarder(),
+                                    app.sshTunnelPool,
                                     com.konprostart.tariffiacode.data.ssh.SshCredentialStore(app.settings),
                                 ),
                             profiles = com.konprostart.tariffiacode.data.ssh.SshProfileStore(app.settings),
