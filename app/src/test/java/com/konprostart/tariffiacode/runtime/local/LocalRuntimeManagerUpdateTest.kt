@@ -2,9 +2,13 @@ package com.konprostart.tariffiacode.runtime.local
 
 import com.konprostart.tariffiacode.runtime.LocalRuntimeStatus
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
@@ -136,6 +140,36 @@ class LocalRuntimeManagerUpdateTest {
             assertEquals("1.19.0", operation.failedVersion)
             assertEquals("1.18.3", operation.restoredVersion)
             assertTrue(operation.reason.contains("new server failed"))
+        }
+
+    @Test
+    fun `a probe that finishes after an operation never overwrites its state`() =
+        runTest {
+            // Drive the constructor's bootstrap probe on its own scheduler so it stays queued until we
+            // run it explicitly - deliberately after the operation has already published its state.
+            val probeScheduler = TestCoroutineScheduler()
+            val probeScope = CoroutineScope(StandardTestDispatcher(probeScheduler) + SupervisorJob())
+            engine.updateCheck = available("1.19.0")
+            operations.startFailures += IllegalStateException("new server failed")
+            val manager =
+                LocalRuntimeManager(
+                    runtimeDirectory = runtime,
+                    abi = "arm64-v8a",
+                    portProbe = { false },
+                    updateEngine = engine,
+                    runtimeOperations = operations,
+                    statusScope = probeScope,
+                )
+
+            val result = manager.updateToLatest()
+
+            assertTrue(result.isFailure)
+            assertEquals(LocalRuntimeStatus.Ready("1.18.3", 4097), manager.state.value)
+
+            // The probe would report Stopped, but the rollback already published Ready. A stale probe
+            // must leave that state untouched, so this is the regression the flake exposed.
+            probeScheduler.advanceUntilIdle()
+            assertEquals(LocalRuntimeStatus.Ready("1.18.3", 4097), manager.state.value)
         }
 
     @Test
