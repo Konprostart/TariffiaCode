@@ -1,7 +1,6 @@
 package com.konprostart.tariffiacode.di
 
 import android.os.Build
-import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.core.api.GitHubApiClient
 import com.konprostart.tariffiacode.core.notification.RuntimeNotificationHelper
 import com.konprostart.tariffiacode.data.connection.SecureSettingsRepository
@@ -13,10 +12,7 @@ import com.konprostart.tariffiacode.data.repository.RuntimeCatalogRepository
 import com.konprostart.tariffiacode.data.settings.AppPreferencesRepository
 import com.konprostart.tariffiacode.data.settings.DraftRepository
 import com.konprostart.tariffiacode.feature.wakeword.VoskModelStore
-import com.konprostart.tariffiacode.runtime.RuntimeRegistry
 import com.konprostart.tariffiacode.runtime.local.AndroidLocalRuntimeMessages
-import com.konprostart.tariffiacode.runtime.local.AntigravityRuntime
-import com.konprostart.tariffiacode.runtime.local.AntigravityTarget
 import com.konprostart.tariffiacode.runtime.local.CustomProviderStore
 import com.konprostart.tariffiacode.runtime.local.DefaultLocalRuntimeUpdateEngine
 import com.konprostart.tariffiacode.runtime.local.GitCredentialHelper
@@ -29,7 +25,6 @@ import com.konprostart.tariffiacode.runtime.local.LocalRuntimeMessages
 import com.konprostart.tariffiacode.runtime.local.LocalRuntimeProcessLauncher
 import com.konprostart.tariffiacode.runtime.local.LocalRuntimeReleaseClient
 import com.konprostart.tariffiacode.runtime.local.LocalRuntimeServiceController
-import com.konprostart.tariffiacode.runtime.local.LocalRuntimeTarget
 import com.konprostart.tariffiacode.runtime.local.LocalRuntimeUpdater
 import com.konprostart.tariffiacode.runtime.local.RuntimeCredentialPolicy
 import com.konprostart.tariffiacode.runtime.local.VerifiedRuntimeDownloader
@@ -172,22 +167,15 @@ val appModule =
 
         single { LocalRuntimeServiceController(androidContext()) }
 
-        single {
-            RuntimeRegistry(
-                store = get(),
-                localTarget = LocalRuntimeTarget(get(), messages = get()),
-                additionalTargets =
-                    listOf(
-                        AntigravityTarget(
-                            AntigravityRuntime(get(), (get<LocalRuntimeInstaller>())::installedRuntime),
-                        ),
-                        // The application's own instance, not a second CodexTarget: Codex runs one
-                        // long-lived app-server whose approvals and threads a second runtime would
-                        // not see. Resolved lazily, after TariffiaCodeApplication.onCreate has built it.
-                        (androidContext().applicationContext as TariffiaCodeApplication).codexTarget,
-                    ),
-            )
-        }
+        // RuntimeRegistry is deliberately NOT registered here. The application builds the only one
+        // that exists, in TariffiaCodeApplication.onCreate, because its targets need the agents and
+        // the VPS connection that are constructed there and cannot be resolved from this module.
+        //
+        // There used to be a second definition here, holding a different and smaller set of targets
+        // than the one actually used - no Claude Code, no VPS - and nothing ever resolved it. That
+        // is worse than dead code: it reads as the place to register an agent, so adding one here
+        // would have changed nothing at all, silently. If you need the registry, take
+        // TariffiaCodeApplication.runtimeRegistry, which is what the UI and every view model use.
 
         single {
             val settings: SecureSettingsRepository = get()

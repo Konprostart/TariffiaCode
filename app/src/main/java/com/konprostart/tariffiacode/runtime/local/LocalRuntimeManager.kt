@@ -664,12 +664,15 @@ class LocalRuntimeManager(
             }.getOrElse { error ->
                 return LocalRuntimeStatus.Broken("Runtime metadata is invalid: ${error.message}")
             }
-        // A sandbox provisioned for Claude Code only is not a broken OpenCode install: OpenCode was
-        // never asked for, so it is simply not installed and the UI should offer to add it.
-        if (!metadata.has(LocalAgent.OPEN_CODE)) return LocalRuntimeStatus.NotInstalled
+        // This status describes the local server agent, not the sandbox: a sandbox provisioned for
+        // other agents only is correctly reported as not running the server. It is still a usable
+        // setup, which is why LocalAgent.nonServerAgents() exists and OnboardingGate asks about it
+        // rather than treating this answer as "nothing is installed".
+        val serverAgent = LocalAgent.serverAgent()
+        if (!metadata.has(serverAgent)) return LocalRuntimeStatus.NotInstalled
         val rootfs = File(runtimeDirectory, "environment/rootfs")
-        val openCode = File(rootfs, "usr/local/bin/opencode")
-        if (!rootfs.isDirectory || !openCode.isFile) {
+        val serverBinary = serverAgent.descriptor.binaryPaths.firstOrNull()?.let { File(rootfs, it.removePrefix("/")) }
+        if (!rootfs.isDirectory || serverBinary?.isFile != true) {
             return LocalRuntimeStatus.Broken(messages.missingFiles)
         }
         if (metadata.version.isBlank() || metadata.port !in 1..65535) {

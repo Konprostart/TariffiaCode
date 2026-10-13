@@ -25,6 +25,7 @@ enum class LocalAgent(val descriptor: AgentDescriptor) {
             iconRes = R.drawable.ic_agent_opencode,
             targetId = "local-android",
             proprietary = false,
+            providesLocalServer = true,
             installMechanism = AgentInstallMechanism.DOWNLOADED_TARBALL,
             userland = AgentUserland.ALPINE_STAGING_ROOTFS,
             binaryPaths = listOf("/usr/local/bin/opencode"),
@@ -55,6 +56,7 @@ enum class LocalAgent(val descriptor: AgentDescriptor) {
             iconRes = R.drawable.ic_agent_claude,
             targetId = "claude-code-local",
             proprietary = true,
+            providesLocalServer = false,
             installMechanism = AgentInstallMechanism.APK,
             userland = AgentUserland.ALPINE_STAGING_ROOTFS,
             binaryPaths = listOf("/usr/bin/claude"),
@@ -86,6 +88,7 @@ enum class LocalAgent(val descriptor: AgentDescriptor) {
             iconRes = R.drawable.ic_agent_antigravity,
             targetId = "antigravity-local",
             proprietary = true,
+            providesLocalServer = false,
             installMechanism = AgentInstallMechanism.GITHUB_RELEASE_TARBALL,
             userland = AgentUserland.DEBIAN_ROOTFS,
             binaryPaths = listOf("/usr/local/bin/agy"),
@@ -115,6 +118,7 @@ enum class LocalAgent(val descriptor: AgentDescriptor) {
             iconRes = R.drawable.ic_agent_codex,
             targetId = "codex-local",
             proprietary = true,
+            providesLocalServer = false,
             installMechanism = AgentInstallMechanism.NPM_TARBALL,
             userland = AgentUserland.ALPINE_STAGING_ROOTFS,
             binaryPaths = listOf("/usr/local/bin/codex", "/usr/local/bin/codex-code-mode-host"),
@@ -148,5 +152,17 @@ enum class LocalAgent(val descriptor: AgentDescriptor) {
 
     companion object {
         fun fromId(id: String): LocalAgent? = entries.firstOrNull { it.id == id }
+
+        /**
+         * The agent whose runtime is the local server the app launches and serves chats from.
+         *
+         * Derived from the descriptors rather than named, so that asking "is the server installed"
+         * and "is some other agent installed" is answered by the same declaration that classifies
+         * each agent. Exactly one agent must answer true; the single() below is what enforces it.
+         */
+        fun serverAgent(): LocalAgent = entries.single { it.descriptor.providesLocalServer }
+
+        /** Every agent that is not [serverAgent] - i.e. the ones whose presence is a usable setup on its own. */
+        fun nonServerAgents(): List<LocalAgent> = entries.filterNot { it.descriptor.providesLocalServer }
     }
 }

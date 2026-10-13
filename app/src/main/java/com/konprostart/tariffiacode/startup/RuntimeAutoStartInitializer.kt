@@ -97,15 +97,17 @@ class RuntimeAutoStartInitializer : Initializer<RuntimeAutoStartInitializer.Resu
             val hasRemoteConnection = app.settings.connections().isNotEmpty()
             val setupConfigured =
                 hasUsableRuntimeSetup(localRuntimeStatus, hasRemoteConnection) ||
-                    // Only asked when OpenCode and the remotes did not already answer, and only of
-                    // the metadata file (a read lock): this runs on the main thread at every launch.
+                    // Only asked when the server agent and the remotes did not already answer, and
+                    // only of the metadata file (a read lock): this runs on the main thread at
+                    // every launch. Derived from the descriptors, so an agent added later
+                    // counts as a usable setup without this list being edited.
                     hasUsableRuntimeSetup(
                         localRuntimeStatus,
                         hasRemoteConnection,
                         hasOtherLocalAgent =
                             runCatching {
                                 app.localRuntimeInstaller.installedMetadata()?.let { metadata ->
-                                    listOf(LocalAgent.CLAUDE_CODE, LocalAgent.ANTIGRAVITY, LocalAgent.CODEX).any(metadata::has)
+                                    LocalAgent.nonServerAgents().any(metadata::has)
                                 } == true
                             }.getOrDefault(false),
                     )

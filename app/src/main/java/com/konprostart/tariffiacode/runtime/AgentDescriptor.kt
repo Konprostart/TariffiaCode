@@ -117,6 +117,21 @@ data class AgentDescriptor(
      * per agent rather than inferred from "is it the free one".
      */
     val proprietary: Boolean,
+    /**
+     * Whether this agent's runtime is the local HTTP server the app launches, serves chats from, and
+     * reports a version and port for.
+     *
+     * Exactly one agent is this, and the distinction is load-bearing in two places that used to
+     * name it directly. [com.konprostart.tariffiacode.runtime.local.LocalRuntimeManager]'s status
+     * describes this server rather than the sandbox, so a sandbox that has only other agents in it
+     * is correctly reported as not running it. And
+     * [com.konprostart.tariffiacode.OnboardingGate] treats any *other* installed agent as a usable
+     * setup, which is what stops a Claude Code user being sent back through setup forever.
+     *
+     * Both ask "is the server agent installed" and "is some other agent installed" by reading this,
+     * so an agent added later satisfies the second question without either being edited.
+     */
+    val providesLocalServer: Boolean,
     /** How [binaryPaths] get onto the device. */
     val installMechanism: AgentInstallMechanism,
     /** Which Linux userland the agent is installed into. */
