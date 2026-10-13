@@ -7,8 +7,6 @@ import com.konprostart.tariffiacode.data.connection.SecureSettingsRepository
 import com.konprostart.tariffiacode.data.repository.AndroidRuntimeActivityMessages
 import com.konprostart.tariffiacode.data.repository.AndroidRuntimeCatalogMessages
 import com.konprostart.tariffiacode.data.repository.PullRequestStatusRepository
-import com.konprostart.tariffiacode.data.repository.RuntimeActivityRepository
-import com.konprostart.tariffiacode.data.repository.RuntimeCatalogRepository
 import com.konprostart.tariffiacode.data.settings.AppPreferencesRepository
 import com.konprostart.tariffiacode.data.settings.DraftRepository
 import com.konprostart.tariffiacode.feature.wakeword.VoskModelStore
@@ -192,30 +190,5 @@ val appModule =
 
         single {
             PullRequestStatusRepository(api = get(), scope = get())
-        }
-
-        single {
-            RuntimeCatalogRepository(get(), get(), messages = get<AndroidRuntimeCatalogMessages>())
-        }
-
-        single {
-            val notifications: RuntimeNotificationHelper = get()
-            RuntimeActivityRepository(
-                registry = get(),
-                scope = get(),
-                onPermissionAsked = { request, title, runtimeId ->
-                    notifications.notifyPermission(request, title, runtimeId)
-                },
-                onSessionIdle = { sessionId, title, runtimeId ->
-                    notifications.notifySessionComplete(sessionId, title, runtimeId)
-                },
-                onSessionError = { sessionId, message, runtimeId ->
-                    notifications.notifySessionError(sessionId, message, runtimeId)
-                },
-                onQuestionAsked = { request, title, runtimeId ->
-                    notifications.notifyQuestion(request, title, runtimeId)
-                },
-                messages = get<AndroidRuntimeActivityMessages>(),
-            )
         }
     }

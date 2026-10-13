@@ -39,7 +39,6 @@ import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfileStore
 import com.konprostart.tariffiacode.data.vps.VpsSelectionStore
 import com.konprostart.tariffiacode.di.appModule
-import com.konprostart.tariffiacode.di.viewModelModule
 import com.konprostart.tariffiacode.feature.schedule.AppScheduleStore
 import com.konprostart.tariffiacode.feature.schedule.ScheduleBridge
 import com.konprostart.tariffiacode.feature.schedule.ScheduleManager
@@ -289,7 +288,7 @@ class TariffiaCodeApplication : Application() {
         CrashReporter.install()
         startKoin {
             androidContext(this@TariffiaCodeApplication)
-            modules(appModule, viewModelModule)
+            modules(appModule)
         }
         appForeground = ProcessLifecycleAppForeground.install()
         // Created early so every collaborator constructed below - the adb manager, the agent
