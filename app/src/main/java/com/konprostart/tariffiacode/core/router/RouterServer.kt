@@ -1,9 +1,9 @@
 package com.konprostart.tariffiacode.core.router
 
-import java.io.BufferedReader
+import java.io.BufferedInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.io.InputStreamReader
 import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -132,8 +132,13 @@ class RouterServer(
         runCatching {
             client.soTimeout = READ_TIMEOUT_MILLIS
             client.tcpNoDelay = true
-            val reader = BufferedReader(InputStreamReader(client.getInputStream(), CHARSET))
-            val request = readRequest(reader, client.getInputStream()) ?: return
+            // One buffered stream for the header lines *and* the body. Reading the headers through a
+            // BufferedReader and the body through the raw socket stream looks equivalent and is not:
+            // the reader buffers ahead, and for any body under its 8 KiB buffer - which is every
+            // Claude Code request - it swallows the body. The server then waits for Content-Length
+            // bytes that have already been consumed and never answers at all.
+            val input = BufferedInputStream(client.getInputStream())
+            val request = readRequest(input) ?: return
             handle(request, client.getOutputStream())
         }.onFailure { error ->
             // A dropped connection is routine - the agent closes a socket it no longer needs - and
@@ -146,23 +151,37 @@ class RouterServer(
     }
 
     /**
+     * Reads one CRLF-terminated line, in bytes.
+     *
+     * Deliberately not a BufferedReader: see the note in [serve] about why the two views of the
+     * socket have to be the same one.
+     */
+    private fun readLine(input: InputStream): String? {
+        val line = ByteArrayOutputStream()
+        while (true) {
+            val byte = input.read()
+            if (byte < 0) return if (line.size() == 0) null else String(line.toByteArray(), CHARSET)
+            if (byte == '\n'.code) return String(line.toByteArray(), CHARSET).removeSuffix("\r")
+            line.write(byte)
+            if (line.size() > MAX_HEADER_LINE_BYTES) return null
+        }
+    }
+
+    /**
      * Reads one request line and its headers.
      *
      * Returns null for a connection that carried nothing - a health check, a port probe, a port that
      * was opened and closed. Those are not errors and must not be logged as ones.
      */
-    private fun readRequest(
-        reader: BufferedReader,
-        body: InputStream,
-    ): HttpRequest? {
-        val requestLine = reader.readLine() ?: return null
+    private fun readRequest(body: InputStream): HttpRequest? {
+        val requestLine = readLine(body) ?: return null
         val parts = requestLine.split(' ')
         if (parts.size < 2) return null
         val method = parts[0]
         val path = parts[1]
         val headers = mutableMapOf<String, String>()
         while (true) {
-            val line = reader.readLine() ?: break
+            val line = readLine(body) ?: break
             if (line.isEmpty()) break
             val separator = line.indexOf(':')
             if (separator > 0) {
@@ -347,6 +366,7 @@ class RouterServer(
         const val COUNT_TOKENS_PATH = "/v1/messages/count_tokens"
         const val MODELS_PATH = "/v1/models"
         const val MAX_BODY_BYTES = 8 * 1024 * 1024
+        const val MAX_HEADER_LINE_BYTES = 8 * 1024
 
         val CHARSET = Charsets.UTF_8
         val EVENT_PREFIX = "event: ".toByteArray(CHARSET)
