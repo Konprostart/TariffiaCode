@@ -1,5 +1,6 @@
 package com.konprostart.tariffiacode.runtime.local
 
+import com.konprostart.tariffiacode.runtime.LocalAgent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -262,7 +263,7 @@ class AntigravityAuthCoordinator(
     fun logout() {
         val runtime = installedRuntimeProvider() ?: return
         cancel()
-        val rootfs = runtime.antigravityRootfs ?: runtime.rootfs
+        val rootfs = runtime.rootfsFor(LocalAgent.ANTIGRAVITY)
         runCatching { File(rootfs, GUEST_TOKEN_PATH).delete() }
         runtime.let { AntigravityGuestSettings.repair(it) }
         mutableState.value = State.Idle

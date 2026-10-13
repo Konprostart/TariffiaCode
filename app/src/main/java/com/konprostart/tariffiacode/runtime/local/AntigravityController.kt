@@ -118,8 +118,11 @@ class AntigravityController(
 
     private suspend fun rehydrate() {
         val installed = installer.installedRuntime()
-        val rootfs = installed?.antigravityRootfs
-        val binaryInstalled = rootfs?.resolve("usr/local/bin/agy")?.let { it.isFile && it.canExecute() } == true
+        // Deliberately its own userland and not rootfsFor(): this asks whether Antigravity was
+        // provisioned a Debian rootfs at all. Falling back to the shared rootfs here would answer a
+        // different question - "is agy in the Alpine rootfs" - which it never is.
+        val rootfs = installed?.takeIf { it.hasUserlandFor(LocalAgent.ANTIGRAVITY) }
+        val binaryInstalled = rootfs?.binaryFor(LocalAgent.ANTIGRAVITY)?.let { it.isFile && it.canExecute() } == true
         if (!binaryInstalled) return
         val version = target.runtime.version()
         mutableState.value =

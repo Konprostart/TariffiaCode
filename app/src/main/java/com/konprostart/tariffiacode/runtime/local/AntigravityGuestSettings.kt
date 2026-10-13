@@ -1,5 +1,6 @@
 package com.konprostart.tariffiacode.runtime.local
 
+import com.konprostart.tariffiacode.runtime.LocalAgent
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -49,7 +50,7 @@ object AntigravityGuestSettings {
     }
 
     fun repair(runtime: LocalRuntimeInstaller.InstalledRuntime) {
-        val rootfs = runtime.antigravityRootfs ?: runtime.rootfs
+        val rootfs = runtime.rootfsFor(LocalAgent.ANTIGRAVITY)
         runCatching {
             val settings = File(rootfs, RELATIVE_PATH)
             if (!settings.isFile || !isValid(settings.readText())) write(rootfs)
