@@ -10,8 +10,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 
 class LocalRuntimeInstaller(
@@ -22,7 +20,32 @@ class LocalRuntimeInstaller(
     private val manifestReader: LocalRuntimeManifestReader = LocalRuntimeManifestReader(context),
     private val downloader: VerifiedRuntimeDownloader = VerifiedRuntimeDownloader(httpClient),
     private val accessCoordinator: LocalRuntimeAccessCoordinator = LocalRuntimeAccessCoordinator(),
+    /** Guest capabilities written into a rootfs whatever agents are installed - see [GuestCapabilities]. */
+    private val guestCapabilities: GuestCapabilities = GuestCapabilities(context),
+    /**
+     * Which installers run, and in which order.
+     *
+     * Built here rather than from a shared default so there is exactly one production registry.
+     */
+    private val installers: AgentInstallerRegistry =
+        AgentInstallerRegistry(
+            listOf(
+                OpenCodeAgentInstaller(),
+                ClaudeCodeAgentInstaller(guestCapabilities),
+                CodexAgentInstaller(),
+                AntigravityAgentInstaller(context, guestCapabilities),
+            ),
+        ),
 ) {
+    /**
+     * Where Antigravity's userland lives inside [environment], or null when it has none.
+     *
+     * Derived from the agent's own id, so the path cannot drift from the one the installer created.
+     */
+    private fun antigravityRootfs(environment: File): File =
+        AgentInstallStep.userlandRootFor(environment, LocalAgent.ANTIGRAVITY)
+            ?: error("Antigravity declares a Debian userland, so one must be planned for it")
+
     private val json: Json =
         Json {
             ignoreUnknownKeys = true
@@ -61,9 +84,6 @@ class LocalRuntimeInstaller(
         withContext(Dispatchers.IO) {
             // The shared environment's own steps, which belong to no single agent.
             val onShared: (Float?, String) -> Unit = { progress, step -> onProgress(progress, step, null) }
-            val onClaude: (Float?, String) -> Unit = { progress, step -> onProgress(progress, step, LocalAgent.CLAUDE_CODE) }
-            val onAntigravity: (Float?, String) -> Unit = { progress, step -> onProgress(progress, step, LocalAgent.ANTIGRAVITY) }
-            val onCodex: (Float?, String) -> Unit = { progress, step -> onProgress(progress, step, LocalAgent.CODEX) }
             runtimeDirectory.mkdirs()
             onShared(0.02f, context.getString(R.string.install_step_preparing_command_env))
             val existingMetadata = installedMetadata()
@@ -99,108 +119,87 @@ class LocalRuntimeInstaller(
 
             try {
                 val alpineArchive = File(cache, "alpine-${manifest.alpineVersion}-$abi.tar.gz")
-                download(
-                    architecture.alpineUrl,
-                    alpineArchive,
-                    architecture.alpineSha256,
-                    0.05f,
-                    0.22f,
-                    context.getString(R.string.install_step_downloading_alpine),
-                    onShared,
+                downloadVerified(
+                    downloader = downloader,
+                    url = architecture.alpineUrl,
+                    destination = alpineArchive,
+                    expectedSha256 = architecture.alpineSha256,
+                    startProgress = 0.05f,
+                    endProgress = 0.22f,
+                    label = context.getString(R.string.install_step_downloading_alpine),
+                    onProgress = { progress, step -> onShared(progress, step) },
                 )
                 val withOpenCode = LocalAgent.OPEN_CODE in requestedAgents
-                val openCodeArchive =
-                    File(cache, "opencode-${manifest.openCodeVersion}-$abi.tar.gz").takeIf { withOpenCode }?.also { archive ->
-                        download(
-                            architecture.openCodeUrl,
-                            archive,
-                            architecture.openCodeSha256,
-                            0.24f,
-                            0.72f,
-                            context.getString(R.string.install_step_downloading_opencode),
-                            onShared,
-                        )
+                val selected = installers.forAgents(requestedAgents)
+                val steps =
+                    selected.associate { installer ->
+                        installer.agent to
+                            AgentInstallStep(
+                                agent = installer.agent,
+                                label = { resource -> context.getString(resource) },
+                                runtimeDirectory = runtimeDirectory,
+                                stagingDirectory = staging,
+                                stagingRootfs = File(staging, "rootfs"),
+                                abi = abi,
+                                commandSuite = commandSuite,
+                                accessCoordinator = accessCoordinator,
+                                httpClient = httpClient,
+                                downloader = downloader,
+                                cache = cache,
+                                manifest = manifest,
+                                includeFullDevelopmentTools = includeFullDevelopmentTools,
+                                onProgress = { progress, step -> onProgress(progress, step, installer.agent) },
+                                onSharedProgress = onShared,
+                            )
                     }
-
                 val rootfs = File(staging, "rootfs").apply { mkdirs() }
-                onShared(0.75f, context.getString(R.string.install_step_extracting_linux_env))
-                alpineArchive.inputStream().use { RuntimeArchive.extractTarGz(it, rootfs) }
-
-                val openCodeBinary =
-                    openCodeArchive?.let { archive ->
-                        onShared(0.85f, context.getString(R.string.install_step_extracting_opencode))
-                        extractOpenCode(archive, staging, rootfs)
-                    }
-                configureRootfs(rootfs, commandSuite)
+                provisionAgents(
+                    installers = selected,
+                    steps = steps,
+                    afterDownloads = {
+                        onShared(0.75f, context.getString(R.string.install_step_extracting_linux_env))
+                        alpineArchive.inputStream().use { RuntimeArchive.extractTarGz(it, rootfs) }
+                        // Checked here, before the provision phase, which can pull a whole second
+                        // rootfs down: a missing launcher must not cost the user that download
+                        // before the install is told it cannot possibly finish.
+                        require(commandSuite.proot.isFile) { "PRoot launcher is unavailable" }
+                    },
+                    afterProvision = {
+                        configureRootfs(rootfs, commandSuite)
+                        // Credentials and agent config live under /root inside the rootfs. Activation swaps
+                        // the whole environment directory, so without this the user is signed out of every
+                        // agent whenever another one is added or the runtime is reinstalled.
+                        carryOverHomeDirectory(File(active, "rootfs"), rootfs)
+                        ensureTariffiaCodeAgentContext(rootfs, context)
+                        onShared(
+                            0.91f,
+                            context.getString(
+                                if (includeFullDevelopmentTools) {
+                                    R.string.install_step_installing_dev_tools
+                                } else {
+                                    R.string.install_step_installing_runtime_tools
+                                },
+                            ),
+                        )
+                        installPackages(
+                            rootfs = rootfs,
+                            suite = commandSuite,
+                            packages =
+                                if (includeFullDevelopmentTools) {
+                                    REQUIRED_RUNTIME_PACKAGES + OPTIONAL_DEVELOPMENT_PACKAGES
+                                } else {
+                                    REQUIRED_RUNTIME_PACKAGES
+                                },
+                        )
+                    },
+                )
+                // Whether Antigravity provisioned a userland of its own, asked of its descriptor
+                // rather than of the outcome - a step that was never given one has no root to
+                // redirect, so the two are not the same question.
                 val antigravityRootfs =
-                    if (LocalAgent.ANTIGRAVITY in requestedAgents) {
-                        onAntigravity(0.90f, context.getString(R.string.install_step_preparing_antigravity_rootfs))
-                        DebianRootfsInstaller(runtimeDirectory, abi, downloader, httpClient, commandSuite).installInto(
-                            File(staging, "antigravity-rootfs"),
-                            installFullDevelopmentTools = includeFullDevelopmentTools,
-                        ) { progress ->
-                            onAntigravity(0.90f + progress * 0.03f, context.getString(R.string.install_step_preparing_antigravity_rootfs))
-                        }
-                    } else {
-                        null
-                    }
-                if (antigravityRootfs != null) {
-                    ensureTariffiaCodeAgentContext(antigravityRootfs, context)
-                    copyCaCertificates(rootfs, antigravityRootfs)
-                    // Keep the Android-vision tool surface added for Claude/OpenCode available
-                    // to agy's Debian tool runner as well. The scripts still fail closed when adb
-                    // or Pillow is not installed; they are never silently replaced by a fork.
-                    installAndroidHelperScripts(antigravityRootfs)
-                    provisionBrowserMcp(antigravityRootfs)
-                    provisionScheduleMcp(antigravityRootfs)
-                }
-                // Credentials and agent config live under /root inside the rootfs. Activation swaps
-                // the whole environment directory, so without this the user is signed out of every
-                // agent whenever another one is added or the runtime is reinstalled.
-                carryOverHomeDirectory(File(active, "rootfs"), rootfs)
-                ensureTariffiaCodeAgentContext(rootfs, context)
-                onShared(
-                    0.91f,
-                    context.getString(
-                        if (includeFullDevelopmentTools) {
-                            R.string.install_step_installing_dev_tools
-                        } else {
-                            R.string.install_step_installing_runtime_tools
-                        },
-                    ),
-                )
-                installPackages(
-                    rootfs = rootfs,
-                    suite = commandSuite,
-                    packages =
-                        if (includeFullDevelopmentTools) {
-                            REQUIRED_RUNTIME_PACKAGES + OPTIONAL_DEVELOPMENT_PACKAGES
-                        } else {
-                            REQUIRED_RUNTIME_PACKAGES
-                        },
-                )
-                if (LocalAgent.CLAUDE_CODE in requestedAgents) {
-                    onClaude(0.93f, context.getString(R.string.install_step_installing_claude_code))
-                    ClaudeCodeInstaller.installInto(rootfs, commandSuite, runtimeDirectory)
-                    provisionClaudePermissionHook(rootfs)
-                }
-                if (LocalAgent.CODEX in requestedAgents) {
-                    onCodex(0.935f, context.getString(R.string.install_step_downloading_codex))
-                    // Into the staging rootfs like every other agent here, so it is swapped in with the
-                    // environment and is not lost when a later install rebuilds the sandbox.
-                    CodexInstaller.install(rootfs, abi, runtimeDirectory, accessCoordinator, httpClient)
-                }
-                if (LocalAgent.ANTIGRAVITY in requestedAgents) {
-                    onAntigravity(0.94f, context.getString(R.string.install_step_downloading_antigravity))
-                    val antigravityRelease = resolveAntigravityRelease(abi, httpClient)
-                    AntigravityInstaller(runtimeDirectory, downloader).installInto(
-                        antigravityRootfs ?: rootfs,
-                        { progress ->
-                            onAntigravity(0.94f + progress * 0.04f, context.getString(R.string.install_step_installing_antigravity))
-                        },
-                        antigravityRelease,
-                    )
-                }
+                    steps[LocalAgent.ANTIGRAVITY]
+                        ?.takeIf { AgentInstallStep.userlandRootFor(staging, LocalAgent.ANTIGRAVITY) != null }
+                        ?.installRoot
 
                 val metadata =
                     LocalRuntimeMetadata(
@@ -229,12 +228,24 @@ class LocalRuntimeInstaller(
                     )
                 }
                 onShared(1f, context.getString(R.string.install_step_done))
+                val activeRootfs = File(active, "rootfs")
                 InstalledRuntime(
                     metadata,
                     commandSuite,
-                    File(active, "rootfs"),
-                    openCodeBinary?.let { File(active, "rootfs/usr/local/bin/opencode") },
-                    File(active, "antigravity-rootfs").takeIf { LocalAgent.ANTIGRAVITY in requestedAgents && it.isDirectory },
+                    activeRootfs,
+                    // Where each agent's executables ended up, from what the descriptor declares,
+                    // rather than from which branch installed them.
+                    if (withOpenCode) {
+                        val binary = LocalAgent.OPEN_CODE.descriptor.binaryPaths.first()
+                        // Explicitly relative: File(parent, child) concatenates, but that is a
+                        // coincidence of the JDK rather than something to rely on for an absolute path.
+                        File(activeRootfs, binary.removePrefix("/"))
+                    } else {
+                        null
+                    },
+                    AgentInstallStep
+                        .userlandRootFor(active, LocalAgent.ANTIGRAVITY)
+                        ?.takeIf { LocalAgent.ANTIGRAVITY in requestedAgents && it.isDirectory },
                 )
             } catch (error: Throwable) {
                 staging.deleteRecursively()
@@ -277,7 +288,7 @@ class LocalRuntimeInstaller(
                 commandSuite,
                 rootfs,
                 File(rootfs, "usr/local/bin/opencode").takeIf { it.isFile },
-                File(active, "antigravity-rootfs").takeIf { metadata.has(LocalAgent.ANTIGRAVITY) && it.isDirectory },
+                antigravityRootfs(active).takeIf { metadata.has(LocalAgent.ANTIGRAVITY) && it.isDirectory },
             )
         }?.also { installed ->
             ensureTariffiaCodeAgentContext(installed.rootfs, context)
@@ -334,7 +345,7 @@ class LocalRuntimeInstaller(
                 onProgress(null, context.getString(R.string.install_step_installing_dev_tools), null)
                 if (!metadata.fullDevelopmentToolsInstalled) installPackages(rootfs, suite, OPTIONAL_DEVELOPMENT_PACKAGES)
                 if (metadata.has(LocalAgent.ANTIGRAVITY) && !metadata.fullDebianDevelopmentToolsInstalled) {
-                    val antigravityRootfs = File(active, "antigravity-rootfs")
+                    val antigravityRootfs = antigravityRootfs(active)
                     require(antigravityRootfs.isDirectory) { "The Antigravity Linux environment is not installed" }
                     DebianRootfsInstaller(runtimeDirectory, abi, downloader, httpClient, suite)
                         .installFullDevelopmentTools(antigravityRootfs)
@@ -380,30 +391,6 @@ class LocalRuntimeInstaller(
         return AntigravityInstaller(runtimeDirectory, downloader).installInto(rootfs, onProgress, release)
     }
 
-    private fun extractOpenCode(
-        archive: File,
-        staging: File,
-        rootfs: File,
-    ): File {
-        val extractDir = File(staging, "opencode-extract").apply { mkdirs() }
-        try {
-            archive.inputStream().use { RuntimeArchive.extractTarGz(it, extractDir) }
-            val sourceBinary =
-                extractDir.walkTopDown()
-                    .firstOrNull { it.isFile && it.name == "opencode" }
-                    ?: error("OpenCode archive did not contain the opencode binary")
-            val binary = File(rootfs, "usr/local/bin/opencode")
-            binary.parentFile?.mkdirs()
-            sourceBinary.copyTo(binary, overwrite = true)
-            require(binary.setExecutable(true, false) || binary.canExecute()) {
-                "Unable to mark OpenCode executable"
-            }
-            return binary
-        } finally {
-            extractDir.deleteRecursively()
-        }
-    }
-
     private fun carryOverHomeDirectory(
         currentRootfs: File,
         stagingRootfs: File,
@@ -411,39 +398,6 @@ class LocalRuntimeInstaller(
         val currentHome = File(currentRootfs, "root")
         if (!currentHome.isDirectory) return
         runCatching { currentHome.copyRecursively(File(stagingRootfs, "root"), overwrite = true) }
-    }
-
-    private suspend fun download(
-        url: String,
-        destination: File,
-        expectedSha256: String,
-        startProgress: Float,
-        endProgress: Float,
-        label: String,
-        onProgress: (Float?, String) -> Unit,
-    ) {
-        if (destination.isFile) {
-            runCatching { RuntimeArchive.verifySha256(destination, expectedSha256) }
-                .onSuccess {
-                    onProgress(endProgress, label)
-                    return
-                }
-            destination.delete()
-        }
-        downloader.download(
-            url = url,
-            destination = destination,
-            expectedSha256 = expectedSha256,
-            onProgress = { fraction ->
-                onProgress(
-                    fraction?.let {
-                        startProgress + (endProgress - startProgress) * it.coerceIn(0f, 1f)
-                    },
-                    label,
-                )
-            },
-        )
-        onProgress(endProgress, label)
     }
 
     private fun installPackages(
@@ -541,9 +495,9 @@ class LocalRuntimeInstaller(
         if (!libApk.exists() && File(rootfs, "usr/lib/libapk.so.3.0.0").isFile) {
             Os.symlink("libapk.so.3.0.0", libApk.absolutePath)
         }
-        installAndroidHelperScripts(rootfs)
-        provisionBrowserMcp(rootfs)
-        provisionScheduleMcp(rootfs)
+        guestCapabilities.installHelperScripts(rootfs)
+        guestCapabilities.provisionBrowserMcp(rootfs)
+        guestCapabilities.provisionScheduleMcp(rootfs)
         require(suite.proot.isFile) { "PRoot launcher is unavailable" }
     }
 
@@ -553,171 +507,18 @@ class LocalRuntimeInstaller(
      */
     fun provisionGuestCapabilitiesForExistingInstall() {
         val active = File(runtimeDirectory, "environment")
-        listOf(File(active, "rootfs"), File(active, "antigravity-rootfs"))
+        listOf(File(active, "rootfs"), antigravityRootfs(active))
             .filter(File::isDirectory)
             .forEach { rootfs ->
-                installAndroidHelperScripts(rootfs)
-                provisionBrowserMcp(rootfs)
-                provisionScheduleMcp(rootfs)
-                provisionClaudePermissionHook(rootfs)
+                guestCapabilities.installHelperScripts(rootfs)
+                guestCapabilities.provisionBrowserMcp(rootfs)
+                guestCapabilities.provisionScheduleMcp(rootfs)
+                guestCapabilities.installClaudePermissionHook(rootfs)
             }
-    }
-
-    /** Installs the Claude Code PermissionRequest hook into an Alpine rootfs. */
-    fun provisionClaudePermissionHook(rootfs: File = File(runtimeDirectory, "environment/rootfs")) {
-        if (!rootfs.isDirectory) return
-        runCatching {
-            val script =
-                context.assets.open("scripts/tariffiacode-claude-permission-hook.sh").bufferedReader().use { it.readText() }
-            ClaudePermissionHooks.installInto(rootfs, script)
-        }
-    }
-
-    /**
-     * Registers the guest-browser MCP server with every agent (OpenCode, Claude Code,
-     * Antigravity) so they all expose the same browser_* tools. User-added servers are kept.
-     */
-    private fun provisionBrowserMcp(rootfs: File) {
-        mergeJsonConfig(File(rootfs, "root/.config/opencode/opencode.json")) { root ->
-            upsertMcpServer(root, "mcp", BROWSER_MCP_NAME, browserMcpEntry("opencode"), LEGACY_BROWSER_MCP_NAME)
-        }
-        mergeJsonConfig(File(rootfs, "root/.claude.json")) { root ->
-            upsertMcpServer(root, "mcpServers", BROWSER_MCP_NAME, browserMcpEntry("claude"), LEGACY_BROWSER_MCP_NAME)
-        }
-        mergeJsonConfig(File(rootfs, "root/.gemini/config/mcp_config.json")) { root ->
-            upsertMcpServer(root, "mcpServers", BROWSER_MCP_NAME, browserMcpEntry("antigravity"), LEGACY_BROWSER_MCP_NAME)
-        }
-    }
-
-    private fun browserMcpEntry(agent: String): JSONObject =
-        when (agent) {
-            "claude" ->
-                JSONObject()
-                    .put("type", "stdio")
-                    .put("command", BROWSER_MCP_BIN)
-                    .put("args", JSONArray())
-            "antigravity" -> JSONObject().put("command", BROWSER_MCP_BIN)
-            else ->
-                JSONObject()
-                    .put("type", "local")
-                    .put("command", JSONArray(listOf(BROWSER_MCP_BIN)))
-                    .put("enabled", true)
-                    .put("timeout", BROWSER_MCP_TIMEOUT_MILLIS)
-        }
-
-    /**
-     * Registers the guest-schedule MCP server with every agent (OpenCode, Claude Code, Antigravity)
-     * so they all expose the same schedule_* tools. User-added servers are kept.
-     */
-    private fun provisionScheduleMcp(rootfs: File) {
-        mergeJsonConfig(File(rootfs, "root/.config/opencode/opencode.json")) { root ->
-            upsertMcpServer(root, "mcp", SCHEDULE_MCP_NAME, scheduleMcpEntry("opencode"), LEGACY_SCHEDULE_MCP_NAME)
-        }
-        mergeJsonConfig(File(rootfs, "root/.claude.json")) { root ->
-            upsertMcpServer(root, "mcpServers", SCHEDULE_MCP_NAME, scheduleMcpEntry("claude"), LEGACY_SCHEDULE_MCP_NAME)
-        }
-        mergeJsonConfig(File(rootfs, "root/.gemini/config/mcp_config.json")) { root ->
-            upsertMcpServer(root, "mcpServers", SCHEDULE_MCP_NAME, scheduleMcpEntry("antigravity"), LEGACY_SCHEDULE_MCP_NAME)
-        }
-    }
-
-    private fun scheduleMcpEntry(agent: String): JSONObject =
-        when (agent) {
-            "claude" ->
-                JSONObject()
-                    .put("type", "stdio")
-                    .put("command", SCHEDULE_MCP_BIN)
-                    .put("args", JSONArray())
-            "antigravity" -> JSONObject().put("command", SCHEDULE_MCP_BIN)
-            else ->
-                JSONObject()
-                    .put("type", "local")
-                    .put("command", JSONArray(listOf(SCHEDULE_MCP_BIN)))
-                    .put("enabled", true)
-                    .put("timeout", SCHEDULE_MCP_TIMEOUT_MILLIS)
-        }
-
-    private fun mergeJsonConfig(
-        file: File,
-        mutate: (JSONObject) -> Unit,
-    ) {
-        file.parentFile?.mkdirs()
-        val root =
-            if (file.isFile) {
-                runCatching { JSONObject(file.readText()) }.getOrNull() ?: JSONObject()
-            } else {
-                JSONObject()
-            }
-        val before = root.toString()
-        mutate(root)
-        if (root.toString() != before) {
-            file.writeText(root.toString(2) + "\n")
-        }
-    }
-
-    private fun installAndroidHelperScripts(rootfs: File) {
-        val binDir = File(rootfs, "usr/local/bin").apply { mkdirs() }
-        File(binDir, "android-ui").delete()
-        listOf(
-            "android-vision.sh" to "android-vision",
-            "android-screenshot.sh" to "android-screenshot",
-            "android-instrument.sh" to "android-instrument",
-            "android-app.sh" to "android-app",
-            "tariffiacode-browser-mcp.py" to "tariffiacode-browser-mcp.py",
-            "tariffiacode-schedule-mcp.py" to "tariffiacode-schedule-mcp.py",
-        ).forEach {
-                (assetName, scriptName) ->
-            val scriptFile = File(binDir, scriptName)
-            context.assets.open("scripts/$assetName").use { input ->
-                scriptFile.outputStream().use { output -> input.copyTo(output) }
-            }
-            scriptFile.setExecutable(true, false)
-        }
-        // Remove pre-rename MCP binaries so an upgraded guest does not keep runnable legacy servers.
-        File(binDir, LEGACY_BROWSER_MCP_BIN_NAME).delete()
-        File(binDir, LEGACY_SCHEDULE_MCP_BIN_NAME).delete()
-    }
-
-    private fun copyCaCertificates(
-        alpineRootfs: File,
-        debianRootfs: File,
-    ) {
-        val source = File(alpineRootfs, "etc/ssl/certs/ca-certificates.crt")
-        if (!source.isFile) return
-        val destination = File(debianRootfs, "etc/ssl/certs/ca-certificates.crt")
-        destination.parentFile?.mkdirs()
-        source.copyTo(destination, overwrite = true)
     }
 
     internal companion object {
         private const val METADATA_FILE = "metadata.json"
-        private const val BROWSER_MCP_NAME = "tariffiacode-browser"
-        private const val LEGACY_BROWSER_MCP_NAME = "and-code-browser"
-        private const val BROWSER_MCP_BIN = "/usr/local/bin/tariffiacode-browser-mcp.py"
-        private const val LEGACY_BROWSER_MCP_BIN_NAME = "andcode-browser-mcp.py"
-        private const val BROWSER_MCP_TIMEOUT_MILLIS = 30000
-        private const val SCHEDULE_MCP_NAME = "tariffiacode-schedule"
-        private const val LEGACY_SCHEDULE_MCP_NAME = "and-code-schedule"
-        private const val SCHEDULE_MCP_BIN = "/usr/local/bin/tariffiacode-schedule-mcp.py"
-        private const val LEGACY_SCHEDULE_MCP_BIN_NAME = "andcode-schedule-mcp.py"
-        private const val SCHEDULE_MCP_TIMEOUT_MILLIS = 120000
-
-        /**
-         * Registers [newName] under [containerKey] in [root], dropping the pre-rename [legacyName]
-         * if present. Every other server in the container, and the rest of [root], is left as-is.
-         */
-        internal fun upsertMcpServer(
-            root: JSONObject,
-            containerKey: String,
-            newName: String,
-            entry: JSONObject,
-            legacyName: String,
-        ) {
-            val servers = root.optJSONObject(containerKey) ?: JSONObject()
-            servers.remove(legacyName)
-            servers.put(newName, entry)
-            root.put(containerKey, servers)
-        }
 
         /** Required by OpenCode and TariffiaCode's built-in Git, MCP, and Android-device features. */
         val REQUIRED_RUNTIME_PACKAGES =

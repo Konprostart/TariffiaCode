@@ -1,0 +1,253 @@
+package com.konprostart.tariffiacode.runtime.local
+
+import com.konprostart.tariffiacode.runtime.AgentUserland
+import com.konprostart.tariffiacode.runtime.LocalAgent
+import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.File
+
+/**
+ * The phase contract the installer seam rests on.
+ *
+ * A provisioning pass runs download, then provision, then install, and each agent takes part in
+ * whichever of those it needs. That ordering is the whole reason the seam exists - it is what lets
+ * an agent's work be expressed without knowing what any other agent does - so these tests drive the
+ * contract directly rather than through a full install, which needs a device.
+ */
+class AgentInstallerRegistryTest {
+    @Test
+    fun `agents run in registry order, not in the order they were selected`() {
+        val registry =
+            AgentInstallerRegistry(
+                listOf(
+                    RecordingInstaller(LocalAgent.CODEX, mutableListOf(), mutableMapOf()),
+                    RecordingInstaller(LocalAgent.OPEN_CODE, mutableListOf(), mutableMapOf()),
+                ),
+            )
+
+        // Selected in the opposite order on purpose: the registry decides, because the setup guide
+        // renders one panel per agent and an install that reported its steps out of order would look
+        // like it was going backwards.
+        assertEquals(
+            listOf(LocalAgent.CODEX, LocalAgent.OPEN_CODE),
+            registry.forAgents(listOf(LocalAgent.OPEN_CODE, LocalAgent.CODEX)).map { it.agent },
+        )
+    }
+
+    @Test
+    fun `an agent with no installer is simply absent`() {
+        val registry = AgentInstallerRegistry(listOf(RecordingInstaller(LocalAgent.OPEN_CODE, mutableListOf(), mutableMapOf())))
+
+        assertEquals(listOf(LocalAgent.OPEN_CODE), registry.forAgents(LocalAgent.entries.toList()).map { it.agent })
+    }
+
+    @Test
+    fun `an agent's installer knows which agent it installs`() {
+        // The failure this guards: an agent added to LocalAgent without an installer would be
+        // accepted by the app and then silently not installed at all. Only the installers whose
+        // collaborators are constructible without an Android Context are built here; Claude Code and
+        // Antigravity take one because they read an asset (the permission hook, the agent context),
+        // and a unit test has no Context to give them.
+        assertEquals(LocalAgent.OPEN_CODE, OpenCodeAgentInstaller().agent)
+        assertEquals(LocalAgent.CODEX, CodexAgentInstaller().agent)
+    }
+
+    @Test
+    fun `two installers for one agent is a configuration error`() {
+        val failure =
+            runCatching {
+                val installer = RecordingInstaller(LocalAgent.CODEX, mutableListOf(), mutableMapOf())
+                AgentInstallerRegistry(listOf(installer, installer))
+            }.exceptionOrNull()
+
+        assertNotNull("registering two installers for one agent must not be allowed", failure)
+        assertTrue(failure!!.message!!.contains("CODEX"))
+    }
+
+    @Test
+    fun `only an agent with a userland of its own gets a separate root`() {
+        val staging = File("/tmp/staging")
+
+        assertNull(
+            "an agent on the shared rootfs must not be given one of its own",
+            AgentInstallStep.userlandRootFor(staging, LocalAgent.OPEN_CODE),
+        )
+        // Named after the agent, so the path is a function of the agent rather than of which branch
+        // created it - and it must stay the path this agent has always used.
+        assertEquals(
+            File(staging, "antigravity-rootfs"),
+            AgentInstallStep.userlandRootFor(staging, LocalAgent.ANTIGRAVITY),
+        )
+    }
+
+    @Test
+    fun `the userland root is named after the agent that needs one`() {
+        val staging = File("/tmp/staging")
+
+        LocalAgent.entries
+            .filter { it.descriptor.userland == AgentUserland.DEBIAN_ROOTFS }
+            .forEach { agent ->
+                val root = AgentInstallStep.userlandRootFor(staging, agent)
+                assertNotNull("${agent.id} declares its own userland but was given no root", root)
+                assertEquals("${agent.id}-rootfs", root!!.name)
+            }
+    }
+
+    @Test
+    fun `an artefact put in one phase comes back in the next`() =
+        runTest {
+            val step = step()
+
+            step.put("archive", File("/tmp/opencode.tar.gz"))
+
+            assertEquals(File("/tmp/opencode.tar.gz"), step.get("archive"))
+            assertNull("a missing key must be null rather than throw", step.get("nope"))
+            // Overwriting is what a retrying phase needs: the second download must win outright
+            // rather than leave a half-written first one behind.
+            step.put("archive", File("/tmp/opencode-2.tar.gz"))
+            assertEquals(File("/tmp/opencode-2.tar.gz"), step.get("archive"))
+        }
+
+    @Test
+    fun `an agent installs into the shared rootfs unless it declared one`() =
+        runTest {
+            val shared = File("/tmp/staging/rootfs")
+            val step = step()
+            assertEquals("an agent on the shared userland must start on the shared rootfs", shared, step.installRoot)
+
+            val own = File("/tmp/staging/antigravity-rootfs")
+            step.useUserlandRoot(own)
+
+            assertEquals("provisioning a userland must redirect later phases into it", own, step.installRoot)
+        }
+
+    @Test
+    fun `progress is attributed to the agent, and shared progress to no agent`() =
+        runTest {
+            val perAgent = mutableListOf<String>()
+            val shared = mutableListOf<String>()
+            val step =
+                step(
+                    onProgress = { _, label -> perAgent += label },
+                    onSharedProgress = { _, label -> shared += label },
+                )
+
+            step.onProgress(0.5f, "installing")
+            step.onSharedProgress(0.6f, "building the environment")
+
+            assertEquals(listOf("installing"), perAgent)
+            assertEquals(listOf("building the environment"), shared)
+        }
+
+    @Test
+    fun `every phase runs every installer, in registry order, around the shared work`() =
+        runTest {
+            val phases = mutableListOf<String>()
+            val rootsSeen = mutableMapOf<LocalAgent, String>()
+            val registry =
+                AgentInstallerRegistry(
+                    listOf(
+                        RecordingInstaller(LocalAgent.OPEN_CODE, phases, rootsSeen),
+                        RecordingInstaller(LocalAgent.CODEX, phases, rootsSeen),
+                    ),
+                )
+            val selected = registry.forAgents(LocalAgent.entries.toList())
+            val steps = selected.associate { it.agent to step(it.agent) }
+
+            provisionAgents(
+                installers = selected,
+                steps = steps,
+                afterDownloads = { phases += "unpacked" },
+                afterProvision = { phases += "packaged" },
+            )
+
+            // The order the seam exists to guarantee, and the thing a progress bar visibly depends
+            // on: every download before the rootfs is unpacked, every provision before the shared
+            // packages, every install last.
+            assertEquals(
+                listOf(
+                    "opencode:download",
+                    "codex:download",
+                    "unpacked",
+                    "opencode:provision",
+                    "codex:provision",
+                    "packaged",
+                    "opencode:install",
+                    "codex:install",
+                ),
+                phases,
+            )
+            // Both phases ran against the rootfs that existed at the time, not one built later.
+            assertEquals(setOf("rootfs"), rootsSeen.values.toSet())
+        }
+
+    @Test
+    fun `an agent's scratch space is named after it`() =
+        runTest {
+            // Inside the staging environment, so it is discarded with it if the install fails.
+            assertEquals(File("/tmp/staging/opencode-work"), step().workDirectory)
+        }
+
+    private fun step(
+        agent: LocalAgent = LocalAgent.OPEN_CODE,
+        onProgress: (Float?, String) -> Unit = { _, _ -> },
+        onSharedProgress: (Float?, String) -> Unit = { _, _ -> },
+    ) = AgentInstallStep(
+        agent = agent,
+        label = { resource -> "label-$resource" },
+        runtimeDirectory = File("/tmp/runtime"),
+        stagingDirectory = File("/tmp/staging"),
+        stagingRootfs = File("/tmp/staging/rootfs"),
+        abi = "arm64-v8a",
+        commandSuite =
+            EmbeddedCommandSuite.Paths(
+                home = File("/tmp/embedded/home"),
+                tmp = File("/tmp/embedded/tmp"),
+                nativeLibraryDirectory = File("/tmp/embedded/lib"),
+                proot = File("/tmp/embedded/proot"),
+                loader = File("/tmp/embedded/loader"),
+                loader32 = File("/tmp/embedded/loader32"),
+            ),
+        accessCoordinator = LocalRuntimeAccessCoordinator(),
+        httpClient = OkHttpClient(),
+        downloader = VerifiedRuntimeDownloader(OkHttpClient()),
+        cache = File("/tmp/runtime/cache"),
+        manifest =
+            LocalRuntimeManifest(
+                schemaVersion = 1,
+                runtimeVersion = "1",
+                openCodeVersion = "1.0.0",
+                alpineVersion = "3.21",
+                port = 4096,
+                architectures = emptyMap(),
+            ),
+        includeFullDevelopmentTools = false,
+        onProgress = onProgress,
+        onSharedProgress = onSharedProgress,
+    )
+
+    /** Records every phase it takes part in, so the ordering the seam guarantees can be asserted. */
+    private class RecordingInstaller(
+        override val agent: LocalAgent,
+        private val phases: MutableList<String>,
+        private val installRootSeen: MutableMap<LocalAgent, String>,
+    ) : AgentInstaller {
+        override suspend fun download(step: AgentInstallStep) {
+            phases += "${agent.id}:download"
+        }
+
+        override suspend fun provision(step: AgentInstallStep) {
+            phases += "${agent.id}:provision"
+            installRootSeen[agent] = step.installRoot.name
+        }
+
+        override suspend fun install(step: AgentInstallStep) {
+            phases += "${agent.id}:install"
+        }
+    }
+}
