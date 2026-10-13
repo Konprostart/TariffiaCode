@@ -1,0 +1,32 @@
+{
+  "_comment": "Routing table for the smart router. DATA, not code: these lists change every few weeks, so they are shipped as an asset and can be updated without a release. Order within a chain is the failover order. contextWindow is used to reject entries that cannot carry Claude Code's system prompt plus tool definitions at all; below 64000 a normal turn fails and the chain would chase a model that can never work.",
+  "chains": [
+    {
+      "tier": "haiku",
+      "models": [
+        { "provider": "ollama", "model": "qwen3-coder:30b", "contextWindow": 262144, "supportsTools": true },
+        { "provider": "openrouter", "model": "google/gemini-2.0-flash-exp:free", "contextWindow": 1048576, "supportsTools": true },
+        { "provider": "deepseek", "model": "deepseek-chat", "contextWindow": 131072, "supportsTools": true }
+      ]
+    },
+    {
+      "tier": "sonnet",
+      "models": [
+        { "provider": "ollama", "model": "qwen3-coder:30b", "contextWindow": 262144, "supportsTools": true },
+        { "provider": "deepseek", "model": "deepseek-chat", "contextWindow": 131072, "supportsTools": true },
+        { "provider": "openrouter", "model": "google/gemini-2.5-pro", "contextWindow": 1048576, "supportsTools": true },
+        { "provider": "gemini", "model": "gemini-2.5-flash", "contextWindow": 1048576, "supportsTools": true },
+        { "provider": "groq", "model": "llama-3.3-70b-versatile", "contextWindow": 131072, "supportsTools": true }
+      ]
+    },
+    {
+      "tier": "opus",
+      "models": [
+        { "provider": "deepseek", "model": "deepseek-reasoner", "contextWindow": 131072, "supportsTools": true },
+        { "provider": "openrouter", "model": "anthropic/claude-sonnet-4.5", "contextWindow": 200000, "supportsTools": true },
+        { "provider": "gemini", "model": "gemini-2.5-pro", "contextWindow": 1048576, "supportsTools": true },
+        { "provider": "groq", "model": "llama-3.3-70b-versatile", "contextWindow": 131072, "supportsTools": true }
+      ]
+    }
+  ]
+}
