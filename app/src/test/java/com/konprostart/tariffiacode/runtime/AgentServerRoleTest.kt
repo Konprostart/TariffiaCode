@@ -1,5 +1,6 @@
 package com.konprostart.tariffiacode.runtime
 
+import com.konprostart.tariffiacode.agentTargetsOf
 import com.konprostart.tariffiacode.core.api.OpenCodeAgent
 import com.konprostart.tariffiacode.core.api.OpenCodeEvent
 import com.konprostart.tariffiacode.core.api.OpenCodeHealth
