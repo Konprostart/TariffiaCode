@@ -26,11 +26,11 @@ import java.io.File
  */
 class RouterKeys(
     context: Context,
-) {
+) : KeyStore {
     private val preferences: SharedPreferences by lazy { createPreferences(context) }
 
     /** Whether [provider] has a usable key. A blank entry is stored as absent, never as empty. */
-    fun hasKey(provider: String): Boolean = preferences.contains(keyName(provider))
+    override fun hasKey(provider: String): Boolean = preferences.contains(keyName(provider))
 
     /**
      * The key for [provider], or null when the user has not configured one.
@@ -39,10 +39,10 @@ class RouterKeys(
      * skipped rather than tried and failed, which is the whole reason this returns null instead of
      * an empty string.
      */
-    fun keyFor(provider: String): String? = preferences.getString(keyName(provider), null)?.takeIf { it.isNotBlank() }
+    override fun keyFor(provider: String): String? = preferences.getString(keyName(provider), null)?.takeIf { it.isNotBlank() }
 
     /** Stores [key] for [provider]. A blank key removes the entry rather than storing an empty one. */
-    fun setKey(
+    override fun setKey(
         provider: String,
         key: String,
     ) {
@@ -54,12 +54,12 @@ class RouterKeys(
         }
     }
 
-    fun removeKey(provider: String) {
+    override fun removeKey(provider: String) {
         preferences.edit().remove(keyName(provider)).apply()
     }
 
     /** The providers that currently have a key, in no particular order. */
-    fun configuredProviders(): Set<String> = preferences.all.keys.mapNotNull { providerForKey(it) }.toSet()
+    override fun configuredProviders(): Set<String> = preferences.all.keys.mapNotNull { providerForKey(it) }.toSet()
 
     /**
      * Every configured key, resolved once per routing pass.
@@ -68,10 +68,14 @@ class RouterKeys(
      * otherwise change the chain underneath an in-flight request. Snapshotting once per pass is what
      * keeps a turn stable.
      */
-    fun snapshot(): Map<String, String> = configuredProviders().mapNotNull { provider -> keyFor(provider)?.let { provider to it } }.toMap()
+    override fun snapshot(): Map<String, String> =
+        configuredProviders().mapNotNull {
+                provider ->
+            keyFor(provider)?.let { provider to it }
+        }.toMap()
 
     /** Forgets every key. Used when the router is switched off, so nothing is left behind. */
-    fun clear() {
+    override fun clear() {
         preferences.edit().clear().apply()
     }
 
@@ -109,19 +113,6 @@ class RouterKeys(
     companion object {
         private const val PREFS_NAME = "router_provider_keys"
         private const val KEY_PREFIX = "router_key_"
-
-        /**
-         * The token the router requires on every request, generated per run.
-         *
-         * Not stored: it is regenerated each time the router starts, so a token captured from one
-         * session cannot be replayed against the next. The router hands it to the agent as
-         * `ANTHROPIC_AUTH_TOKEN` and compares in constant time.
-         */
-        fun newSessionToken(): String {
-            val bytes = ByteArray(32)
-            java.security.SecureRandom().nextBytes(bytes)
-            return bytes.joinToString("") { "%02x".format(it) }
-        }
 
         /** Kept so tests can assert the store never shares a file with anything else. */
         const val STORE_FILE_NAME: String = PREFS_NAME
