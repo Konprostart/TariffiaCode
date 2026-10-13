@@ -800,18 +800,18 @@ class TariffiaCodeApplication : Application() {
          */
         private const val SESSIONS_LEASE_GRACE_MILLIS = 60_000L
     }
+}
 
 /**
-     * Every agent runtime in [targets], keyed by the agent each one declares for itself.
-     *
-     * Derived from [RuntimeTarget.agent] rather than written out as `agent to target` pairs, so the
-     * mapping cannot contradict what a target says it is - `RuntimeRegistry.targetFor(agent)` would
-     * otherwise resolve to the wrong runtime for an agent whose entry was mistyped, with nothing to
-     * catch it. A target that declares no agent - the local OpenCode target, which is passed to the
-     * registry separately, and the VPS target - is left out, because it is not a local agent's runtime.
-     *
-     * Pure, and free of any Android type, so a test can read the keys without a Context.
-     */
-    internal fun agentTargetsOf(vararg targets: RuntimeTarget): Map<LocalAgent, RuntimeTarget> =
-        targets.mapNotNull { target -> target.agent?.let { it to target } }.toMap()
-}
+ * Every agent runtime in [targets], keyed by the agent each one declares for itself.
+ *
+ * Derived from [RuntimeTarget.agent] rather than written out as `agent to target` pairs, so the
+ * mapping cannot contradict what a target says it is - `RuntimeRegistry.targetFor(agent)` would
+ * otherwise resolve to the wrong runtime for an agent whose entry was mistyped, with nothing to
+ * catch it. A target that declares no agent - the local OpenCode target, which is passed to the
+ * registry separately, and the VPS target - is left out, because it is not a local agent's runtime.
+ *
+ * Pure, and free of any Android type, so a test can read the keys without a Context.
+ */
+internal fun agentTargetsOf(vararg targets: RuntimeTarget): Map<LocalAgent, RuntimeTarget> =
+    targets.mapNotNull { target -> target.agent?.let { it to target } }.toMap()
