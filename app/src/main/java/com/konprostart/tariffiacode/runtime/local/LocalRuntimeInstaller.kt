@@ -287,7 +287,8 @@ class LocalRuntimeInstaller(
                 metadata,
                 commandSuite,
                 rootfs,
-                File(rootfs, "usr/local/bin/opencode").takeIf { it.isFile },
+                File(rootfs, LocalAgent.serverAgent().descriptor.binaryPaths.first().removePrefix("/"))
+                    .takeIf { it.isFile },
                 antigravityRootfs(active).takeIf { metadata.has(LocalAgent.ANTIGRAVITY) && it.isDirectory },
             )
         }?.also { installed ->

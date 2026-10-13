@@ -233,6 +233,45 @@ class LocalRuntimeManagerTest {
             assertEquals(LocalRuntimeStatus.NotInstalled, manager.status())
         }
 
+    @Test
+    fun `a sandbox with only another agent is not running the server`() {
+        // The status describes the server agent, not the sandbox, so a Claude-only sandbox is
+        // correctly NotInstalled - and OnboardingGate's hasOtherLocalAgent is what makes that
+        // sandbox usable. Every other status test writes metadata without a components field,
+        // which defaults to the server agent, so neither of the branches this refactor touched
+        // had a test until now.
+        createRuntimeFiles()
+        temporaryFolder.newFile("metadata.json").writeText(
+            """{"version":"1.17.20","port":4096,"installedAt":123,"components":["claude-code"]}""",
+        )
+        val manager =
+            LocalRuntimeManager(
+                runtimeDirectory = temporaryFolder.root,
+                abi = "arm64-v8a",
+                portProbe = { true },
+            )
+
+        assertEquals(LocalRuntimeStatus.NotInstalled, manager.status())
+    }
+
+    @Test
+    fun `the server agent recorded but its binary missing is broken`() {
+        // No createRuntimeFiles(): the metadata claims the server agent, the sandbox does not have
+        // it. The path checked comes from the descriptor, so this also pins that it resolves to
+        // environment/rootfs/usr/local/bin/opencode.
+        temporaryFolder.newFile("metadata.json").writeText(
+            """{"version":"1.17.20","port":4096,"installedAt":123,"components":["opencode"]}""",
+        )
+        val manager =
+            LocalRuntimeManager(
+                runtimeDirectory = temporaryFolder.root,
+                abi = "arm64-v8a",
+                portProbe = { true },
+            )
+
+        assertTrue(manager.status() is LocalRuntimeStatus.Broken)
+    }
+
     private fun createRuntimeFiles() {
         val binary = temporaryFolder.root.resolve("environment/rootfs/usr/local/bin/opencode")
         binary.parentFile.mkdirs()
