@@ -61,7 +61,7 @@ class RouterConfigLoader(
                 if (!kept) rejected += "${chain.tier}: chain is empty"
                 kept
             }
-        return Result(chains, rejected)
+        return Result(RouterConfig(chains), rejected)
     }
 
     /** A validated table, and what validation dropped. */

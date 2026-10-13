@@ -2,11 +2,13 @@ package com.konprostart.tariffiacode.core.router
 
 import java.io.BufferedReader
 import java.io.IOException
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.nio.charset.Charset
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicBoolean
@@ -135,7 +137,12 @@ class RouterServer(
             val request = readRequest(reader) ?: return
             handle(request, client.getOutputStream())
         }.onFailure { error ->
-            if (error !is IOException) gateway.onServerFailure(error)
+            // A dropped connection is routine - the agent closes a socket it no longer needs - and
+            // must not be reported as a server fault. Anything else is wrapped so the gateway's
+            // contract can stay in terms of Exception.
+            if (error !is IOException) {
+                gateway.onServerFailure(error as? Exception ?: RuntimeException(error))
+            }
         }
     }
 
@@ -161,7 +168,7 @@ class RouterServer(
                 headers[line.substring(0, separator).trim().lowercase()] = line.substring(separator + 1).trim()
             }
         }
-        return HttpRequest(method, path, headers, reader)
+        return HttpRequest(method, path, headers, body)
     }
 
     private fun handle(
@@ -266,10 +273,10 @@ class RouterServer(
     private fun readBody(request: HttpRequest): String? {
         val length = request.headers["content-length"]?.toIntOrNull() ?: return null
         if (length < 0 || length > MAX_BODY_BYTES) return null
-        val buffer = CharArray(length)
+        val buffer = ByteArray(length)
         var read = 0
         while (read < length) {
-            val count = request.body.read(buffer, read, length - read)
+            val count = request.stream.read(buffer, read, length - read)
             if (count < 0) break
             read += count
         }
@@ -326,7 +333,7 @@ class RouterServer(
         val method: String,
         val path: String,
         val headers: Map<String, String>,
-        val body: BufferedReader,
+        val stream: InputStream,
     )
 
     private companion object {
@@ -339,7 +346,7 @@ class RouterServer(
         const val MODELS_PATH = "/v1/models"
         const val MAX_BODY_BYTES = 8 * 1024 * 1024
 
-        val CHARSET: java.nio.charset.Charset = Charsets.UTF_8
+        val CHARSET: Charset = Charsets.UTF_8
         val EVENT_PREFIX = "event: ".toByteArray(CHARSET)
         val EVENT_SUFFIX = "\n\n".toByteArray(CHARSET)
         val DONE_FRAME = "event: message_stop\n\n".toByteArray(CHARSET)

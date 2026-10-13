@@ -111,7 +111,7 @@ data class RouterConfig(
      * Surfaced rather than swallowed: a router silently missing its opus chain would look like a
      * provider problem on every request, and the cost of finding that out would be paid in support.
      */
-    val incompleteTiers: List<RouterTier> = RouterTier.entries.filterNot { byTier[it].isUsable }
+    val incompleteTiers: List<RouterTier> = RouterTier.entries.filterNot { byTier[it]?.isUsable == true }
 
     val isUsable: Boolean get() = incompleteTiers.isEmpty()
 }
