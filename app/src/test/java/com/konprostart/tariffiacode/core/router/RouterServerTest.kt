@@ -125,7 +125,7 @@ class RouterServerTest {
     fun `a streamed request is forwarded frame by frame, not buffered to the end`() {
         val gateway =
             RecordingGateway().apply {
-                frames = listOf("message_start", "content_block_delta", "message_stop")
+                frames = listOf(START_EVENT, DELTA_EVENT, STOP_EVENT_JSON)
             }
         val started = start(gateway)
 
@@ -134,11 +134,32 @@ class RouterServerTest {
         assertEquals(200, response.status)
         assertEquals(1, gateway.handled)
         assertTrue("streaming must be reported to the gateway", gateway.streaming)
-        // The frames arrive as three separate SSE events, each terminated by a blank line.
+        // Each frame carries both halves of an SSE event. A frame with a name and no data parses as
+        // empty in a real client, which is the bug these assertions exist to prevent.
         assertTrue(response.body.contains("event: message_start"))
         assertTrue(response.body.contains("event: content_block_delta"))
         assertTrue(response.body.contains("event: message_stop"))
+        assertTrue("the payload must actually be sent", response.body.contains("""data: {"type":"content_block_delta""""))
         assertEquals(3, response.body.split("\n\n").count { it.isNotBlank() })
+    }
+
+    @Test
+    fun `a streamed response is chunked so the client can tell events apart`() {
+        val gateway =
+            RecordingGateway().apply {
+                frames = listOf(START_EVENT, DELTA_EVENT, STOP_EVENT_JSON)
+            }
+        val started = start(gateway)
+
+        val raw = rawPost(started, "/v1/messages", """{"model":"claude-sonnet-4-5","stream":true}""", token)
+
+        // Read over a socket rather than through HttpURLConnection, which would de-chunk it for us
+        // and hide exactly the thing under test.
+        assertTrue("the response must declare chunked framing", raw.contains("Transfer-Encoding: chunked"))
+        assertTrue("and must not claim a length it cannot know", !raw.contains("Content-Length:"))
+        assertTrue("every chunk must be length-prefixed", CHUNK_PREFIX.containsMatchIn(raw))
+        assertTrue("the stream must end with a zero-length chunk", raw.contains("\r\n0\r\n\r\n"))
+        assertTrue("the payload must still be intact", raw.contains("""data: {"type":"content_block_delta""""))
     }
 
     @Test
@@ -199,6 +220,13 @@ class RouterServerTest {
     // --- helpers ---------------------------------------------------------------------------
 
     private companion object {
+        const val START_EVENT = """{"type":"message_start"}"""
+        const val DELTA_EVENT = """{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}"""
+        const val STOP_EVENT_JSON = """{"type":"message_stop"}"""
+
+        /** A chunk size line: hex digits between CRLFs. */
+        val CHUNK_PREFIX = Regex("\r\n[0-9a-fA-F]+\r\n")
+
         /**
          * HttpURLConnection defaults to waiting forever. In a test that turns any bug in the server
          * into a build that hangs instead of a build that fails, which is a far worse outcome and a
@@ -248,6 +276,34 @@ class RouterServerTest {
         return connection.read()
     }
 
+    /** One raw request and the whole response, chunk framing included. */
+    private fun rawPost(
+        server: RouterServer,
+        path: String,
+        body: String,
+        token: String,
+    ): String {
+        val socket = java.net.Socket("127.0.0.1", server.port)
+        socket.soTimeout = 5_000
+        val request =
+            buildString {
+                append("POST $path HTTP/1.1\r\n")
+                append("Host: 127.0.0.1\r\n")
+                append("Authorization: BEARER $token\r\n")
+                append("Content-Type: application/json\r\n")
+                append("Content-Length: ${body.toByteArray().size}\r\n")
+                append("Connection: close\r\n\r\n")
+                append(body)
+            }
+        socket.getOutputStream().apply {
+            write(request.toByteArray())
+            flush()
+        }
+        val raw = socket.getInputStream().readBytes().toString(Charsets.UTF_8)
+        socket.close()
+        return raw
+    }
+
     private fun withToken(url: URL): HttpURLConnection {
         val connection = url.openConnection() as HttpURLConnection
         connection.connectTimeout = CLIENT_TIMEOUT_MILLIS
@@ -275,7 +331,7 @@ class RouterServerTest {
         var streaming = false
             private set
         var lastRequest: AnthropicRequest? = null
-        var frames: List<String> = listOf("message_start")
+        var frames: List<String> = listOf(START_EVENT)
 
         override fun isStreaming(rawRequest: String): Boolean = rawRequest.contains(""""stream":true""")
 

@@ -1,5 +1,8 @@
 package com.konprostart.tariffiacode.core.router
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -40,6 +43,9 @@ class RouterServer(
     private val token: String = RouterKeys.newSessionToken(),
 ) {
     private val running = AtomicBoolean(false)
+
+    /** Only used to read the event name back out of a frame the gateway has already built. */
+    private val json = Json { isLenient = true }
 
     @Volatile
     private var socket: ServerSocket? = null
@@ -262,32 +268,79 @@ class RouterServer(
         raw: String,
         out: OutputStream,
     ) {
-        writeStatus(out, 200, "text/event-stream")
+        // No Content-Length: the length is not knowable until the model stops, which may be never.
+        // Chunked is the alternative that still lets the client tell where events begin and end.
+        writeStatus(out, 200, "text/event-stream", chunked = true)
+        val stream = ChunkedStream(out)
         try {
             var sawStop = false
             gateway.stream(raw) { event ->
                 if (event.contains(STOP_EVENT)) sawStop = true
-                out.write(EVENT_PREFIX)
-                out.write(event.toByteArray(CHARSET))
-                out.write(EVENT_SUFFIX)
-                out.flush()
+                stream.write(sseFrame(event))
             }
             // Only if the chain did not already close its own stream: two message_stop events make a
             // client that is counting events, or keying off the terminal one, behave oddly.
             if (!sawStop) {
-                out.write(DONE_FRAME)
-                out.flush()
+                stream.write(sseFrame(DONE_EVENT))
             }
+            stream.finish()
         } catch (failure: IOException) {
             // The agent closed the connection mid-turn. Nothing to report to a caller that left.
         } catch (failure: Exception) {
             // Report it in the shape the client parses rather than dropping the stream silently.
             runCatching {
-                out.write(EVENT_PREFIX)
-                out.write(gateway.errorEvent(failure).toByteArray(CHARSET))
-                out.write(EVENT_SUFFIX)
-                out.flush()
+                stream.write(sseFrame(gateway.errorEvent(failure)))
+                stream.finish()
             }
+        }
+    }
+
+    /**
+     * One SSE frame: the event name, and the event itself.
+     *
+     * Both lines matter. The gateway hands over a complete Anthropic event object, and sending it as
+     * the event *name* - which is what this used to do - left the client with a name and no payload,
+     * so every frame parsed as empty and the stream was unwatchable.
+     *
+     * The name is taken from the payload rather than asked for separately, so the two cannot drift.
+     * A payload with no recognisable type still goes out as data, because losing the payload is worse
+     * than losing the name: a client that keys off `type` can recover, one left with no data cannot.
+     */
+    private fun sseFrame(payload: String): ByteArray {
+        val name = runCatching { json.parseToJsonElement(payload).jsonObject["type"]?.jsonPrimitive?.content }.getOrNull()
+        val head = if (name.isNullOrBlank()) "" else "event: $name\n"
+        return "${head}data: $payload\n\n".toByteArray(CHARSET)
+    }
+
+    /**
+     * Frames writes as HTTP/1.1 chunked transfer-encoding.
+     *
+     * Each write is length-prefixed so the client can find the next event, and the zero-length chunk
+     * at the end is what tells it the turn is over. Closing the socket alone would do that too, but
+     * only as a side effect of the connection dying - a client cannot tell that from a network fault,
+     * and will treat a clean end of turn as a dropped connection.
+     */
+    private class ChunkedStream(
+        private val out: OutputStream,
+    ) {
+        fun write(bytes: ByteArray) {
+            if (bytes.isEmpty()) return
+            out.write(bytes.size.toString(16).toByteArray(CHARSET))
+            out.write(CRLF)
+            out.write(bytes)
+            out.write(CRLF)
+            out.flush()
+        }
+
+        fun finish() {
+            out.write("0".toByteArray(CHARSET))
+            out.write(CRLF)
+            out.write(CRLF)
+            out.flush()
+        }
+
+        private companion object {
+            val CRLF = "\r\n".toByteArray(CHARSET)
         }
     }
 
@@ -326,14 +379,19 @@ class RouterServer(
         status: Int,
         contentType: String,
         contentLength: String? = null,
+        chunked: Boolean = false,
     ) {
         val headers =
             buildString {
                 append("HTTP/1.1 $status ${reason(status)}\r\n")
                 append("Content-Type: $contentType\r\n")
-                // A streamed response has no length; everything else is measured so the connection can
-                // be closed cleanly instead of hanging.
-                if (contentLength != null) append("Content-Length: $contentLength\r\n")
+                // A streamed response has no length to declare; chunked carries the framing instead.
+                // Everything else is measured so the connection can be closed cleanly instead of hanging.
+                if (chunked) {
+                    append("Transfer-Encoding: chunked\r\n")
+                } else if (contentLength != null) {
+                    append("Content-Length: $contentLength\r\n")
+                }
                 append("Cache-Control: no-store\r\n")
                 append("Connection: close\r\n\r\n")
             }
@@ -376,9 +434,7 @@ class RouterServer(
         const val MAX_HEADER_LINE_BYTES = 8 * 1024
 
         val CHARSET = Charsets.UTF_8
-        val EVENT_PREFIX = "event: ".toByteArray(CHARSET)
-        val EVENT_SUFFIX = "\n\n".toByteArray(CHARSET)
-        val DONE_FRAME = "event: message_stop\n\n".toByteArray(CHARSET)
+        val DONE_EVENT = """{"type":"message_stop"}"""
     }
 }
 
