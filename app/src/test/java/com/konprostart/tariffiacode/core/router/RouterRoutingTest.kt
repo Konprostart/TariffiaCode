@@ -32,67 +32,67 @@ class RouterRoutingTest {
 
     @Test
     fun `a request is routed by the tier named in the model id`() {
-        server.on("sonnet-provider") { Reply.answer("wrong-tier") }
-        server.on("opus-provider") { Reply.answer("right-tier") }
+        server.on("deepseek") { Reply.answer("wrong-tier") }
+        server.on("groq") { Reply.answer("right-tier") }
 
         engine(
             listOf(
-                RouterTierChain(RouterTier.SONNET, listOf(RouterModel("sonnet-provider", "s", 200_000))),
-                RouterTierChain(RouterTier.OPUS, listOf(RouterModel("opus-provider", "o", 200_000))),
+                RouterTierChain(RouterTier.SONNET, listOf(RouterModel("deepseek", "s", 200_000))),
+                RouterTierChain(RouterTier.OPUS, listOf(RouterModel("groq", "o", 200_000))),
             ),
         ).handle("""{"model":"claude-opus-4-1","messages":[]}""")
 
-        assertEquals("an opus request must not be served by the sonnet chain", 0, server.hits("sonnet-provider"))
-        assertEquals(1, server.hits("opus-provider"))
+        assertEquals("an opus request must not be served by the sonnet chain", 0, server.hits("deepseek"))
+        assertEquals(1, server.hits("groq"))
     }
 
     @Test
     fun `an unrecognised model lands on a usable chain rather than nowhere`() {
-        server.on("sonnet-provider") { Reply.answer("fallback") }
+        server.on("deepseek") { Reply.answer("fallback") }
 
         engine(
             listOf(
-                RouterTierChain(RouterTier.SONNET, listOf(RouterModel("sonnet-provider", "s", 200_000))),
-                RouterTierChain(RouterTier.OPUS, listOf(RouterModel("opus-provider", "o", 200_000))),
+                RouterTierChain(RouterTier.SONNET, listOf(RouterModel("deepseek", "s", 200_000))),
+                RouterTierChain(RouterTier.OPUS, listOf(RouterModel("groq", "o", 200_000))),
             ),
         ).handle("""{"model":"something-unrecognisable","messages":[]}""")
 
-        assertEquals(1, server.hits("sonnet-provider"))
+        assertEquals(1, server.hits("deepseek"))
     }
 
     @Test
     fun `the chain is walked in the order the config declares`() {
-        server.on("first") { Reply.refuse(429) }
-        server.on("second") { Reply.refuse(429) }
-        server.on("third") { Reply.answer("reached") }
+        server.on("deepseek") { Reply.refuse(429) }
+        server.on("groq") { Reply.refuse(429) }
+        server.on("openrouter") { Reply.answer("reached") }
 
         engine(
             listOf(
                 RouterTierChain(
                     RouterTier.SONNET,
                     listOf(
-                        RouterModel("first", "a", 200_000),
-                        RouterModel("second", "b", 200_000),
-                        RouterModel("third", "c", 200_000),
+                        RouterModel("deepseek", "a", 200_000),
+                        RouterModel("groq", "b", 200_000),
+                        RouterModel("openrouter", "c", 200_000),
                     ),
                 ),
             ),
         ).handle("""{"model":"claude-sonnet-4-5","messages":[]}""")
 
-        assertEquals(1, server.hits("first"))
-        assertEquals(1, server.hits("second"))
-        assertEquals("the first provider that answers ends the walk", 1, server.hits("third"))
+        assertEquals(1, server.hits("deepseek"))
+        assertEquals(1, server.hits("groq"))
+        assertEquals("the first provider that answers ends the walk", 1, server.hits("openrouter"))
     }
 
     @Test
     fun `the model named in the config is the model sent`() {
-        server.on("only") { Reply.answer("served") }
+        server.on("deepseek") { Reply.answer("served") }
 
         engine(
-            listOf(RouterTierChain(RouterTier.SONNET, listOf(RouterModel("only", "deepseek-chat", 200_000)))),
+            listOf(RouterTierChain(RouterTier.SONNET, listOf(RouterModel("deepseek", "deepseek-chat", 200_000)))),
         ).handle("""{"model":"claude-sonnet-4-5","messages":[{"role":"user","content":"hi"}]}""")
 
-        val body = server.body("only")
+        val body = server.body("deepseek")
         assertTrue(
             "the provider must be asked for the configured model, not Claude's: $body",
             body.contains("\"model\":\"deepseek-chat\""),
@@ -135,12 +135,12 @@ class RouterRoutingTest {
         val client = RouterEngine.defaultClient()
         assertEquals(
             TimeUnit.SECONDS.toMillis(RouterEngine.CONNECT_TIMEOUT_SECONDS),
-            client.connectTimeoutMillis,
+            client.connectTimeoutMillis.toLong(),
         )
         assertEquals(
             "the read timeout is what bounds the wait for the first chunk",
             TimeUnit.SECONDS.toMillis(RouterEngine.FIRST_BYTE_TIMEOUT_SECONDS),
-            client.readTimeoutMillis,
+            client.readTimeoutMillis.toLong(),
         )
     }
 
@@ -157,15 +157,15 @@ class RouterRoutingTest {
 
     @Test
     fun `a tier with no chain serves nothing rather than falling through sideways`() {
-        server.on("only") { Reply.answer("served") }
+        server.on("deepseek") { Reply.answer("served") }
 
         val response =
             engine(
-                listOf(RouterTierChain(RouterTier.SONNET, listOf(RouterModel("only", "m", 200_000)))),
+                listOf(RouterTierChain(RouterTier.SONNET, listOf(RouterModel("deepseek", "m", 200_000)))),
             ).handle("""{"model":"claude-haiku-4-5","messages":[]}""")
 
         assertNull(response)
-        assertEquals("no chain, no provider, no request", 0, server.hits("only"))
+        assertEquals("no chain, no provider, no request", 0, server.hits("deepseek"))
     }
 
     // --- helpers ----------------------------------------------------------------------------

@@ -37,44 +37,44 @@ class RouterFailoverTest {
 
     @Test
     fun `a refusal before any bytes moves to the next provider`() {
-        server.on("first") { Reply.refuse(429) }
-        server.on("second") { Reply.answer("from-second") }
+        server.on("deepseek") { Reply.refuse(429) }
+        server.on("groq") { Reply.answer("from-second") }
 
         val response =
-            engine(listOf(model("first"), model("second"))).handle(
+            engine(listOf(model("deepseek"), model("groq"))).handle(
                 """{"model":"claude-sonnet-4-5","messages":[{"role":"user","content":"hi"}]}""",
             )
 
         assertNotNull("a refusal that produced nothing must not end the turn", response)
         assertTrue(response!!.contains("from-second"))
-        assertEquals(1, server.hits("first"))
-        assertEquals(1, server.hits("second"))
+        assertEquals(1, server.hits("deepseek"))
+        assertEquals(1, server.hits("groq"))
     }
 
     @Test
     fun `a stream that dies before its first event is still failed over`() {
-        server.on("silent") { Reply.die() }
-        server.on("second") { Reply.stream("hello") }
+        server.on("openrouter") { Reply.die() }
+        server.on("groq") { Reply.stream("hello") }
 
         val events = mutableListOf<String>()
-        engine(listOf(model("silent"), model("second")))
+        engine(listOf(model("openrouter"), model("groq")))
             .stream("""{"model":"claude-sonnet-4-5","stream":true,"messages":[]}""") { events += it }
 
         assertEquals("only the provider that actually produced text may speak", 1, events.size)
         assertTrue(events.single().contains("hello"))
-        assertEquals("the silent provider must have been tried once and abandoned", 1, server.hits("silent"))
-        assertEquals(1, server.hits("second"))
+        assertEquals("the silent provider must have been tried once and abandoned", 1, server.hits("openrouter"))
+        assertEquals(1, server.hits("groq"))
     }
 
     @Test
     fun `once an event has reached the client there is no failover`() {
-        server.on("partial") { Reply.die("partial-text") }
-        server.on("second") { Reply.answer("should-never-be-used") }
+        server.on("deepseek") { Reply.die("partial-text") }
+        server.on("groq") { Reply.answer("should-never-be-used") }
 
         val events = mutableListOf<String>()
         val failure =
             runCatching {
-                engine(listOf(model("partial"), model("second")))
+                engine(listOf(model("deepseek"), model("groq")))
                     .stream("""{"model":"claude-sonnet-4-5","stream":true,"messages":[]}""") { events += it }
             }.exceptionOrNull()
 
@@ -83,39 +83,39 @@ class RouterFailoverTest {
         assertEquals(
             "the second provider must never be touched once the turn has begun",
             0,
-            server.hits("second"),
+            server.hits("groq"),
         )
         assertNotNull("and the failure must be reported rather than swallowed", failure)
     }
 
     @Test
     fun `an exhausted chain reports rather than inventing an answer`() {
-        server.on("first") { Reply.refuse(403) }
-        server.on("second") { Reply.refuse(500) }
+        server.on("deepseek") { Reply.refuse(403) }
+        server.on("groq") { Reply.refuse(500) }
 
         val response =
-            engine(listOf(model("first"), model("second"))).handle(
+            engine(listOf(model("deepseek"), model("groq"))).handle(
                 """{"model":"claude-sonnet-4-5","messages":[]}""",
             )
 
         assertNull("nothing served the request, so there is nothing to return", response)
-        assertEquals(1, server.hits("first"))
-        assertEquals(1, server.hits("second"))
+        assertEquals(1, server.hits("deepseek"))
+        assertEquals(1, server.hits("groq"))
     }
 
     @Test
     fun `a provider with no key is never contacted`() {
-        server.on("keyless") { Reply.answer("unused") }
-        server.on("second") { Reply.answer("served") }
+        server.on("openrouter") { Reply.answer("unused") }
+        server.on("groq") { Reply.answer("served") }
 
         val response =
-            engine(listOf(model("keyless"), model("second")), keys = mapOf("second" to "k")).handle(
+            engine(listOf(model("openrouter"), model("groq")), keys = mapOf("groq" to "k")).handle(
                 """{"model":"claude-sonnet-4-5","messages":[]}""",
             )
 
         assertNotNull(response)
-        assertEquals("a provider with no key has no adapter and must not be called", 0, server.hits("keyless"))
-        assertEquals(1, server.hits("second"))
+        assertEquals("a provider with no key has no adapter and must not be called", 0, server.hits("openrouter"))
+        assertEquals(1, server.hits("groq"))
     }
 
     @Test
@@ -135,21 +135,21 @@ class RouterFailoverTest {
     fun `a provider that keeps failing is opened and then skipped`() {
         var now = 1_000L
         val breaker = CircuitBreaker(cooldownMillis = 60_000, failureThreshold = 2) { now }
-        server.on("flaky") { Reply.refuse(500) }
-        server.on("healthy") { Reply.answer("served") }
+        server.on("openrouter") { Reply.refuse(500) }
+        server.on("groq") { Reply.answer("served") }
 
-        val subject = engine(listOf(model("flaky"), model("healthy")), breaker = breaker)
+        val subject = engine(listOf(model("openrouter"), model("groq")), breaker = breaker)
         val request = """{"model":"claude-sonnet-4-5","messages":[]}"""
 
         subject.handle(request)
         subject.handle(request)
-        assertEquals(CircuitBreaker.Status.OPEN, breaker.statusOf("flaky"))
+        assertEquals(CircuitBreaker.Status.OPEN, breaker.statusOf("openrouter"))
 
-        val before = server.hits("flaky")
+        val before = server.hits("openrouter")
         subject.handle(request)
 
-        assertEquals("an open provider must not be paid for again", before, server.hits("flaky"))
-        assertTrue("the healthy provider must still serve", server.hits("healthy") > 0)
+        assertEquals("an open provider must not be paid for again", before, server.hits("openrouter"))
+        assertTrue("the healthy provider must still serve", server.hits("groq") > 0)
     }
 
     @Test

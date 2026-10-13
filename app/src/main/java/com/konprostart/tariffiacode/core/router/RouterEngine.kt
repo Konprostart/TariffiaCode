@@ -166,14 +166,21 @@ class RouterEngine(
     /**
      * The chain for [tier], minus what cannot be tried at all.
      *
-     * A provider with no key has no adapter, and a provider whose breaker is open is not worth
-     * waiting on. Both are dropped here so the chain that gets walked is the chain that could work -
-     * which is also why a keyless local entry still survives while a keyless remote one does not.
+     * Three things disqualify an entry, and all three are checked here so the chain that gets walked
+     * is the chain that could actually work:
+     *
+     *  - no adapter for the vendor, so nothing can speak to it;
+     *  - nowhere to send it, which is how a missing key shows up - a remote provider resolves to no
+     *    endpoint without one, while a local entry needs no key and survives;
+     *  - an open breaker, which is the whole reason the chain does not re-pay for a provider that is
+     *    known to be down.
      */
     private fun usableChain(tier: RouterTier): List<RouterModel> {
         val available = keys()
         return config().chainFor(tier).filter { model ->
-            ProviderAdapters.forProvider(model.provider, available) != null && breakers.allows(model.provider)
+            ProviderAdapters.forProvider(model.provider, available) != null &&
+                endpointFor(model.provider) != null &&
+                breakers.allows(model.provider)
         }
     }
 
