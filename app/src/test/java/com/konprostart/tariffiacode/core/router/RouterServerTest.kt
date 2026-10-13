@@ -159,6 +159,8 @@ class RouterServerTest {
         val started = start(RecordingGateway())
 
         val connection = URL(started.baseUrl() + "/v1/messages").openConnection() as HttpURLConnection
+        connection.connectTimeout = CLIENT_TIMEOUT_MILLIS
+        connection.readTimeout = CLIENT_TIMEOUT_MILLIS
         connection.requestMethod = "POST"
         connection.doOutput = true
         connection.setRequestProperty("Authorization", "BEARER $token")
@@ -193,6 +195,15 @@ class RouterServerTest {
 
     // --- helpers ---------------------------------------------------------------------------
 
+    private companion object {
+        /**
+         * HttpURLConnection defaults to waiting forever. In a test that turns any bug in the server
+         * into a build that hangs instead of a build that fails, which is a far worse outcome and a
+         * far slower one to diagnose.
+         */
+        const val CLIENT_TIMEOUT_MILLIS = 5_000
+    }
+
     private var token: String = ""
         private set
 
@@ -211,6 +222,8 @@ class RouterServerTest {
         token: String?,
     ): Response {
         val connection = URL(server.baseUrl() + path).openConnection() as HttpURLConnection
+        connection.connectTimeout = CLIENT_TIMEOUT_MILLIS
+        connection.readTimeout = CLIENT_TIMEOUT_MILLIS
         connection.requestMethod = "POST"
         connection.doOutput = true
         connection.setRequestProperty("Content-Type", "application/json")
@@ -225,6 +238,8 @@ class RouterServerTest {
         token: String?,
     ): Response {
         val connection = URL(server.baseUrl() + path).openConnection() as HttpURLConnection
+        connection.connectTimeout = CLIENT_TIMEOUT_MILLIS
+        connection.readTimeout = CLIENT_TIMEOUT_MILLIS
         connection.requestMethod = "GET"
         token?.let { connection.setRequestProperty("Authorization", "BEARER $it") }
         return connection.read()
@@ -232,6 +247,8 @@ class RouterServerTest {
 
     private fun withToken(url: URL): HttpURLConnection {
         val connection = url.openConnection() as HttpURLConnection
+        connection.connectTimeout = CLIENT_TIMEOUT_MILLIS
+        connection.readTimeout = CLIENT_TIMEOUT_MILLIS
         connection.setRequestProperty("Authorization", "BEARER $token")
         return connection
     }
