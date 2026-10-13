@@ -548,8 +548,7 @@ class LocalRuntimeInstaller(
                 .filter { (agent, root) -> metadata.has(agent) && root.isDirectory }
                 .toMap()
 
-        private const val METADATA_FILE = "metadata.json"
-        private const val METADATA_FILE = "metadata.json"
+        const val METADATA_FILE = "metadata.json"
 
         /** Required by OpenCode and TariffiaCode's built-in Git, MCP, and Android-device features. */
         val REQUIRED_RUNTIME_PACKAGES =
