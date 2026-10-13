@@ -22,7 +22,7 @@ class LocalRuntimeInstallerMcpTest {
                 """.trimIndent(),
             )
 
-        LocalRuntimeInstaller.upsertMcpServer(
+        GuestCapabilities.upsertMcpServer(
             root = root,
             containerKey = "mcpServers",
             newName = "tariffiacode-browser",
@@ -51,7 +51,7 @@ class LocalRuntimeInstallerMcpTest {
                 """.trimIndent(),
             )
 
-        LocalRuntimeInstaller.upsertMcpServer(
+        GuestCapabilities.upsertMcpServer(
             root = root,
             containerKey = "mcp",
             newName = "tariffiacode-schedule",
@@ -69,7 +69,7 @@ class LocalRuntimeInstallerMcpTest {
     fun `upsertMcpServer creates the container when it is absent`() {
         val root = JSONObject()
 
-        LocalRuntimeInstaller.upsertMcpServer(
+        GuestCapabilities.upsertMcpServer(
             root = root,
             containerKey = "mcpServers",
             newName = "tariffiacode-browser",
