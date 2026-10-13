@@ -141,6 +141,10 @@ data class AgentDescriptor(
      *
      * Absolute on purpose: the same binary is referenced from a rootfs and from a device-side
      * staging directory, and those callers use different forms of the same path.
+     *
+     * **The first entry is the agent's main executable** - the one the app launches and the one a
+     * caller resolves to decide whether the agent is present. Codex has two entries because its CLI
+     * spawns a code-mode host; that host is installed alongside the CLI, never instead of it.
      */
     val binaryPaths: List<String>,
     /**

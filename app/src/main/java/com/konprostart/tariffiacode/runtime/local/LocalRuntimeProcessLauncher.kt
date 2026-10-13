@@ -1,6 +1,7 @@
 package com.konprostart.tariffiacode.runtime.local
 
 import com.konprostart.tariffiacode.core.storage.DeviceStorage
+import com.konprostart.tariffiacode.runtime.LocalAgent
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -81,7 +82,7 @@ class LocalRuntimeProcessLauncher(
                 addAll(DeviceStorage.bindArguments())
                 add("-w")
                 add("/workspace")
-                add("/usr/local/bin/opencode")
+                add(LocalAgent.serverAgent().descriptor.binaryPaths.first())
                 add("serve")
                 add("--hostname")
                 add("127.0.0.1")

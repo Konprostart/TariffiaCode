@@ -14,6 +14,12 @@ import java.io.File
 val viewModelModule =
     module {
 
+        // Every definition below asks Koin for a RuntimeRegistry through an untyped `get()`. The
+        // registry is not a Koin bean - the application builds the only one, in onCreate - so
+        // resolving any of these throws rather than quietly returning a registry with the wrong
+        // targets. None is resolved today: the UI constructs these view models explicitly from the
+        // application's own instances. Remove this module rather than adding a bean to make it work.
+
         viewModel {
             val app = androidContext().applicationContext as TariffiaCodeApplication
             ChatViewModel(

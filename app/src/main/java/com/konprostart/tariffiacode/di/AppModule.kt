@@ -177,6 +177,14 @@ val appModule =
         // would have changed nothing at all, silently. If you need the registry, take
         // TariffiaCodeApplication.runtimeRegistry, which is what the UI and every view model use.
 
+        // Five definitions below still ask Koin for a RuntimeRegistry through an untyped `get()` -
+        // the two repositories and three view models. Nothing resolves them (the UI hand-builds
+        // those objects from the application's own instances), and before this definition was
+        // removed they would have quietly produced a registry missing Claude Code and the VPS
+        // target. They now throw instead, which is the safer failure but still means any future
+        // `by viewModel()` on one of them would break at runtime rather than at build time. They
+        // are dead and are the next thing to remove.
+
         single {
             val settings: SecureSettingsRepository = get()
             GitHubApiClient(token = { settings.githubToken }, client = get())
