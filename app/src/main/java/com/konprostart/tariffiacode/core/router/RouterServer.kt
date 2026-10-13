@@ -251,7 +251,7 @@ class RouterServer(
                 out.write(EVENT_SUFFIX)
                 out.flush()
             }
-            out.write(DONE_FRAME.toByteArray(CHARSET))
+            out.write(DONE_FRAME)
             out.flush()
         } catch (failure: IOException) {
             // The agent closed the connection mid-turn. Nothing to report to a caller that left.
