@@ -1,7 +1,5 @@
 package com.konprostart.tariffiacode.core.router
 
-import com.sun.net.httpserver.HttpExchange
-import com.sun.net.httpserver.HttpServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -13,39 +11,34 @@ import org.junit.Test
 /**
  * The first-byte rule, proven against the real engine.
  *
- * There is no fake here on purpose. An earlier draft of this file tested a hand-written stand-in for
- * the engine, which meant it proved the stand-in worked and said nothing about the router - the two
- * would only ever agree by accident. So these drive [RouterEngine] over a real socket and observe the
- * only thing that matters from outside: which providers were contacted, and what reached the client.
+ * There is no fake engine here on purpose. An earlier draft of this file tested a hand-written
+ * stand-in for the router, which proved only that the stand-in agreed with itself and would have
+ * agreed about the wrong thing just as confidently. So these drive [RouterEngine] over real sockets
+ * and observe the only facts that matter from outside: which providers were contacted, and what
+ * reached the client.
  *
- * The pair that carries the weight is the third and second test. They cannot both pass unless the
- * engine distinguishes a provider that failed *before* saying anything from one that failed after.
- * An implementation that always failed over would pass the second and corrupt every mid-stream turn;
- * one that never failed over would pass the third and be useless.
+ * The pair that carries the weight is the second and third test. They cannot both pass unless the
+ * engine tells apart a provider that failed *before saying anything* from one that failed after.
+ * An engine that always failed over would pass the second and corrupt every mid-stream turn; one
+ * that never failed over would pass the third and be pointless.
  */
 class RouterFailoverTest {
-    private lateinit var server: HttpServer
-    private var port = 0
-    private val hits = mutableMapOf<String, Int>()
+    private lateinit var server: FakeProviderServer
 
     @Before
     fun startServer() {
-        hits.clear()
-        server = HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
-        port = server.address.port
-        server.executor = null
-        server.start()
+        server = FakeProviderServer()
     }
 
     @After
     fun stopServer() {
-        server.stop(0)
+        server.close()
     }
 
     @Test
     fun `a refusal before any bytes moves to the next provider`() {
-        refuse("first", 429)
-        answer("second", "from-second")
+        server.on("first") { Reply.refuse(429) }
+        server.on("second") { Reply.answer("from-second") }
 
         val response =
             engine(listOf(model("first"), model("second"))).handle(
@@ -54,33 +47,29 @@ class RouterFailoverTest {
 
         assertNotNull("a refusal that produced nothing must not end the turn", response)
         assertTrue(response!!.contains("from-second"))
-        assertEquals(1, hit("first"))
-        assertEquals(1, hit("second"))
+        assertEquals(1, server.hits("first"))
+        assertEquals(1, server.hits("second"))
     }
 
     @Test
     fun `a stream that dies before its first event is still failed over`() {
-        // 200, then the connection ends without a single frame. The client has been told a response
-        // is coming but has received none of it, so the turn has not started.
-        truncate("silent", content = null)
-        stream("second", "hello")
+        server.on("silent") { Reply.die() }
+        server.on("second") { Reply.stream("hello") }
 
-        val events =
-            mutableListOf<String>()
+        val events = mutableListOf<String>()
         engine(listOf(model("silent"), model("second")))
             .stream("""{"model":"claude-sonnet-4-5","stream":true,"messages":[]}""") { events += it }
 
         assertEquals("only the provider that actually produced text may speak", 1, events.size)
         assertTrue(events.single().contains("hello"))
-        assertEquals("the silent provider must have been tried once and abandoned", 1, hit("silent"))
-        assertEquals(1, hit("second"))
+        assertEquals("the silent provider must have been tried once and abandoned", 1, server.hits("silent"))
+        assertEquals(1, server.hits("second"))
     }
 
     @Test
     fun `once an event has reached the client there is no failover`() {
-        // One frame lands, then the connection breaks mid-body. The user has seen this turn begin.
-        truncate("partial", content = "partial-text")
-        answer("second", "should-never-be-used")
+        server.on("partial") { Reply.die("partial-text") }
+        server.on("second") { Reply.answer("should-never-be-used") }
 
         val events = mutableListOf<String>()
         val failure =
@@ -94,15 +83,15 @@ class RouterFailoverTest {
         assertEquals(
             "the second provider must never be touched once the turn has begun",
             0,
-            hit("second"),
+            server.hits("second"),
         )
         assertNotNull("and the failure must be reported rather than swallowed", failure)
     }
 
     @Test
     fun `an exhausted chain reports rather than inventing an answer`() {
-        refuse("first", 403)
-        refuse("second", 500)
+        server.on("first") { Reply.refuse(403) }
+        server.on("second") { Reply.refuse(500) }
 
         val response =
             engine(listOf(model("first"), model("second"))).handle(
@@ -110,14 +99,14 @@ class RouterFailoverTest {
             )
 
         assertNull("nothing served the request, so there is nothing to return", response)
-        assertEquals(1, hit("first"))
-        assertEquals(1, hit("second"))
+        assertEquals(1, server.hits("first"))
+        assertEquals(1, server.hits("second"))
     }
 
     @Test
     fun `a provider with no key is never contacted`() {
-        answer("keyless", "unused")
-        answer("second", "served")
+        server.on("keyless") { Reply.answer("unused") }
+        server.on("second") { Reply.answer("served") }
 
         val response =
             engine(listOf(model("keyless"), model("second")), keys = mapOf("second" to "k")).handle(
@@ -125,13 +114,13 @@ class RouterFailoverTest {
             )
 
         assertNotNull(response)
-        assertEquals("a provider with no key has no adapter and must not be called", 0, hit("keyless"))
-        assertEquals(1, hit("second"))
+        assertEquals("a provider with no key has no adapter and must not be called", 0, server.hits("keyless"))
+        assertEquals(1, server.hits("second"))
     }
 
     @Test
     fun `the keyless local provider is still usable`() {
-        answer("ollama", "local-answer")
+        server.on("ollama") { Reply.answer("local-answer") }
 
         val response =
             engine(listOf(RouterModel("ollama", "qwen3", 200_000)), keys = emptyMap()).handle(
@@ -146,8 +135,8 @@ class RouterFailoverTest {
     fun `a provider that keeps failing is opened and then skipped`() {
         var now = 1_000L
         val breaker = CircuitBreaker(cooldownMillis = 60_000, failureThreshold = 2) { now }
-        refuse("flaky", 500)
-        answer("healthy", "served")
+        server.on("flaky") { Reply.refuse(500) }
+        server.on("healthy") { Reply.answer("served") }
 
         val subject = engine(listOf(model("flaky"), model("healthy")), breaker = breaker)
         val request = """{"model":"claude-sonnet-4-5","messages":[]}"""
@@ -156,11 +145,11 @@ class RouterFailoverTest {
         subject.handle(request)
         assertEquals(CircuitBreaker.Status.OPEN, breaker.statusOf("flaky"))
 
-        val before = hit("flaky") ?: 0
+        val before = server.hits("flaky")
         subject.handle(request)
 
-        assertEquals("an open provider must not be paid for again", before, hit("flaky") ?: 0)
-        assertTrue("the healthy provider must still serve", hit("healthy") != null && hit("healthy")!! > 0)
+        assertEquals("an open provider must not be paid for again", before, server.hits("flaky"))
+        assertTrue("the healthy provider must still serve", server.hits("healthy") > 0)
     }
 
     @Test
@@ -199,7 +188,7 @@ class RouterFailoverTest {
         var now = 1_000L
         val breaker = CircuitBreaker(cooldownMillis = 60_000, failureThreshold = 5) { now }
         repeat(4) { breaker.recordFailure("p") }
-        assertEquals(CircuitBreaker.Status.CLOSED, breaker.statusOf("p"))
+        assertEquals("the threshold has not been reached yet", CircuitBreaker.Status.CLOSED, breaker.statusOf("p"))
 
         now += 60_001
         assertTrue(breaker.allows("p"))
@@ -213,7 +202,7 @@ class RouterFailoverTest {
         assertTrue("and it must not serve until the next cooldown", !breaker.allows("p"))
     }
 
-    // --- server helpers ---------------------------------------------------------------------
+    // --- helpers ----------------------------------------------------------------------------
 
     private fun model(provider: String) = RouterModel(provider, "test-model", 200_000)
 
@@ -227,75 +216,7 @@ class RouterFailoverTest {
             keys = { keys },
             config = { config },
             breakers = breaker,
-            endpointFor = { ProviderEndpoint("http://127.0.0.1:$port/$it", "key") },
+            endpointFor = { ProviderEndpoint("http://127.0.0.1:${server.port}/$it", "key") },
         )
-    }
-
-    private fun hit(name: String): Int? = hits[name]
-
-    /** Answers with a well-formed OpenAI response, so the adapter has something real to parse. */
-    private fun answer(
-        name: String,
-        text: String,
-    ) = route(name) { exchange ->
-        val body = """{"choices":[{"message":{"content":"$text"},"finish_reason":"stop"}]}"""
-        val bytes = body.toByteArray()
-        exchange.sendResponseHeaders(200, bytes.size.toLong())
-        exchange.responseBody.use { it.write(bytes) }
-    }
-
-    /** Refuses outright: nothing is written, which is what makes failing over correct. */
-    private fun refuse(
-        name: String,
-        status: Int,
-    ) = route(name) { exchange ->
-        exchange.sendResponseHeaders(status, -1)
-        exchange.close()
-    }
-
-    /** A single SSE frame carrying [content], then a clean end of stream. */
-    private fun stream(
-        name: String,
-        content: String,
-    ) = route(name) { exchange ->
-        writeFrames(exchange, listOf(content))
-    }
-
-    /**
-     * Promises more bytes than it delivers and closes, which is what a provider dying mid-turn looks
-     * like on the wire. With [content] null it dies having said nothing at all.
-     */
-    private fun truncate(
-        name: String,
-        content: String?,
-    ) = route(name) { exchange ->
-        exchange.sendResponseHeaders(200, 4096)
-        if (content != null) {
-            exchange.responseBody.write(frame(content))
-            exchange.responseBody.flush()
-        }
-        exchange.close()
-    }
-
-    private fun writeFrames(
-        exchange: HttpExchange,
-        contents: List<String>,
-    ) {
-        val body = contents.joinToString("") { frame(it) }.toByteArray()
-        exchange.sendResponseHeaders(200, body.size.toLong())
-        exchange.responseBody.use { it.write(body) }
-    }
-
-    private fun frame(content: String) = "data: {\"choices\":[{\"delta\":{\"content\":\"$content\"}}]}\n\n"
-
-    private fun route(
-        name: String,
-        handler: (HttpExchange) -> Unit,
-    ) {
-        server.createContext("/$name") { exchange ->
-            hits[name] = (hits[name] ?: 0) + 1
-            runCatching { handler(exchange) }
-                .onFailure { exchange.close() }
-        }
     }
 }
