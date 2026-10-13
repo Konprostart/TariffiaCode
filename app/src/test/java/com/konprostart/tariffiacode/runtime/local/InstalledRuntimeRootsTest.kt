@@ -103,7 +103,7 @@ class InstalledRuntimeRootsTest {
         }
         LocalAgent.entries
             .filterNot { it in declaring }
-            .forEach { assertFalse("${agent.id} must not get a userland slot", installed().hasUserlandFor(it)) }
+            .forEach { agent -> assertFalse("${agent.id} must not get a userland slot", installed().hasUserlandFor(agent)) }
     }
 
     private fun metadata() =

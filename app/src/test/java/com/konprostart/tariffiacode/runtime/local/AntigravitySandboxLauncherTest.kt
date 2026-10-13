@@ -102,7 +102,6 @@ class AntigravitySandboxLauncherTest {
                     loader32 = rootfs,
                 ),
             rootfs = rootfs,
-            openCode = null,
-            antigravityRootfs = rootfs,
+            agentRootfs = mapOf(LocalAgent.ANTIGRAVITY to rootfs),
         )
 }

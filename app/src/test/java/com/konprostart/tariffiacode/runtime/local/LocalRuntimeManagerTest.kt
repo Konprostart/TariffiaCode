@@ -80,7 +80,6 @@ class LocalRuntimeManagerTest {
                     loader32 = rootfs,
                 ),
             rootfs = rootfs,
-            openCode = null,
         )
 
     @Test
