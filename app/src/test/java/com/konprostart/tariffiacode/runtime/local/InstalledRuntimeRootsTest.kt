@@ -1,13 +1,83 @@
 package com.konprostart.tariffiacode.runtime.local
 
-import com.konprostart.tariffiacode.runtime.AgentUserland
 import com.konprostart.tariffiacode.runtime.LocalAgent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.File
+
+/**
+ * How `userlandRootfs` decides which agents got a rootfs of their own.
+ *
+ * The population is where the two conditions live - the agent is recorded as installed, and the
+ * directory is actually there - and getting either wrong means a caller is pointed at a rootfs that
+ * does not exist, or at a stale one that does.
+ */
+class UserlandRootfsTest {
+    @Rule
+    @JvmField
+    val temporaryFolder = TemporaryFolder()
+
+    @Test
+    fun `an installed agent with a directory present gets a rootfs`() {
+        val environment = temporaryFolder.root
+        File(environment, "antigravity-rootfs").mkdirs()
+
+        assertEquals(
+            setOf(LocalAgent.ANTIGRAVITY),
+            LocalRuntimeInstaller.userlandRootfs(environment, metadata(LocalAgent.ANTIGRAVITY)).keys,
+        )
+    }
+
+    @Test
+    fun `a directory for an agent that was not installed is ignored`() {
+        // The regression worth guarding: a Debian rootfs left on the device from an install that no
+        // longer records Antigravity would otherwise be handed to a caller as this agent's root.
+        val environment = temporaryFolder.root
+        File(environment, "antigravity-rootfs").mkdirs()
+
+        assertTrue(
+            LocalRuntimeInstaller.userlandRootfs(environment, metadata()).isEmpty(),
+        )
+    }
+
+    @Test
+    fun `an installed agent whose directory is missing gets no rootfs`() {
+        val environment = temporaryFolder.root
+
+        assertTrue(
+            LocalRuntimeInstaller.userlandRootfs(environment, metadata(LocalAgent.ANTIGRAVITY)).isEmpty(),
+        )
+    }
+
+    @Test
+    fun `the rootfs it hands back is the one inside the environment`() {
+        val environment = temporaryFolder.root
+        val expected = File(environment, "antigravity-rootfs")
+        expected.mkdirs()
+
+        assertEquals(
+            expected,
+            LocalRuntimeInstaller.userlandRootfs(environment, metadata(LocalAgent.ANTIGRAVITY))[LocalAgent.ANTIGRAVITY],
+        )
+    }
+
+    private fun metadata(vararg agents: LocalAgent) =
+        LocalRuntimeMetadata(
+            version = "1.17.20",
+            port = 4096,
+            installedAt = 123,
+            runtimeVersion = "1",
+            abi = "arm64-v8a",
+            components = agents.map { it.id }.toSet(),
+            fullDevelopmentToolsInstalled = false,
+            fullDebianDevelopmentToolsInstalled = false,
+        )
+}
 
 /**
  * Where an agent runs, and the distinction this replaced.
@@ -88,22 +158,6 @@ class InstalledRuntimeRootsTest {
             File(rootfs, "usr/bin/claude"),
             installed(agentRootfs = emptyMap()).binaryFor(LocalAgent.CLAUDE_CODE),
         )
-    }
-
-    @Test
-    fun `every agent that declares a userland has one rootfs, and only those do`() {
-        // The invariant that made the old per-agent fields wrong: a second agent declaring a
-        // userland needs no new field here, and one that does not must not acquire a slot.
-        val declaring =
-            LocalAgent.entries.filter { it.descriptor.userland != AgentUserland.ALPINE_STAGING_ROOTFS }
-
-        assertTrue("no agent declares a userland, so this test proves nothing", declaring.isNotEmpty())
-        declaring.forEach { agent ->
-            assertTrue("${agent.id} declares a userland but has no entry in the map", installed().hasUserlandFor(agent))
-        }
-        LocalAgent.entries
-            .filterNot { it in declaring }
-            .forEach { agent -> assertFalse("${agent.id} must not get a userland slot", installed().hasUserlandFor(agent)) }
     }
 
     private fun metadata() =

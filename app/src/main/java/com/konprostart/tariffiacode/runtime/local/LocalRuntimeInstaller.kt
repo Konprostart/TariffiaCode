@@ -46,21 +46,6 @@ class LocalRuntimeInstaller(
         AgentInstallStep.userlandRootFor(environment, LocalAgent.ANTIGRAVITY)
             ?: error("Antigravity declares a Debian userland, so one must be planned for it")
 
-    /**
-     * Every agent recorded as installed that also has a userland directory present in [environment].
-     *
-     * Derived from the descriptors rather than named per agent, so an agent needing a userland of
-     * its own shows up here without this function changing.
-     */
-    private fun userlandRootfs(
-        environment: File,
-        metadata: LocalRuntimeMetadata,
-    ): Map<LocalAgent, File> =
-        LocalAgent.entries
-            .mapNotNull { agent -> AgentInstallStep.userlandRootFor(environment, agent)?.let { agent to it } }
-            .filter { (agent, root) -> metadata.has(agent) && root.isDirectory }
-            .toMap()
-
     private val json: Json =
         Json {
             ignoreUnknownKeys = true
@@ -545,6 +530,25 @@ class LocalRuntimeInstaller(
     }
 
     internal companion object {
+        /**
+         * Every agent recorded as installed that also has a userland directory present in
+         * [environment].
+         *
+         * Derived from the descriptors rather than named per agent, so an agent needing a userland
+         * of its own shows up here without this function changing. The two conditions are the ones
+         * the per-agent fields used: the agent is recorded as installed, and the directory is
+         * actually there.
+         */
+        internal fun userlandRootfs(
+            environment: File,
+            metadata: LocalRuntimeMetadata,
+        ): Map<LocalAgent, File> =
+            LocalAgent.entries
+                .mapNotNull { agent -> AgentInstallStep.userlandRootFor(environment, agent)?.let { agent to it } }
+                .filter { (agent, root) -> metadata.has(agent) && root.isDirectory }
+                .toMap()
+
+        private const val METADATA_FILE = "metadata.json"
         private const val METADATA_FILE = "metadata.json"
 
         /** Required by OpenCode and TariffiaCode's built-in Git, MCP, and Android-device features. */

@@ -68,6 +68,14 @@ data class AntigravityControllerState(
 /** Single owner for install/update/auth state; UI can observe this without owning a process. */
 class AntigravityController(
     private val installer: LocalRuntimeInstaller,
+    /**
+     * How the installed sandbox is read.
+     *
+     * Its own parameter rather than [installer]::installedRuntime so that [rehydrate] - which asks
+     * whether Antigravity was provisioned a userland of its own, which is not the same question as
+     * "which rootfs do I run in" - can be exercised without an Android Context.
+     */
+    private val installedRuntimeProvider: () -> LocalRuntimeInstaller.InstalledRuntime?,
     private val target: AntigravityTarget,
     /**
      * Install and update run for real time on the runtime's proot process, exactly like a chat
@@ -117,7 +125,7 @@ class AntigravityController(
     }
 
     private suspend fun rehydrate() {
-        val installed = installer.installedRuntime()
+        val installed = installedRuntimeProvider()
         // Deliberately its own userland and not rootfsFor(): this asks whether Antigravity was
         // provisioned a Debian rootfs at all. Falling back to the shared rootfs here would answer a
         // different question - "is agy in the Alpine rootfs" - which it never is.
