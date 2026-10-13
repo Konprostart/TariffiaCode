@@ -115,7 +115,10 @@ class RouterServerTest {
         assertEquals(200, response.status)
         assertEquals(1, gateway.handled)
         assertEquals("claude-sonnet-4-5", gateway.lastRequest?.model)
-        assertEquals("the gateway decides how to read the body", true, gateway.streaming)
+        // stream:false must reach handle(), never stream(): a turn the client wants in one piece
+        // cannot be satisfied by events, and taking the streaming path here would start a response
+        // the client is not reading.
+        assertEquals("a non-streamed request must not go down the streaming path", false, gateway.streaming)
     }
 
     @Test
