@@ -7,7 +7,6 @@ import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -98,12 +97,13 @@ class AgentInstallerRegistryTest {
             val step = step()
 
             step.put("archive", File("/tmp/opencode.tar.gz"))
-            step.put("count", 7)
 
-            assertEquals(File("/tmp/opencode.tar.gz"), step.get<File>("archive"))
-            assertEquals(7, step.get<Int>("count"))
-            assertNull("a missing key must be null rather than throw", step.get<File>("nope"))
-            assertNull("a wrongly typed read must be null rather than throw", step.get<String>("count"))
+            assertEquals(File("/tmp/opencode.tar.gz"), step.get("archive"))
+            assertNull("a missing key must be null rather than throw", step.get("nope"))
+            // Overwriting is what a retrying phase needs: the second download must win outright
+            // rather than leave a half-written first one behind.
+            step.put("archive", File("/tmp/opencode-2.tar.gz"))
+            assertEquals(File("/tmp/opencode-2.tar.gz"), step.get("archive"))
         }
 
     @Test
@@ -111,12 +111,12 @@ class AgentInstallerRegistryTest {
         runTest {
             val shared = File("/tmp/staging/rootfs")
             val step = step()
-            assertSame("an agent on the shared userland must start on the shared rootfs", shared, step.installRoot)
+            assertEquals("an agent on the shared userland must start on the shared rootfs", shared, step.installRoot)
 
             val own = File("/tmp/staging/antigravity-rootfs")
             step.useUserlandRoot(own)
 
-            assertSame("provisioning a userland must redirect later phases into it", own, step.installRoot)
+            assertEquals("provisioning a userland must redirect later phases into it", own, step.installRoot)
         }
 
     @Test
@@ -141,7 +141,7 @@ class AgentInstallerRegistryTest {
     fun `an agent's scratch space is named after it`() =
         runTest {
             // Inside the staging environment, so it is discarded with it if the install fails.
-            assertEquals(File("/tmp/staging/codex-work"), step().workDirectory)
+            assertEquals(File("/tmp/staging/opencode-work"), step().workDirectory)
         }
 
     private fun step(

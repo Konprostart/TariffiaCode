@@ -34,7 +34,7 @@ class OpenCodeAgentInstaller : AgentInstaller {
     }
 
     override suspend fun provision(step: AgentInstallStep) {
-        val archive = step.get<File>(ARCHIVE_KEY) ?: return
+        val archive = step.get(ARCHIVE_KEY) ?: return
         // Reported as shared environment work, not as "installing OpenCode" - see
         // AgentInstallStep.onSharedProgress.
         step.onSharedProgress(0.85f, step.label(R.string.install_step_extracting_opencode))

@@ -95,18 +95,24 @@ class AgentInstallStep(
         installRoot = root
     }
 
-    /** Remembers an artefact from one phase for a later one, e.g. an archive to unpack in [AgentInstaller.provision]. */
-    private val artifacts = mutableMapOf<String, Any>()
+    /**
+     * Remembers a file from one phase for a later one, e.g. an archive to unpack in
+     * [AgentInstaller.provision].
+     *
+     * Typed to [File] rather than to any value on purpose: a generic `get<T>()` would erase to an
+     * unchecked cast, so a read with the wrong type would return the wrong value or throw
+     * [ClassCastException] instead of yielding null. Files are the only thing that crosses phases.
+     */
+    private val artifacts = mutableMapOf<String, File>()
 
-    fun <T : Any> put(
+    fun put(
         key: String,
-        value: T,
+        artifact: File,
     ) {
-        artifacts[key] = value
+        artifacts[key] = artifact
     }
 
-    @Suppress("UNCHECKED_CAST")
-    fun <T : Any> get(key: String): T? = artifacts[key] as? T
+    fun get(key: String): File? = artifacts[key]
 
     companion object {
         /**
