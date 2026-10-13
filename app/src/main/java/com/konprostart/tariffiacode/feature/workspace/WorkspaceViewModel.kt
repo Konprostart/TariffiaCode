@@ -91,7 +91,17 @@ class WorkspaceViewModel(
     private val settings: SecureSettingsRepository,
     private val workspaceHostDir: File,
     private val incompleteConnectionMessage: String = "Connection information is incomplete",
-    private val claudeCode: ClaudeCodeController? = null,
+    /**
+     * Claude Code's install, sign-in and permission flows.
+     *
+     * Required, not optional with a default. `TariffiaCodeApplication` builds the controller
+     * unconditionally - including on the F-Droid flavour, where proprietary agents cannot be
+     * *downloaded* but their controller is still constructed - and this view model is built after
+     * `onCreate`, so the value was never null in production. The nullable version carried ten
+     * `?: Unit` branches that could only ever hide a caller that had forgotten to pass a controller
+     * at all; now that mistake is a compile error instead.
+     */
+    private val claudeCode: ClaudeCodeController,
     private val deviceStorage: () -> DeviceStorage.Mounts = DeviceStorage::mounts,
     private val folderBrowser: RuntimeFolderBrowser =
         RuntimeFolderBrowser(
@@ -101,8 +111,7 @@ class WorkspaceViewModel(
         ),
 ) : ViewModel() {
     private val registeredTick = MutableStateFlow(0)
-    private val claudeState: StateFlow<ClaudeCodeUiState> =
-        claudeCode?.state ?: MutableStateFlow(ClaudeCodeUiState())
+    private val claudeState: StateFlow<ClaudeCodeUiState> = claudeCode.state
     private val folderActions = MutableStateFlow(WorkspaceFolderActions())
     private val folderPicker = MutableStateFlow(FolderPickerState())
 
@@ -352,45 +361,45 @@ class WorkspaceViewModel(
 
     fun reinstallLocalRuntime() = localRuntimeController.reinstall()
 
-    fun installClaudeCode(installFullDevelopmentTools: Boolean = false) = claudeCode?.install(installFullDevelopmentTools) ?: Unit
+    fun installClaudeCode(installFullDevelopmentTools: Boolean = false) = claudeCode.install(installFullDevelopmentTools)
 
-    fun updateClaudeCode() = claudeCode?.update() ?: Unit
+    fun updateClaudeCode() = claudeCode.update()
 
     fun setClaudePermissionMode(
         mode: ClaudePermissionMode,
         sessionId: String? = null,
-    ) = claudeCode?.setPermissionMode(mode, sessionId) ?: Unit
+    ) = claudeCode.setPermissionMode(mode, sessionId)
 
     fun selectClaudeSystemPrompt(
         presetId: String?,
         sessionId: String? = null,
-    ) = claudeCode?.selectSystemPrompt(presetId, sessionId) ?: Unit
+    ) = claudeCode.selectSystemPrompt(presetId, sessionId)
 
     fun saveClaudeSystemPromptPreset(
         name: String,
         prompt: String,
         id: String? = null,
     ) {
-        claudeCode?.saveSystemPromptPreset(name, prompt, id)
+        claudeCode.saveSystemPromptPreset(name, prompt, id)
     }
 
-    fun deleteClaudeSystemPromptPreset(id: String) = claudeCode?.deleteSystemPromptPreset(id) ?: Unit
+    fun deleteClaudeSystemPromptPreset(id: String) = claudeCode.deleteSystemPromptPreset(id)
 
-    fun beginClaudeSignIn() = claudeCode?.beginSignIn() ?: Unit
+    fun beginClaudeSignIn() = claudeCode.beginSignIn()
 
-    fun submitClaudeSignInCode(code: String) = claudeCode?.submitSignInCode(code) ?: Unit
+    fun submitClaudeSignInCode(code: String) = claudeCode.submitSignInCode(code)
 
-    fun cancelClaudeSignIn() = claudeCode?.cancelSignIn() ?: Unit
+    fun cancelClaudeSignIn() = claudeCode.cancelSignIn()
 
-    fun signOutClaude() = claudeCode?.signOut() ?: Unit
+    fun signOutClaude() = claudeCode.signOut()
 
     /** Re-reads whether Claude Code is installed, after an install this app did not run itself. */
-    fun refreshClaudeCode() = claudeCode?.refresh() ?: Unit
+    fun refreshClaudeCode() = claudeCode.refresh()
 
     fun refresh() {
         registry.refresh()
         catalog.refresh()
-        claudeCode?.refresh()
+        claudeCode.refresh()
     }
 
     /** The four app-local flows, folded into one so [combine] stays within its arity. */
