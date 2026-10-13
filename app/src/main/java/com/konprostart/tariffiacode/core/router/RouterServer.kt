@@ -8,7 +8,6 @@ import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.nio.charset.Charset
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicBoolean
@@ -134,7 +133,7 @@ class RouterServer(
             client.soTimeout = READ_TIMEOUT_MILLIS
             client.tcpNoDelay = true
             val reader = BufferedReader(InputStreamReader(client.getInputStream(), CHARSET))
-            val request = readRequest(reader) ?: return
+            val request = readRequest(reader, client.getInputStream()) ?: return
             handle(request, client.getOutputStream())
         }.onFailure { error ->
             // A dropped connection is routine - the agent closes a socket it no longer needs - and
@@ -152,7 +151,10 @@ class RouterServer(
      * Returns null for a connection that carried nothing - a health check, a port probe, a port that
      * was opened and closed. Those are not errors and must not be logged as ones.
      */
-    private fun readRequest(reader: BufferedReader): HttpRequest? {
+    private fun readRequest(
+        reader: BufferedReader,
+        body: InputStream,
+    ): HttpRequest? {
         val requestLine = reader.readLine() ?: return null
         val parts = requestLine.split(' ')
         if (parts.size < 2) return null
@@ -245,11 +247,11 @@ class RouterServer(
         try {
             gateway.stream(raw) { event ->
                 out.write(EVENT_PREFIX)
-                out.write(event.toByteArray(Charset))
+                out.write(event.toByteArray(CHARSET))
                 out.write(EVENT_SUFFIX)
                 out.flush()
             }
-            out.write(DONE_FRAME.toByteArray(Charset))
+            out.write(DONE_FRAME.toByteArray(CHARSET))
             out.flush()
         } catch (failure: IOException) {
             // The agent closed the connection mid-turn. Nothing to report to a caller that left.
@@ -257,7 +259,7 @@ class RouterServer(
             // Report it in the shape the client parses rather than dropping the stream silently.
             runCatching {
                 out.write(EVENT_PREFIX)
-                out.write(gateway.errorEvent(failure).toByteArray(Charset))
+                out.write(gateway.errorEvent(failure).toByteArray(CHARSET))
                 out.write(EVENT_SUFFIX)
                 out.flush()
             }
@@ -346,7 +348,7 @@ class RouterServer(
         const val MODELS_PATH = "/v1/models"
         const val MAX_BODY_BYTES = 8 * 1024 * 1024
 
-        val CHARSET: Charset = Charsets.UTF_8
+        val CHARSET = Charsets.UTF_8
         val EVENT_PREFIX = "event: ".toByteArray(CHARSET)
         val EVENT_SUFFIX = "\n\n".toByteArray(CHARSET)
         val DONE_FRAME = "event: message_stop\n\n".toByteArray(CHARSET)
