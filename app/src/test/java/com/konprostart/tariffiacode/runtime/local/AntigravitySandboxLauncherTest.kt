@@ -1,5 +1,6 @@
 package com.konprostart.tariffiacode.runtime.local
 
+import com.konprostart.tariffiacode.runtime.LocalAgent
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive

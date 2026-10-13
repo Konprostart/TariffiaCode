@@ -1,6 +1,7 @@
 package com.konprostart.tariffiacode.runtime.local
 
 import com.konprostart.tariffiacode.core.storage.DeviceStorage
+import com.konprostart.tariffiacode.runtime.LocalAgent
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
