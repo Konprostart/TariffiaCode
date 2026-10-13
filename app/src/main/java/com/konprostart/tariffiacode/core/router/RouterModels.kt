@@ -135,7 +135,27 @@ enum class RouterProviderKind {
     ;
 
     companion object {
-        fun of(name: String): RouterProviderKind? = entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
+        /**
+         * The vendors named in `claude_tiers.json`, mapped to the kind they speak.
+         *
+         * None of these names is an enum member - `deepseek` is a vendor, `OPENAI_COMPATIBLE` is a
+         * protocol - so resolving a name against the enum alone silently returned null for every
+         * OpenAI-compatible vendor we ship, and the router skipped them all.
+         */
+        private val BY_VENDOR =
+            mapOf(
+                "deepseek" to OPENAI_COMPATIBLE,
+                "openrouter" to OPENAI_COMPATIBLE,
+                "groq" to OPENAI_COMPATIBLE,
+                "openai" to OPENAI_COMPATIBLE,
+                "gemini" to GEMINI,
+                "google" to GEMINI,
+                "ollama" to LOCAL,
+                "lmstudio" to LOCAL,
+            )
+
+        fun of(name: String): RouterProviderKind? =
+            BY_VENDOR[name.trim().lowercase()] ?: entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
     }
 }
 
