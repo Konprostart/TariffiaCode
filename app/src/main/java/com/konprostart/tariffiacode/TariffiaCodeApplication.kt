@@ -234,6 +234,9 @@ class TariffiaCodeApplication : Application() {
         private set
 
     lateinit var codexTarget: CodexTarget
+
+    /** Every local agent runtime, by agent - see the comment where it is assigned. */
+    lateinit var agentTargets: Map<LocalAgent, RuntimeTarget>
         private set
 
     lateinit var antigravityController: AntigravityController
@@ -408,6 +411,22 @@ class TariffiaCodeApplication : Application() {
                 fullAccessEnabled = { settings.codexFullAccessEnabled },
             )
         codexTarget = CodexTarget(codexRuntime, codexMessages)
+        /**
+         * Every local agent runtime this app can run, by agent.
+         *
+         * The single place an agent's runtime is registered: the registry is built from these
+         * values, so adding an agent means one entry here rather than a list that can fall out of
+         * step with the targets that were actually constructed. The named handles above stay because
+         * callers need the concrete type - `CodexSignInViewModel` takes a `CodexTarget`, not a
+         * `RuntimeTarget` - but they are not where registration happens.
+         */
+        agentTargets =
+            mapOf(
+                LocalAgent.CLAUDE_CODE to claudeCodeTarget,
+                LocalAgent.ANTIGRAVITY to antigravityTarget,
+                LocalAgent.CODEX to codexTarget,
+            )
+
         // Codex is a child of this process, so it is cut off from the network the moment the app has
         // nothing in the foreground on some devices: hold the app there while Codex is signing in or
         // running a turn (see CodexKeepAliveService).
@@ -551,7 +570,9 @@ class TariffiaCodeApplication : Application() {
             RuntimeRegistry(
                 store = settings,
                 localTarget = LocalRuntimeTarget(localRuntimeManager, messages = runtimeMessages),
-                additionalTargets = listOf(claudeCodeTarget, antigravityTarget, codexTarget, vpsRuntimeTarget),
+                // Derived from the agent registration, so a target that exists but is not registered
+                // cannot silently fall out of the registry - which is what the Koin copy did.
+                additionalTargets = agentTargets.values.toList() + vpsRuntimeTarget,
             )
         // Surface the installed/version state to the workspace picker without waiting for the
         // first chat to touch Antigravity.

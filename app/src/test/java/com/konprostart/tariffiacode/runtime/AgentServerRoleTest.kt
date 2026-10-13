@@ -48,6 +48,25 @@ class AgentServerRoleTest {
     }
 
     @Test
+    fun `every agent that needs its own runtime gets one registered`() {
+        // The application registers its agent targets in a map keyed by agent, and the registry is
+        // built from that map's values. An agent added to the enum but not to that map compiles
+        // fine and then simply has no runtime - selectable in the UI, absent from the registry.
+        //
+        // This cannot read the application's own map: building it needs a Context. What it can do
+        // is name the agents that must appear in it, which is the list a new agent has to be added
+        // to - OpenCode is absent because its runtime is the `localTarget` argument, not one of the
+        // additional targets.
+        val registered = setOf(LocalAgent.CLAUDE_CODE, LocalAgent.ANTIGRAVITY, LocalAgent.CODEX)
+
+        assertEquals(
+            "every agent other than the server agent needs an entry in the application's target map",
+            LocalAgent.nonServerAgents().toSet(),
+            registered,
+        )
+    }
+
+    @Test
     fun `the server agent's binary path is where the runtime status looks for it`() {
         // computeStatus reads binaryPaths rather than a literal, so a descriptor whose path changed
         // would not leave the status checking a file that no longer exists.
