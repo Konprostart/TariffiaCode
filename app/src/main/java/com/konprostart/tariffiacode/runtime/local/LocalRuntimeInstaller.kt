@@ -272,8 +272,7 @@ class LocalRuntimeInstaller(
                     // Which agents got a userland of their own, by the same two conditions the
                     // per-agent fields used: the agent is recorded as installed, and the directory
                     // is actually there after activation.
-                    userlandRootfs(active, metadata)
-                        ?.takeIf { LocalAgent.ANTIGRAVITY in requestedAgents && it.isDirectory },
+                    userlandRootfs(active, metadata),
                 )
             } catch (error: Throwable) {
                 staging.deleteRecursively()
@@ -294,7 +293,8 @@ class LocalRuntimeInstaller(
      * The provisioned sandbox, or null when no usable Linux environment exists yet.
      *
      * The OpenCode binary is no longer part of the liveness check: a Claude Code-only sandbox is a
-     * complete, usable runtime and callers that need OpenCode check [InstalledRuntime.openCode].
+     * complete, usable runtime; [InstalledRuntime.rootfsFor] is the rootfs to run in and
+     * [InstalledRuntime.binaryFor] the executable to run.
      */
     fun installedRuntime(): InstalledRuntime? =
         accessCoordinator.write {
@@ -411,7 +411,7 @@ class LocalRuntimeInstaller(
     suspend fun updateAntigravity(onProgress: (Float) -> Unit = {}): String {
         require(ProprietaryAgents.enabled) { "Antigravity is not available in this build" }
         val runtime = installedRuntime() ?: error("The Linux environment is not installed")
-        val rootfs = runtime.antigravityRootfs ?: runtime.rootfs
+        val rootfs = runtime.rootfsFor(LocalAgent.ANTIGRAVITY)
         val release = resolveAntigravityRelease(abi, httpClient)
         val installed = AntigravityInstaller.installedVersion(rootfs)
         if (!shouldReplaceInstalledAntigravity(installed, release.version)) return installed!!

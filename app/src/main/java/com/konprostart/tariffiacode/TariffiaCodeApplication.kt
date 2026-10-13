@@ -50,6 +50,7 @@ import com.konprostart.tariffiacode.runtime.LocalAgent
 import com.konprostart.tariffiacode.runtime.LocalRuntimeStatus
 import com.konprostart.tariffiacode.runtime.RuntimeRegistry
 import com.konprostart.tariffiacode.runtime.RuntimeState
+import com.konprostart.tariffiacode.runtime.RuntimeTarget
 import com.konprostart.tariffiacode.runtime.local.AdbConnectionManager
 import com.konprostart.tariffiacode.runtime.local.AdbShellRunner
 import com.konprostart.tariffiacode.runtime.local.AndroidClaudeMessages
