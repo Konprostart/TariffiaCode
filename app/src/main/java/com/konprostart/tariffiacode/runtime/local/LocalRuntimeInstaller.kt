@@ -43,7 +43,8 @@ class LocalRuntimeInstaller(
      * Derived from the agent's own id, so the path cannot drift from the one the installer created.
      */
     private fun antigravityRootfs(environment: File): File =
-        AgentInstallStep.userlandRootFor(environment, LocalAgent.ANTIGRAVITY) ?: File(environment, "antigravity-rootfs")
+        AgentInstallStep.userlandRootFor(environment, LocalAgent.ANTIGRAVITY)
+            ?: error("Antigravity declares a Debian userland, so one must be planned for it")
 
     private val json: Json =
         Json {
@@ -192,10 +193,13 @@ class LocalRuntimeInstaller(
                         )
                     },
                 )
-                // Which agents provisioned a userland of their own, named by the agent rather than by a literal
-                // path, so a second such agent has somewhere to go without another edit here.
-                val userlandAgents = selected.filter { AgentInstallStep.userlandRootFor(staging, it.agent) != null }
-                val antigravityRootfs = steps[LocalAgent.ANTIGRAVITY]?.takeIf { it in userlandAgents }?.installRoot
+                // Whether Antigravity provisioned a userland of its own, asked of its descriptor
+                // rather than of the outcome - a step that was never given one has no root to
+                // redirect, so the two are not the same question.
+                val antigravityRootfs =
+                    steps[LocalAgent.ANTIGRAVITY]
+                        ?.takeIf { AgentInstallStep.userlandRootFor(staging, LocalAgent.ANTIGRAVITY) != null }
+                        ?.installRoot
 
                 val metadata =
                     LocalRuntimeMetadata(
