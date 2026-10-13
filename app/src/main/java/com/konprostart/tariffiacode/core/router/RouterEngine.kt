@@ -51,7 +51,7 @@ class RouterEngine(
     private val keys: () -> Map<String, String>,
     private val config: () -> RouterConfig,
     private val breakers: CircuitBreaker = CircuitBreaker(),
-    private val endpointFor: (String) -> ProviderEndpoint? = { defaultEndpoint(it, keys()) },
+    private val endpointFor: (String) -> ProviderEndpoint? = { provider -> defaultEndpoint(provider, keys()[provider]) },
     private val client: OkHttpClient = defaultClient(),
 ) : RouterGateway {
     private val json =
@@ -141,7 +141,7 @@ class RouterEngine(
     ) {
         client.newCall(call(translated, model)).execute().use { response ->
             if (!response.isSuccessful) throw ProviderRefused(response.code)
-            val reader = response.body?.charStream()?.bufferedReader() ?: throw IOException("Empty stream")
+            val reader = response.body?.charStream()?.buffered() ?: throw IOException("Empty stream")
             while (true) {
                 val line = reader.readLine() ?: break
                 if (line.startsWith(SSE_DATA)) {
