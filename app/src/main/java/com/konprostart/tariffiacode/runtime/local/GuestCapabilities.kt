@@ -13,7 +13,7 @@ import java.io.File
  * they are written into whichever rootfs is being prepared, including an agent's userland of its own
  * and the re-seed path for runtimes installed before the provisioning existed.
  */
-internal class GuestCapabilities(
+class GuestCapabilities(
     private val context: Context,
 ) {
     /** The Android-vision helper scripts and both MCP servers, into the rootfs's own bin. */
