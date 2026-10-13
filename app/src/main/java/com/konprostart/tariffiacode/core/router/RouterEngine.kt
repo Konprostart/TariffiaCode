@@ -169,20 +169,34 @@ class RouterEngine(
      * Three things disqualify an entry, and all three are checked here so the chain that gets walked
      * is the chain that could actually work:
      *
+     *  - no credential for it, save for a local entry, which is reachable without a key;
      *  - no adapter for the vendor, so nothing can speak to it;
-     *  - nowhere to send it, which is how a missing key shows up - a remote provider resolves to no
-     *    endpoint without one, while a local entry needs no key and survives;
+     *  - nowhere to send it;
      *  - an open breaker, which is the whole reason the chain does not re-pay for a provider that is
      *    known to be down.
      */
     private fun usableChain(tier: RouterTier): List<RouterModel> {
         val available = keys()
         return config().chainFor(tier).filter { model ->
-            ProviderAdapters.forProvider(model.provider, available) != null &&
+            hasCredential(model.provider, available) &&
+                ProviderAdapters.forProvider(model.provider, available) != null &&
                 endpointFor(model.provider) != null &&
                 breakers.allows(model.provider)
         }
     }
+
+    /**
+     * Whether [provider] is one this user could actually authenticate to.
+     *
+     * Stated here rather than inferred from [endpointFor] returning null, because that is a property
+     * of one particular endpoint table. A local entry is reachable without a key; everything else
+     * needs one, and walking a chain into a provider that will answer 401 is the waste this whole
+     * class exists to avoid.
+     */
+    private fun hasCredential(
+        provider: String,
+        available: Map<String, String>,
+    ): Boolean = RouterProviderKind.of(provider) == RouterProviderKind.LOCAL || available.containsKey(provider)
 
     private fun decode(rawRequest: String): AnthropicRequest? =
         runCatching { json.decodeFromString<AnthropicRequest>(rawRequest) }.getOrNull()
