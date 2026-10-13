@@ -36,7 +36,7 @@ class RouterConfigLoader(
             val text = context.assets.open(assetName).bufferedReader().use { it.readText() }
             val parsed = json.decodeFromString<RouterConfig>(text)
             validate(parsed)
-        }.getOrElse { Result(emptyList(), listOf(it.message ?: it::class.simpleName.orEmpty())) }
+        }.getOrElse { Result(RouterConfig(), listOf(it.message ?: it::class.simpleName.orEmpty())) }
 
     /**
      * Drops entries that could never serve a turn, and chains that are left empty.
