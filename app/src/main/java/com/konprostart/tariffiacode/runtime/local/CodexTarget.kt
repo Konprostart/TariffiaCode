@@ -16,7 +16,6 @@ import com.konprostart.tariffiacode.core.api.ProviderCatalog
 import com.konprostart.tariffiacode.runtime.BackendKind
 import com.konprostart.tariffiacode.runtime.LocalAgent
 import com.konprostart.tariffiacode.runtime.PermissionResponse
-import com.konprostart.tariffiacode.runtime.RuntimeCapabilities
 import com.konprostart.tariffiacode.runtime.RuntimeState
 import com.konprostart.tariffiacode.runtime.RuntimeTarget
 import com.konprostart.tariffiacode.runtime.RuntimeType
@@ -61,7 +60,7 @@ class CodexTarget(
     // ClaudeStreamJsonParser does. questions stays false: item/tool/requestUserInput has no UI wired
     // up (see CodexRuntime.handleServerRequest's else branch). Each turn is a multiplexed RPC call
     // rather than a fresh process, so forcesQueue does not apply the way it does for Antigravity.
-    override val capabilities = RuntimeCapabilities(permissions = true, toolEvents = true, providerModelList = true)
+    override val capabilities = agent.descriptor.capabilities
 
     /** The ChatGPT sign-in [completeProviderOAuth] is waiting on, set by [authorizeProvider]. */
     @Volatile private var activeLoginId: String? = null

@@ -25,7 +25,13 @@ import java.util.Base64
  */
 object CodexInstaller {
     const val CODEX_BINARY = "codex"
-    private const val BIN_DIR = "usr/local/bin"
+
+    /**
+     * Directory the binaries land in, relative to the rootfs.
+     *
+     * Internal so the paths an agent descriptor declares can be pinned against it.
+     */
+    internal const val BIN_DIR = "usr/local/bin"
 
     /**
      * What is installed from `vendor/<target>/bin/`: the CLI, and the host it runs model tool calls
