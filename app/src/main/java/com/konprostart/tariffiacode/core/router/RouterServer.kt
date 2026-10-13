@@ -264,14 +264,20 @@ class RouterServer(
     ) {
         writeStatus(out, 200, "text/event-stream")
         try {
+            var sawStop = false
             gateway.stream(raw) { event ->
+                if (event.contains(STOP_EVENT)) sawStop = true
                 out.write(EVENT_PREFIX)
                 out.write(event.toByteArray(CHARSET))
                 out.write(EVENT_SUFFIX)
                 out.flush()
             }
-            out.write(DONE_FRAME)
-            out.flush()
+            // Only if the chain did not already close its own stream: two message_stop events make a
+            // client that is counting events, or keying off the terminal one, behave oddly.
+            if (!sawStop) {
+                out.write(DONE_FRAME)
+                out.flush()
+            }
         } catch (failure: IOException) {
             // The agent closed the connection mid-turn. Nothing to report to a caller that left.
         } catch (failure: Exception) {
@@ -365,6 +371,7 @@ class RouterServer(
         const val MESSAGES_PATH = "/v1/messages"
         const val COUNT_TOKENS_PATH = "/v1/messages/count_tokens"
         const val MODELS_PATH = "/v1/models"
+        const val STOP_EVENT = "message_stop"
         const val MAX_BODY_BYTES = 8 * 1024 * 1024
         const val MAX_HEADER_LINE_BYTES = 8 * 1024
 

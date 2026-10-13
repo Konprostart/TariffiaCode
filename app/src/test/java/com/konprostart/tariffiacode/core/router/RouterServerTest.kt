@@ -279,6 +279,7 @@ class RouterServerTest {
         override fun handle(rawRequest: String): String {
             handled++
             streaming = false
+            record(rawRequest)
             return """{"type":"message","content":[]}"""
         }
 
@@ -288,7 +289,14 @@ class RouterServerTest {
         ) {
             handled++
             streaming = true
+            record(rawRequest)
             frames.forEach(onEvent)
+        }
+
+        private fun record(rawRequest: String) {
+            lastRequest =
+                runCatching { kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString<AnthropicRequest>(rawRequest) }
+                    .getOrNull()
         }
 
         override fun listModels(): String = """{"data":[]}"""
