@@ -53,15 +53,36 @@ class LocalRuntimeInstaller(
             encodeDefaults = true
         }
 
+    /**
+     * The provisioned sandbox.
+     *
+     * [rootfs] is the shared Alpine userland every agent runs in unless it declared a userland of
+     * its own, in which case it is one of [agentRootfs]. Keyed by agent rather than held as a field
+     * per agent, so a second agent needing its own userland needs no change here.
+     */
     data class InstalledRuntime(
         val metadata: LocalRuntimeMetadata,
         val commandSuite: EmbeddedCommandSuite.Paths,
         val rootfs: File,
-        /** Null when the sandbox was provisioned without the OpenCode agent. */
-        val openCode: File?,
-        /** Debian Bookworm rootfs for the glibc-linked official Antigravity binary. */
-        val antigravityRootfs: File? = null,
-    )
+        /** Where each agent that declared a userland of its own was provisioned. Empty when none did. */
+        val agentRootfs: Map<LocalAgent, File> = emptyMap(),
+    ) {
+        /** The rootfs [agent] runs in: its own userland if it has one, otherwise the shared [rootfs]. */
+        fun rootfsFor(agent: LocalAgent): File = agentRootfs[agent] ?: rootfs
+
+        /**
+         * Whether [agent] was provisioned a userland of its own.
+         *
+         * Distinct from [rootfsFor], which cannot tell "shares the Alpine rootfs" from "has a
+         * userland that is somehow absent" - and a caller asking whether an install *provided* the
+         * userland needs to tell them apart.
+         */
+        fun hasUserlandFor(agent: LocalAgent): Boolean = agent in agentRootfs
+
+        /** The main executable of [agent], resolved against the rootfs it runs in. */
+        fun binaryFor(agent: LocalAgent): File? =
+            agent.descriptor.binaryPaths.firstOrNull()?.let { File(rootfsFor(agent), it.removePrefix("/")) }
+    }
 
     /**
      * Provisions the shared Alpine sandbox and the requested [agents].
@@ -233,19 +254,10 @@ class LocalRuntimeInstaller(
                     metadata,
                     commandSuite,
                     activeRootfs,
-                    // Where each agent's executables ended up, from what the descriptor declares,
-                    // rather than from which branch installed them.
-                    if (withOpenCode) {
-                        val binary = LocalAgent.OPEN_CODE.descriptor.binaryPaths.first()
-                        // Explicitly relative: File(parent, child) concatenates, but that is a
-                        // coincidence of the JDK rather than something to rely on for an absolute path.
-                        File(activeRootfs, binary.removePrefix("/"))
-                    } else {
-                        null
-                    },
-                    AgentInstallStep
-                        .userlandRootFor(active, LocalAgent.ANTIGRAVITY)
-                        ?.takeIf { LocalAgent.ANTIGRAVITY in requestedAgents && it.isDirectory },
+                    // Which agents got a userland of their own, by the same two conditions the
+                    // per-agent fields used: the agent is recorded as installed, and the directory
+                    // is actually there after activation.
+                    userlandRootfs(active, metadata),
                 )
             } catch (error: Throwable) {
                 staging.deleteRecursively()
@@ -266,7 +278,8 @@ class LocalRuntimeInstaller(
      * The provisioned sandbox, or null when no usable Linux environment exists yet.
      *
      * The OpenCode binary is no longer part of the liveness check: a Claude Code-only sandbox is a
-     * complete, usable runtime and callers that need OpenCode check [InstalledRuntime.openCode].
+     * complete, usable runtime; [InstalledRuntime.rootfsFor] is the rootfs to run in and
+     * [InstalledRuntime.binaryFor] the executable to run.
      */
     fun installedRuntime(): InstalledRuntime? =
         accessCoordinator.write {
@@ -287,13 +300,11 @@ class LocalRuntimeInstaller(
                 metadata,
                 commandSuite,
                 rootfs,
-                File(rootfs, LocalAgent.serverAgent().descriptor.binaryPaths.first().removePrefix("/"))
-                    .takeIf { it.isFile },
-                antigravityRootfs(active).takeIf { metadata.has(LocalAgent.ANTIGRAVITY) && it.isDirectory },
+                userlandRootfs(active, metadata),
             )
         }?.also { installed ->
             ensureTariffiaCodeAgentContext(installed.rootfs, context)
-            installed.antigravityRootfs?.let { ensureTariffiaCodeAgentContext(it, context) }
+            installed.agentRootfs.values.forEach { ensureTariffiaCodeAgentContext(it, context) }
         }
 
     /** Metadata of the active install, without requiring the command suite to be extractable. */
@@ -385,7 +396,7 @@ class LocalRuntimeInstaller(
     suspend fun updateAntigravity(onProgress: (Float) -> Unit = {}): String {
         require(ProprietaryAgents.enabled) { "Antigravity is not available in this build" }
         val runtime = installedRuntime() ?: error("The Linux environment is not installed")
-        val rootfs = runtime.antigravityRootfs ?: runtime.rootfs
+        val rootfs = runtime.rootfsFor(LocalAgent.ANTIGRAVITY)
         val release = resolveAntigravityRelease(abi, httpClient)
         val installed = AntigravityInstaller.installedVersion(rootfs)
         if (!shouldReplaceInstalledAntigravity(installed, release.version)) return installed!!
@@ -519,7 +530,25 @@ class LocalRuntimeInstaller(
     }
 
     internal companion object {
-        private const val METADATA_FILE = "metadata.json"
+        /**
+         * Every agent recorded as installed that also has a userland directory present in
+         * [environment].
+         *
+         * Derived from the descriptors rather than named per agent, so an agent needing a userland
+         * of its own shows up here without this function changing. The two conditions are the ones
+         * the per-agent fields used: the agent is recorded as installed, and the directory is
+         * actually there.
+         */
+        internal fun userlandRootfs(
+            environment: File,
+            metadata: LocalRuntimeMetadata,
+        ): Map<LocalAgent, File> =
+            LocalAgent.entries
+                .mapNotNull { agent -> AgentInstallStep.userlandRootFor(environment, agent)?.let { agent to it } }
+                .filter { (agent, root) -> metadata.has(agent) && root.isDirectory }
+                .toMap()
+
+        const val METADATA_FILE = "metadata.json"
 
         /** Required by OpenCode and TariffiaCode's built-in Git, MCP, and Android-device features. */
         val REQUIRED_RUNTIME_PACKAGES =

@@ -1,6 +1,7 @@
 package com.konprostart.tariffiacode.runtime.local
 
 import com.konprostart.tariffiacode.core.storage.DeviceStorage
+import com.konprostart.tariffiacode.runtime.LocalAgent
 import java.io.File
 
 object AntigravitySandboxLauncher {
@@ -20,7 +21,7 @@ object AntigravitySandboxLauncher {
         pty: Boolean,
     ): List<String> =
         buildList {
-            val rootfs = runtime.antigravityRootfs ?: runtime.rootfs
+            val rootfs = runtime.rootfsFor(LocalAgent.ANTIGRAVITY)
             add(runtime.commandSuite.proot.absolutePath)
             add("--kill-on-exit")
             add("--link2symlink")

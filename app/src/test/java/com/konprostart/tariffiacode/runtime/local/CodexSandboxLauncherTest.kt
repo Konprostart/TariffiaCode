@@ -84,6 +84,5 @@ class CodexSandboxLauncherTest {
                     loader32 = rootfs,
                 ),
             rootfs = rootfs,
-            openCode = null,
         )
 }

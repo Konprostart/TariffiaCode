@@ -8,11 +8,10 @@ class AntigravityInstaller(
     private val runtimeDirectory: File,
     private val downloader: VerifiedRuntimeDownloader = VerifiedRuntimeDownloader(),
 ) {
-    suspend fun install(
-        runtime: LocalRuntimeInstaller.InstalledRuntime,
-        onProgress: (Float) -> Unit = {},
-        release: AntigravityRelease,
-    ): String = installInto(runtime.rootfs, onProgress, release)
+    // There was once an overload here taking an InstalledRuntime and installing into
+    // `runtime.rootfs` - the shared Alpine rootfs, which never holds agy. It had no callers, and
+    // beside the call sites that now ask which userland Antigravity actually has, it read as
+    // deliberate. Callers resolve the rootfs with InstalledRuntime.rootfsFor and pass it in.
 
     /**
      * Downloads [release], verifies it and swaps the `agy` binary in place.

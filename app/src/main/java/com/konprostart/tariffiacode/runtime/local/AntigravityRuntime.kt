@@ -7,6 +7,7 @@ import com.konprostart.tariffiacode.core.api.OpenCodeModelReference
 import com.konprostart.tariffiacode.core.api.OpenCodePart
 import com.konprostart.tariffiacode.core.api.OpenCodeTime
 import com.konprostart.tariffiacode.core.api.PromptAttachment
+import com.konprostart.tariffiacode.runtime.LocalAgent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -96,11 +97,11 @@ class AntigravityRuntime(
 
     fun isInstalled(): Boolean =
         installedRuntimeProvider()?.let { runtime ->
-            (runtime.antigravityRootfs ?: runtime.rootfs).resolve("usr/local/bin/agy").canExecute()
+            runtime.binaryFor(LocalAgent.ANTIGRAVITY)?.canExecute() == true
         } == true
 
     /** The rootfs `mcp_config.json` and other guest-side files live in, or null when not installed. */
-    fun currentRootfs(): File? = installedRuntimeProvider()?.let { it.antigravityRootfs ?: it.rootfs }
+    fun currentRootfs(): File? = installedRuntimeProvider()?.rootfsFor(LocalAgent.ANTIGRAVITY)
 
     /**
      * The installed version, without launching the CLI.

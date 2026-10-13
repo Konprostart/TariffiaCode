@@ -50,6 +50,7 @@ import com.konprostart.tariffiacode.runtime.LocalAgent
 import com.konprostart.tariffiacode.runtime.LocalRuntimeStatus
 import com.konprostart.tariffiacode.runtime.RuntimeRegistry
 import com.konprostart.tariffiacode.runtime.RuntimeState
+import com.konprostart.tariffiacode.runtime.RuntimeTarget
 import com.konprostart.tariffiacode.runtime.local.AdbConnectionManager
 import com.konprostart.tariffiacode.runtime.local.AdbShellRunner
 import com.konprostart.tariffiacode.runtime.local.AndroidClaudeMessages
@@ -234,6 +235,9 @@ class TariffiaCodeApplication : Application() {
         private set
 
     lateinit var codexTarget: CodexTarget
+
+    /** Every local agent runtime, by agent - see the comment where it is assigned. */
+    lateinit var agentTargets: Map<LocalAgent, RuntimeTarget>
         private set
 
     lateinit var antigravityController: AntigravityController
@@ -392,7 +396,14 @@ class TariffiaCodeApplication : Application() {
                 },
             )
         antigravityTarget = AntigravityTarget(antigravityRuntime)
-        antigravityController = AntigravityController(installer, antigravityTarget, runtimeWork, applicationScope)
+        antigravityController =
+            AntigravityController(
+                installer,
+                installer::installedRuntime,
+                antigravityTarget,
+                runtimeWork,
+                applicationScope,
+            )
         val codexMessages = AndroidCodexMessages(this)
         codexRuntime =
             CodexRuntime(
@@ -408,6 +419,17 @@ class TariffiaCodeApplication : Application() {
                 fullAccessEnabled = { settings.codexFullAccessEnabled },
             )
         codexTarget = CodexTarget(codexRuntime, codexMessages)
+        /**
+         * Every local agent runtime this app can run, by agent.
+         *
+         * The single place an agent's runtime is registered: the registry is built from these
+         * values, so adding an agent means one entry here rather than a list that can fall out of
+         * step with the targets that were actually constructed. The named handles above stay because
+         * callers need the concrete type - `CodexSignInViewModel` takes a `CodexTarget`, not a
+         * `RuntimeTarget` - but they are not where registration happens.
+         */
+        agentTargets = agentTargetsOf(claudeCodeTarget, antigravityTarget, codexTarget)
+
         // Codex is a child of this process, so it is cut off from the network the moment the app has
         // nothing in the foreground on some devices: hold the app there while Codex is signing in or
         // running a turn (see CodexKeepAliveService).
@@ -551,7 +573,9 @@ class TariffiaCodeApplication : Application() {
             RuntimeRegistry(
                 store = settings,
                 localTarget = LocalRuntimeTarget(localRuntimeManager, messages = runtimeMessages),
-                additionalTargets = listOf(claudeCodeTarget, antigravityTarget, codexTarget, vpsRuntimeTarget),
+                // Derived from the agent registration, so a target that exists but is not registered
+                // cannot silently fall out of the registry - which is what the Koin copy did.
+                additionalTargets = agentTargets.values.toList() + vpsRuntimeTarget,
             )
         // Surface the installed/version state to the workspace picker without waiting for the
         // first chat to touch Antigravity.
@@ -777,3 +801,17 @@ class TariffiaCodeApplication : Application() {
         private const val SESSIONS_LEASE_GRACE_MILLIS = 60_000L
     }
 }
+
+/**
+ * Every agent runtime in [targets], keyed by the agent each one declares for itself.
+ *
+ * Derived from [RuntimeTarget.agent] rather than written out as `agent to target` pairs, so the
+ * mapping cannot contradict what a target says it is - `RuntimeRegistry.targetFor(agent)` would
+ * otherwise resolve to the wrong runtime for an agent whose entry was mistyped, with nothing to
+ * catch it. A target that declares no agent - the local OpenCode target, which is passed to the
+ * registry separately, and the VPS target - is left out, because it is not a local agent's runtime.
+ *
+ * Pure, and free of any Android type, so a test can read the keys without a Context.
+ */
+internal fun agentTargetsOf(vararg targets: RuntimeTarget): Map<LocalAgent, RuntimeTarget> =
+    targets.mapNotNull { target -> target.agent?.let { it to target } }.toMap()
