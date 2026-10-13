@@ -7,10 +7,10 @@ import java.io.File
 /**
  * OpenCode: an upstream tarball unpacked to a single binary in the shared Alpine rootfs.
  *
- * The only agent that downloads in the download phase, because its archive is by far the largest
- * and fetching it while the (small, fast) Alpine archive is being unpacked is what keeps the
- * install from stalling. The unpack then happens in the provision phase, before the shared packages,
- * so that a failure to unpack is reported before anything has been installed on top of it.
+ * The only agent that downloads in the download phase: its archive is by far the largest, and
+ * starting it before the rootfs is unpacked overlaps it with the (small, fast) Alpine unpack.
+ * The unpack then happens in the provision phase, before the shared packages, so that a failure to
+ * unpack is reported before anything has been installed on top of it.
  */
 class OpenCodeAgentInstaller : AgentInstaller {
     override val agent: LocalAgent = LocalAgent.OPEN_CODE
@@ -38,21 +38,23 @@ class OpenCodeAgentInstaller : AgentInstaller {
         // Reported as shared environment work, not as "installing OpenCode" - see
         // AgentInstallStep.onSharedProgress.
         step.onSharedProgress(0.85f, step.label(R.string.install_step_extracting_opencode))
-        val sourceBinary =
-            step.workDirectory.apply { mkdirs() }.let { extractDir ->
-                try {
-                    archive.inputStream().use { RuntimeArchive.extractTarGz(it, extractDir) }
-                    extractDir.walkTopDown().firstOrNull { it.isFile && it.name == BINARY_NAME }
-                        ?: error("OpenCode archive did not contain the opencode binary")
-                } finally {
-                    extractDir.deleteRecursively()
-                }
-            }
         val binary = File(step.installRoot, "usr/local/bin/$BINARY_NAME")
         binary.parentFile?.mkdirs()
-        sourceBinary.copyTo(binary, overwrite = true)
-        require(binary.setExecutable(true, false) || binary.canExecute()) {
-            "Unable to mark OpenCode executable"
+        val extractDir = step.workDirectory.apply { mkdirs() }
+        try {
+            archive.inputStream().use { RuntimeArchive.extractTarGz(it, extractDir) }
+            val sourceBinary =
+                extractDir.walkTopDown()
+                    .firstOrNull { it.isFile && it.name == BINARY_NAME }
+                    ?: error("OpenCode archive did not contain the opencode binary")
+            // Copied inside the try: the extract directory is removed on the way out, so reading
+            // from it afterwards would be reading a path that no longer exists.
+            sourceBinary.copyTo(binary, overwrite = true)
+            require(binary.setExecutable(true, false) || binary.canExecute()) {
+                "Unable to mark OpenCode executable"
+            }
+        } finally {
+            extractDir.deleteRecursively()
         }
     }
 

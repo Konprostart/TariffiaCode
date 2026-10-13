@@ -22,7 +22,13 @@ import java.io.File
 class AgentInstallerRegistryTest {
     @Test
     fun `agents run in registry order, not in the order they were selected`() {
-        val registry = AgentInstallerRegistry(listOf(RecordingInstaller(LocalAgent.CODEX), RecordingInstaller(LocalAgent.OPEN_CODE)))
+        val registry =
+            AgentInstallerRegistry(
+                listOf(
+                    RecordingInstaller(LocalAgent.CODEX, mutableListOf(), mutableMapOf()),
+                    RecordingInstaller(LocalAgent.OPEN_CODE, mutableListOf(), mutableMapOf()),
+                ),
+            )
 
         // Selected in the opposite order on purpose: the registry decides, because the setup guide
         // renders one panel per agent and an install that reported its steps out of order would look
@@ -35,7 +41,7 @@ class AgentInstallerRegistryTest {
 
     @Test
     fun `an agent with no installer is simply absent`() {
-        val registry = AgentInstallerRegistry(listOf(RecordingInstaller(LocalAgent.OPEN_CODE)))
+        val registry = AgentInstallerRegistry(listOf(RecordingInstaller(LocalAgent.OPEN_CODE, mutableListOf(), mutableMapOf())))
 
         assertEquals(listOf(LocalAgent.OPEN_CODE), registry.forAgents(LocalAgent.entries.toList()).map { it.agent })
     }
@@ -55,7 +61,8 @@ class AgentInstallerRegistryTest {
     fun `two installers for one agent is a configuration error`() {
         val failure =
             runCatching {
-                AgentInstallerRegistry(listOf(RecordingInstaller(LocalAgent.CODEX), RecordingInstaller(LocalAgent.CODEX)))
+                val installer = RecordingInstaller(LocalAgent.CODEX, mutableListOf(), mutableMapOf())
+                AgentInstallerRegistry(listOf(installer, installer))
             }.exceptionOrNull()
 
         assertNotNull("registering two installers for one agent must not be allowed", failure)
@@ -138,6 +145,48 @@ class AgentInstallerRegistryTest {
         }
 
     @Test
+    fun `every phase runs every installer, in registry order, around the shared work`() =
+        runTest {
+            val phases = mutableListOf<String>()
+            val rootsSeen = mutableMapOf<LocalAgent, String>()
+            val registry =
+                AgentInstallerRegistry(
+                    listOf(
+                        RecordingInstaller(LocalAgent.OPEN_CODE, phases, rootsSeen),
+                        RecordingInstaller(LocalAgent.CODEX, phases, rootsSeen),
+                    ),
+                )
+            val selected = registry.forAgents(LocalAgent.entries.toList())
+            val steps = selected.associate { it.agent to step(it.agent) }
+
+            provisionAgents(
+                installers = selected,
+                steps = steps,
+                afterDownloads = { phases += "unpacked" },
+                afterProvision = { phases += "packaged" },
+            )
+
+            // The order the seam exists to guarantee, and the thing a progress bar visibly depends
+            // on: every download before the rootfs is unpacked, every provision before the shared
+            // packages, every install last.
+            assertEquals(
+                listOf(
+                    "opencode:download",
+                    "codex:download",
+                    "unpacked",
+                    "opencode:provision",
+                    "codex:provision",
+                    "packaged",
+                    "opencode:install",
+                    "codex:install",
+                ),
+                phases,
+            )
+            // Both phases ran against the rootfs that existed at the time, not one built later.
+            assertEquals(setOf("rootfs"), rootsSeen.values.toSet())
+        }
+
+    @Test
     fun `an agent's scratch space is named after it`() =
         runTest {
             // Inside the staging environment, so it is discarded with it if the install fails.
@@ -145,10 +194,11 @@ class AgentInstallerRegistryTest {
         }
 
     private fun step(
-        onProgress: (Float, String) -> Unit = { _, _ -> },
-        onSharedProgress: (Float, String) -> Unit = { _, _ -> },
+        agent: LocalAgent = LocalAgent.OPEN_CODE,
+        onProgress: (Float?, String) -> Unit = { _, _ -> },
+        onSharedProgress: (Float?, String) -> Unit = { _, _ -> },
     ) = AgentInstallStep(
-        agent = LocalAgent.OPEN_CODE,
+        agent = agent,
         label = { resource -> "label-$resource" },
         runtimeDirectory = File("/tmp/runtime"),
         stagingDirectory = File("/tmp/staging"),
@@ -181,7 +231,23 @@ class AgentInstallerRegistryTest {
         onSharedProgress = onSharedProgress,
     )
 
-    private class RecordingInstaller(override val agent: LocalAgent) : AgentInstaller {
-        override suspend fun install(step: AgentInstallStep) = Unit
+    /** Records every phase it takes part in, so the ordering the seam guarantees can be asserted. */
+    private class RecordingInstaller(
+        override val agent: LocalAgent,
+        private val phases: MutableList<String>,
+        private val installRootSeen: MutableMap<LocalAgent, String>,
+    ) : AgentInstaller {
+        override suspend fun download(step: AgentInstallStep) {
+            phases += "${agent.id}:download"
+        }
+
+        override suspend fun provision(step: AgentInstallStep) {
+            phases += "${agent.id}:provision"
+            installRootSeen[agent] = step.installRoot.name
+        }
+
+        override suspend fun install(step: AgentInstallStep) {
+            phases += "${agent.id}:install"
+        }
     }
 }

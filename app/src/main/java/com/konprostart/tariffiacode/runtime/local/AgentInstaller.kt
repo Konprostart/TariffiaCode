@@ -50,8 +50,9 @@ class AgentInstallStep(
     /**
      * Resolves a string resource to the user's language.
      *
-     * Deliberately not a [android.content.Context]: an installer needs its own labels, nothing
-     * more, and holding a Context here would make every phase untestable without a device.
+     * Deliberately not a [android.content.Context]: an installer needs its own labels and nothing
+     * more, and a Context here would be one more reason a phase could not be exercised in a plain
+     * unit test. The two installers that genuinely read assets take one in their constructor.
      */
     val label: (Int) -> String,
     val runtimeDirectory: File,
@@ -67,8 +68,15 @@ class AgentInstallStep(
     val cache: File,
     val manifest: LocalRuntimeManifest,
     val includeFullDevelopmentTools: Boolean,
-    /** Reports a step as belonging to [agent]. */
-    val onProgress: (Float, String) -> Unit,
+    /**
+     * Reports a step as belonging to [agent].
+     *
+     * The progress is nullable, and that is load-bearing: a download whose total size is unknown
+     * reports null, which the setup guide renders as an indeterminate bar with no percentage.
+     * Coalescing that to a number here would both lie - it would claim a percentage before a byte
+     * had arrived - and take away the only way an installer could ever say "unknown" again.
+     */
+    val onProgress: (Float?, String) -> Unit,
     /**
      * Reports a step as belonging to no agent in particular.
      *
@@ -76,7 +84,7 @@ class AgentInstallStep(
      * building the shared environment rather than as "installing OpenCode", because that is how the
      * setup guide has always presented them - the sandbox is built once and OpenCode is inside it.
      */
-    val onSharedProgress: (Float, String) -> Unit,
+    val onSharedProgress: (Float?, String) -> Unit,
 ) {
     /**
      * The rootfs this agent installs into.
@@ -155,6 +163,38 @@ class AgentInstallerRegistry(
 }
 
 /**
+ * Provisions every installer, with the shared work between the phases.
+ *
+ * The interleaving lives here, as the two callbacks, because that ordering *is* the contract the
+ * seam rests on: everything is fetched before the rootfs is unpacked, everything acts on the
+ * rootfs before the shared packages go in, and the package-manager-driven agents run last. Written
+ * as three loops at the call site that order would be invisible and untestable - and it would be
+ * easy to move one loop and reorder a progress bar without noticing.
+ *
+ * @param afterDownloads runs once every agent's download phase is done, before the rootfs exists:
+ *   this is where the shared environment is unpacked.
+ * @param afterProvision runs once every agent's provision phase is done, before the shared packages
+ *   are installed: this is where the rootfs is configured and the packages go in.
+ */
+internal suspend fun provisionAgents(
+    installers: List<AgentInstaller>,
+    steps: Map<LocalAgent, AgentInstallStep>,
+    afterDownloads: suspend () -> Unit,
+    afterProvision: suspend () -> Unit,
+) {
+    installers.forEach { it.download(stepFor(it, steps)) }
+    afterDownloads()
+    installers.forEach { it.provision(stepFor(it, steps)) }
+    afterProvision()
+    installers.forEach { it.install(stepFor(it, steps)) }
+}
+
+private fun stepFor(
+    installer: AgentInstaller,
+    steps: Map<LocalAgent, AgentInstallStep>,
+): AgentInstallStep = steps.getValue(installer.agent)
+
+/**
  * Downloads [url] to [destination], verifying it against [expectedSha256], reporting progress in
  * the half-open range [startProgress] to [endProgress].
  *
@@ -203,7 +243,7 @@ internal suspend fun downloadRuntimeFile(
     startProgress: Float,
     endProgress: Float,
     label: String,
-    onProgress: (Float, String) -> Unit = step.onProgress,
+    onProgress: (Float?, String) -> Unit = step.onProgress,
 ) {
     downloadVerified(
         downloader = step.downloader,
@@ -213,6 +253,6 @@ internal suspend fun downloadRuntimeFile(
         startProgress = startProgress,
         endProgress = endProgress,
         label = label,
-        onProgress = { progress, text -> onProgress(progress ?: startProgress, text) },
+        onProgress = onProgress,
     )
 }

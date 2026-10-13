@@ -27,6 +27,9 @@ class AntigravityAgentInstaller(
         val destination =
             AgentInstallStep.userlandRootFor(step.stagingDirectory, agent)
                 ?: error("Antigravity declares its own userland but none was planned for it")
+        // Before the callback stream, which runs 0.90 up to 0.93: emitting it afterwards would make the
+        // bar reach 93% and then snap back to 90%.
+        step.onProgress(0.90f, step.label(R.string.install_step_preparing_antigravity_rootfs))
         val debianRootfs =
             DebianRootfsInstaller(step.runtimeDirectory, step.abi, step.downloader, step.httpClient, step.commandSuite).installInto(
                 destination,
@@ -37,7 +40,6 @@ class AntigravityAgentInstaller(
                     step.label(R.string.install_step_preparing_antigravity_rootfs),
                 )
             }
-        step.onProgress(0.90f, step.label(R.string.install_step_preparing_antigravity_rootfs))
         // From here on this agent installs into its own userland, not the shared Alpine rootfs.
         step.useUserlandRoot(debianRootfs)
         ensureTariffiaCodeAgentContext(debianRootfs, context)

@@ -22,7 +22,11 @@ class LocalRuntimeInstaller(
     private val accessCoordinator: LocalRuntimeAccessCoordinator = LocalRuntimeAccessCoordinator(),
     /** Guest capabilities written into a rootfs whatever agents are installed - see [GuestCapabilities]. */
     private val guestCapabilities: GuestCapabilities = GuestCapabilities(context),
-    /** Which installers run, and in which order. Overridable so a test can drive the phases directly. */
+    /**
+     * Which installers run, and in which order.
+     *
+     * Built here rather than from a shared default so there is exactly one production registry.
+     */
     private val installers: AgentInstallerRegistry =
         AgentInstallerRegistry(
             listOf(
@@ -33,6 +37,14 @@ class LocalRuntimeInstaller(
             ),
         ),
 ) {
+    /**
+     * Where Antigravity's userland lives inside [environment], or null when it has none.
+     *
+     * Derived from the agent's own id, so the path cannot drift from the one the installer created.
+     */
+    private fun antigravityRootfs(environment: File): File =
+        AgentInstallStep.userlandRootFor(environment, LocalAgent.ANTIGRAVITY) ?: File(environment, "antigravity-rootfs")
+
     private val json: Json =
         Json {
             ignoreUnknownKeys = true
@@ -114,7 +126,7 @@ class LocalRuntimeInstaller(
                     startProgress = 0.05f,
                     endProgress = 0.22f,
                     label = context.getString(R.string.install_step_downloading_alpine),
-                    onProgress = { progress, step -> onShared(progress ?: 0.05f, step) },
+                    onProgress = { progress, step -> onShared(progress, step) },
                 )
                 val withOpenCode = LocalAgent.OPEN_CODE in requestedAgents
                 val selected = installers.forAgents(requestedAgents)
@@ -139,54 +151,51 @@ class LocalRuntimeInstaller(
                                 onSharedProgress = onShared,
                             )
                     }
-                // Phase 1: fetch anything an agent unpacks later. Before the rootfs exists.
-                selected.forEach { installer ->
-                    val step = steps.getValue(installer.agent)
-                    installer.download(step)
-                }
-
                 val rootfs = File(staging, "rootfs").apply { mkdirs() }
-                onShared(0.75f, context.getString(R.string.install_step_extracting_linux_env))
-                alpineArchive.inputStream().use { RuntimeArchive.extractTarGz(it, rootfs) }
-
-                // Phase 2: act on the rootfs, and build a userland of their own for an agent that
-                // declared one. Before the shared packages, so a failure here costs nothing.
-                selected.forEach { installer ->
-                    val step = steps.getValue(installer.agent)
-                    installer.provision(step)
-                }
-                configureRootfs(rootfs, commandSuite)
-                // Credentials and agent config live under /root inside the rootfs. Activation swaps
-                // the whole environment directory, so without this the user is signed out of every
-                // agent whenever another one is added or the runtime is reinstalled.
-                carryOverHomeDirectory(File(active, "rootfs"), rootfs)
-                ensureTariffiaCodeAgentContext(rootfs, context)
-                onShared(
-                    0.91f,
-                    context.getString(
-                        if (includeFullDevelopmentTools) {
-                            R.string.install_step_installing_dev_tools
-                        } else {
-                            R.string.install_step_installing_runtime_tools
-                        },
-                    ),
+                provisionAgents(
+                    installers = selected,
+                    steps = steps,
+                    afterDownloads = {
+                        onShared(0.75f, context.getString(R.string.install_step_extracting_linux_env))
+                        alpineArchive.inputStream().use { RuntimeArchive.extractTarGz(it, rootfs) }
+                        // Checked here, before the provision phase, which can pull a whole second
+                        // rootfs down: a missing launcher must not cost the user that download
+                        // before the install is told it cannot possibly finish.
+                        require(commandSuite.proot.isFile) { "PRoot launcher is unavailable" }
+                    },
+                    afterProvision = {
+                        configureRootfs(rootfs, commandSuite)
+                        // Credentials and agent config live under /root inside the rootfs. Activation swaps
+                        // the whole environment directory, so without this the user is signed out of every
+                        // agent whenever another one is added or the runtime is reinstalled.
+                        carryOverHomeDirectory(File(active, "rootfs"), rootfs)
+                        ensureTariffiaCodeAgentContext(rootfs, context)
+                        onShared(
+                            0.91f,
+                            context.getString(
+                                if (includeFullDevelopmentTools) {
+                                    R.string.install_step_installing_dev_tools
+                                } else {
+                                    R.string.install_step_installing_runtime_tools
+                                },
+                            ),
+                        )
+                        installPackages(
+                            rootfs = rootfs,
+                            suite = commandSuite,
+                            packages =
+                                if (includeFullDevelopmentTools) {
+                                    REQUIRED_RUNTIME_PACKAGES + OPTIONAL_DEVELOPMENT_PACKAGES
+                                } else {
+                                    REQUIRED_RUNTIME_PACKAGES
+                                },
+                        )
+                    },
                 )
-                installPackages(
-                    rootfs = rootfs,
-                    suite = commandSuite,
-                    packages =
-                        if (includeFullDevelopmentTools) {
-                            REQUIRED_RUNTIME_PACKAGES + OPTIONAL_DEVELOPMENT_PACKAGES
-                        } else {
-                            REQUIRED_RUNTIME_PACKAGES
-                        },
-                )
-                // Phase 3: the package-manager-driven agents, which need what was just installed.
-                selected.forEach { installer ->
-                    val step = steps.getValue(installer.agent)
-                    installer.install(step)
-                }
-                val antigravityRootfs = steps[LocalAgent.ANTIGRAVITY]?.takeIf { it.installRoot != it.stagingRootfs }?.installRoot
+                // Which agents provisioned a userland of their own, named by the agent rather than by a literal
+                // path, so a second such agent has somewhere to go without another edit here.
+                val userlandAgents = selected.filter { AgentInstallStep.userlandRootFor(staging, it.agent) != null }
+                val antigravityRootfs = steps[LocalAgent.ANTIGRAVITY]?.takeIf { it in userlandAgents }?.installRoot
 
                 val metadata =
                     LocalRuntimeMetadata(
@@ -222,7 +231,14 @@ class LocalRuntimeInstaller(
                     activeRootfs,
                     // Where each agent's executables ended up, from what the descriptor declares,
                     // rather than from which branch installed them.
-                    if (withOpenCode) File(activeRootfs, LocalAgent.OPEN_CODE.descriptor.binaryPaths.first()) else null,
+                    if (withOpenCode) {
+                        val binary = LocalAgent.OPEN_CODE.descriptor.binaryPaths.first()
+                        // Explicitly relative: File(parent, child) concatenates, but that is a
+                        // coincidence of the JDK rather than something to rely on for an absolute path.
+                        File(activeRootfs, binary.removePrefix("/"))
+                    } else {
+                        null
+                    },
                     AgentInstallStep
                         .userlandRootFor(active, LocalAgent.ANTIGRAVITY)
                         ?.takeIf { LocalAgent.ANTIGRAVITY in requestedAgents && it.isDirectory },
@@ -268,7 +284,7 @@ class LocalRuntimeInstaller(
                 commandSuite,
                 rootfs,
                 File(rootfs, "usr/local/bin/opencode").takeIf { it.isFile },
-                File(active, "antigravity-rootfs").takeIf { metadata.has(LocalAgent.ANTIGRAVITY) && it.isDirectory },
+                antigravityRootfs(active).takeIf { metadata.has(LocalAgent.ANTIGRAVITY) && it.isDirectory },
             )
         }?.also { installed ->
             ensureTariffiaCodeAgentContext(installed.rootfs, context)
@@ -325,7 +341,7 @@ class LocalRuntimeInstaller(
                 onProgress(null, context.getString(R.string.install_step_installing_dev_tools), null)
                 if (!metadata.fullDevelopmentToolsInstalled) installPackages(rootfs, suite, OPTIONAL_DEVELOPMENT_PACKAGES)
                 if (metadata.has(LocalAgent.ANTIGRAVITY) && !metadata.fullDebianDevelopmentToolsInstalled) {
-                    val antigravityRootfs = File(active, "antigravity-rootfs")
+                    val antigravityRootfs = antigravityRootfs(active)
                     require(antigravityRootfs.isDirectory) { "The Antigravity Linux environment is not installed" }
                     DebianRootfsInstaller(runtimeDirectory, abi, downloader, httpClient, suite)
                         .installFullDevelopmentTools(antigravityRootfs)
@@ -487,24 +503,14 @@ class LocalRuntimeInstaller(
      */
     fun provisionGuestCapabilitiesForExistingInstall() {
         val active = File(runtimeDirectory, "environment")
-        listOf(File(active, "rootfs"), File(active, "antigravity-rootfs"))
+        listOf(File(active, "rootfs"), antigravityRootfs(active))
             .filter(File::isDirectory)
             .forEach { rootfs ->
                 guestCapabilities.installHelperScripts(rootfs)
                 guestCapabilities.provisionBrowserMcp(rootfs)
                 guestCapabilities.provisionScheduleMcp(rootfs)
-                provisionClaudePermissionHook(rootfs)
+                guestCapabilities.installClaudePermissionHook(rootfs)
             }
-    }
-
-    /** Installs the Claude Code PermissionRequest hook into an Alpine rootfs. */
-    fun provisionClaudePermissionHook(rootfs: File = File(runtimeDirectory, "environment/rootfs")) {
-        if (!rootfs.isDirectory) return
-        runCatching {
-            val script =
-                context.assets.open("scripts/tariffiacode-claude-permission-hook.sh").bufferedReader().use { it.readText() }
-            ClaudePermissionHooks.installInto(rootfs, script)
-        }
     }
 
     internal companion object {
