@@ -116,7 +116,9 @@ internal class FakeProviderServer : AutoCloseable {
         closeQuietly(client)
     }
 
-    private fun closeQuietly(client: Socket) = runCatching { client.close() }
+    private fun closeQuietly(client: Socket) {
+        runCatching { client.close() }
+    }
 
     private fun readLine(input: InputStream): String? {
         val line = java.io.ByteArrayOutputStream()
