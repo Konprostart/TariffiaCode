@@ -309,7 +309,7 @@ class RouterServer(
     private fun sseFrame(payload: String): ByteArray {
         val name = runCatching { json.parseToJsonElement(payload).jsonObject["type"]?.jsonPrimitive?.content }.getOrNull()
         val head = if (name.isNullOrBlank()) "" else "event: $name\n"
-        return "$head$data: $payload\n\n".toByteArray(CHARSET)
+        return "${head}data: $payload\n\n".toByteArray(CHARSET)
     }
 
     /**
