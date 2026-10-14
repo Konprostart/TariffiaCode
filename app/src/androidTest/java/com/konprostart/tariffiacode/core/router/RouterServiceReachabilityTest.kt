@@ -114,8 +114,14 @@ class RouterServiceReachabilityTest {
     )
 
     private fun startRouter(): Running {
-        context.startService(android.content.Intent(context, RouterService::class.java))
         val file = RouterService.endpointFile(context)
+        // Removed first, so what this waits for is the file this service just wrote.
+        //
+        // The router runs in its own process, so Android can end it without onDestroy() running -
+        // and a file left behind names a port nothing is listening on. That is not only a test
+        // hazard: an agent reading a stale endpoint gets a connection refused and no explanation.
+        file.delete()
+        context.startService(android.content.Intent(context, RouterService::class.java))
         val deadline = System.currentTimeMillis() + 30_000
         while (System.currentTimeMillis() < deadline) {
             if (file.isFile) {
