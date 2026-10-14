@@ -3,6 +3,9 @@ package com.konprostart.tariffiacode.core.router
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.database.Cursor
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 
 /**
  * Starts the router when the app process comes up. Debug builds only.
@@ -18,7 +21,19 @@ import android.database.Cursor
 class RouterAutostartProvider : ContentProvider() {
     override fun onCreate(): Boolean {
         val context = context ?: return false
-        RouterService.start(context)
+        // Deferred, and caught.
+        //
+        // The first version called startForegroundService() directly from here. onCreate() runs
+        // during process start, before anything is in the foreground, so that threw - and a throw
+        // out of a provider's onCreate takes the whole process down. It took the instrumentation
+        // process with it, which is how an unrelated SSH test started failing too.
+        //
+        // Nothing a debug convenience does is allowed to be able to kill the app, so both the delay
+        // and the catch are load-bearing.
+        Handler(Looper.getMainLooper()).post {
+            runCatching { RouterService.start(context) }
+                .onFailure { Log.e(TAG, "router did not autostart", it) }
+        }
         return true
     }
 
@@ -50,4 +65,8 @@ class RouterAutostartProvider : ContentProvider() {
         selection: String?,
         selectionArgs: Array<out String>?,
     ): Int = 0
+
+    private companion object {
+        const val TAG = "RouterAutostart"
+    }
 }
