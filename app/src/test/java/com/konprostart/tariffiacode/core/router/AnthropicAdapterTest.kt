@@ -32,7 +32,7 @@ class AnthropicAdapterTest {
     fun `fields the router does not model survive the round trip`() {
         val raw =
             """
-            {"model":"claude-opus-5-5","max_tokens":100,"stream":false,
+            {"model":"claude-opus-5-5","max_tokens":100,"stream":false,"messages":[],
             "system":[{"type":"text","text":"be brief","cache_control":{"type":"ephemeral"}}],
             "output_config":{"effort":"medium"},
             "thinking":{"type":"enabled","budget_tokens":1024}}
