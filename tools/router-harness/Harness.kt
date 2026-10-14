@@ -37,21 +37,35 @@ object Harness {
         val upstream = MockUpstream()
         upstream.start()
 
-        // Every provider in the table points at the same mock. Which provider "fails" is then a
-        // property of the mock rather than of the network, which is what makes failover reproducible.
-        val keys = MapKeyStore()
-        RouterConfigTable.fromJson(table.readText()).config.chains
-            .flatMap { it.models }
-            .map { it.provider }
-            .distinct()
-            .filter { it.lowercase() != "ollama" && it.lowercase() != "lmstudio" }
-            .forEach { keys.setKey(it, "mock-key") }
+        // Providers with a real key go to the real vendor; everything else stays on the mock. Mixing
+        // them is the point: it is how a real rotation gets observed, with the broken half of the chain
+        // still under this process's control rather than the internet's.
+        val realKeys = readKeysFile()
+        val keys = MapKeyStore(realKeys)
+        val providers =
+            RouterConfigTable.fromJson(table.readText()).config.chains
+                .flatMap { it.models }
+                .map { it.provider }
+                .distinct()
+                .filter { it.lowercase() != "ollama" && it.lowercase() != "lmstudio" }
+        providers.forEach { provider ->
+            if (!realKeys.containsKey(provider)) keys.setKey(provider, "mock-key")
+        }
+        val live = providers.filter { realKeys.containsKey(it) }
+        println("[harness] providers on the mock: " + providers.filterNot { realKeys.containsKey(it) }.sorted())
+        println("[harness] providers on the real vendor: $live")
+        if (live.isEmpty()) println("[harness] no ROUTER_KEYS_FILE given, so nothing is leaving this process")
 
         val engine =
             RouterEngine(
                 keys = { keys.snapshot() },
                 config = { loaded.config },
-                endpointFor = { ProviderEndpoint("http://127.0.0.1:${upstream.port}", "mock-key") },
+                // The real table decides where a keyed provider goes; only the keyless ones are aimed
+                // at the mock, so a typo in the table still shows up as a chain that cannot answer.
+                endpointFor = { provider ->
+                    RouterEngine.defaultEndpoint(provider, realKeys[provider])
+                        ?: ProviderEndpoint("http://127.0.0.1:${upstream.port}", "mock-key")
+                },
             )
 
         val server = RouterServer(engine, token = TOKEN)
@@ -69,6 +83,34 @@ object Harness {
         )
         // Nothing to do but stay alive; the client is what drives everything.
         Thread.currentThread().join()
+    }
+
+    /**
+     * Real keys, from a file this process was pointed at.
+     *
+     * Read from a file rather than an environment variable or an argument on purpose: both of those
+     * end up in shell history, in `ps` output, and in whatever logs the shell is attached to. A file
+     * the caller creates and points at keeps the secret out of every one of those.
+     *
+     * Lines are `provider=key`. Nothing here logs, prints or echoes a key value, by design - the
+     * harness reports which providers are live and never what they authenticate with.
+     */
+    private fun readKeysFile(): Map<String, String> {
+        val path = System.getenv("ROUTER_KEYS_FILE")?.takeIf { it.isNotBlank() } ?: return emptyMap()
+        val file = File(path)
+        if (!file.isFile) {
+            println("[harness] ROUTER_KEYS_FILE points at nothing readable: $path")
+            return emptyMap()
+        }
+        return file.readLines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") && it.contains('=') }
+            .associate { line ->
+                val name = line.substringBefore('=').trim().lowercase()
+                val key = line.substringAfter('=').trim()
+                require(key.isNotBlank()) { "blank key for $name in $path" }
+                name to key
+            }
     }
 
     private const val TOKEN = "harness-token-for-local-testing-only"
