@@ -12,7 +12,7 @@ import java.io.File
  * Absent or unreadable yields nothing, and the agent then uses whatever it would have used anyway.
  * A router that is not running must never be able to stop an agent from starting.
  */
-object RouterEndpoint {
+object AgentRouterEndpoint {
     /**
      * The variables for [runtimeDirectory], or empty when the router is not serving.
      *

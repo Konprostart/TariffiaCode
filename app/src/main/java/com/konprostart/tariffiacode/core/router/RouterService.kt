@@ -152,7 +152,7 @@ class RouterService : Service() {
 
         /** Inside the app's private storage, which is where the guest looks for runtime state. */
         private const val ENDPOINT_DIRECTORY = "runtime"
-        private const val ENDPOINT_FILE = RouterEndpoint.ENDPOINT_FILE_NAME
+        private const val ENDPOINT_FILE = AgentRouterEndpoint.ENDPOINT_FILE_NAME
 
         fun start(context: Context) = context.startForegroundService(Intent(context, RouterService::class.java))
 
