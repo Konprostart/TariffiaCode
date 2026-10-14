@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only additions. Nothing here reaches a release build.
+
+  The router can be started and stopped over adb so that whether a guest process can reach a loopback
+  server the app opened can be answered with one command, before any screen exists to turn it on.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+<receiver
+            android:name=".core.router.RouterDebugReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.konprostart.tariffiacode.ROUTER_START" />
+                <action android:name="com.konprostart.tariffiacode.ROUTER_STOP" />
+            </intent-filter>
+        </receiver>
+
+
+        <!--
+          Started last among providers so the app is fully constructed before the router asks for its
+          routing table, which is a question the Application has to be able to answer.
+        -->
+        <provider
+            android:name=".core.router.RouterAutostartProvider"
+            android:authorities="com.konprostart.tariffiacode.debug.router-autostart"
+            android:exported="false"
+            android:initOrder="100" />
+
+    </application>
+
+</manifest>
