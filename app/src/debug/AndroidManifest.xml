@@ -5,9 +5,21 @@
   The router can be started and stopped over adb so that whether a guest process can reach a loopback
   server the app opened can be answered with one command, before any screen exists to turn it on.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application>
+
+        <!--
+          The router runs in its own process in debug builds, so the reachability test is talking to it
+          across a real process boundary rather than from the process that owns it. The test asserts
+          the two PIDs differ, so that claim cannot quietly stop being true.
+        -->
+        <service
+            android:name=".core.router.RouterService"
+            android:process=":routerproc"
+            tools:replace="android:process"
+            tools:ignore="MissingClass" />
 
         <receiver
             android:name=".core.router.RouterDebugReceiver"

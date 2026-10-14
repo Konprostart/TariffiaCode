@@ -97,6 +97,7 @@ class RouterService : Service() {
                 appendLine("ANTHROPIC_BASE_URL=http://127.0.0.1:$port")
                 appendLine("ANTHROPIC_AUTH_TOKEN=$token")
                 appendLine("ANTHROPIC_API_KEY=$token")
+                appendLine("ROUTER_PID=${android.os.Process.myPid()}")
             },
         )
         return file

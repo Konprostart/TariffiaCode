@@ -2,132 +2,102 @@ package com.konprostart.tariffiacode.core.router
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.concurrent.TimeUnit
 
 /**
- * The reachability question, asked of a real Android runtime.
+ * The reachability question, asked of a real Android runtime, across a real process boundary.
  *
- * Everything else about this router was verified against a desktop JVM or against our own fakes. What
- * was never verified is the one thing that decides whether it is usable at all: that a process which
- * is *not* the app can open a connection to a loopback port the app opened. A test inside the app
- * cannot answer that - it would pass even if the socket were somehow private to it - so the request
- * here is made by an entirely separate process, launched through a shell.
+ * Everything else about this router was verified on a desktop JVM or against our own fakes. What was
+ * never verified is the one thing that decides whether it is usable: can a process that is *not* the
+ * one holding the socket open a connection to it.
  *
- * The port is deliberately whatever the kernel assigned, read from the file the service writes rather
- * than passed in, because a hardcoded port is what would have hidden this failure: it would have
- * looked like a connection problem instead of a design one.
+ * In debug builds the service is declared with its own process, and the test asserts the two PIDs
+ * differ before it makes any request. A test that merely ran inside the same process would pass even
+ * if the socket were somehow private to it - which is the failure this exists to catch, and the
+ * reason the PID check is not optional.
+ *
+ * The port is whatever the kernel assigned, read from the file the service writes rather than passed
+ * in, because a hardcoded port would have turned a design problem into something that looked like a
+ * connection problem.
  */
 @RunWith(AndroidJUnit4::class)
 class RouterServiceReachabilityTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
 
+    @After
+    fun stopRouter() {
+        context.stopService(android.content.Intent(context, RouterService::class.java))
+    }
+
     @Test
     fun theRouterAnswersARequestFromAnotherProcess() {
         val server = startRouter()
-        try {
-            // Control first. If this fails too, the router is not answering this path at all and the
-            // separate process is a red herring; if it passes, the socket works and the problem is in
-            // how the outside process is being talked to.
-            val inProcess = fromInsideThisProcess(server, "/v1/models")
-            val external = fromASeparateProcess(server, "GET /v1/models HTTP/1.1")
-            val serviceLog = logcat()
 
-            assertTrue(
-                "the router did not answer /v1/models even in process ($inProcess). " +
-                    "From a separate process: $external. Service log: $serviceLog",
-                inProcess.startsWith("HTTP/1.1 200"),
-            )
-            assertTrue(
-                "a separate process got no HTTP response at all: $external. Service log: $serviceLog",
-                external.startsWith("HTTP/1.1 200"),
-            )
-            assertTrue(
-                "the model list should have come back: $external",
-                external.contains("\"object\":\"model\""),
-            )
-        } finally {
-            context.stopService(android.content.Intent(context, RouterService::class.java))
-        }
+        assertTrue(
+            "the test would prove nothing from inside the router's own process",
+            server.pid != Process.myPid(),
+        )
+
+        val response = request(server, "/v1/models")
+
+        assertEquals(
+            "the model list did not come back. Response: $response. Service log: ${logcat()}",
+            200,
+            response.status,
+        )
+        assertTrue(
+            "the model list should have come back: $response",
+            response.body.contains("\"object\":\"model\""),
+        )
     }
-
-    /** The same request from inside the app, to separate a router fault from a transport one. */
-    private fun fromInsideThisProcess(
-        server: Running,
-        path: String,
-    ): String {
-        val connection = URL("http://127.0.0.1:${server.port}$path").openConnection() as HttpURLConnection
-        connection.connectTimeout = 5_000
-        connection.readTimeout = 5_000
-        connection.setRequestProperty("Authorization", "Bearer ${server.token}")
-        return runCatching {
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader()?.readText().orEmpty()
-            "HTTP/1.1 $code ${body.take(120)}"
-        }.getOrElse { "threw ${it::class.simpleName}: ${it.message}" }
-            .also { connection.disconnect() }
-    }
-
-    /** Whatever the service logged, so a failure says why rather than just that it happened. */
-    private fun logcat(): String =
-        runCatching {
-            val process = ProcessBuilder("logcat", "-d", "-s", "RouterService:V").start()
-            process.inputStream.bufferedReader().readText().takeLast(600)
-        }.getOrDefault("logcat unavailable")
 
     @Test
     fun theRouterRefusesAProcessWithoutTheToken() {
         val server = startRouter()
-        try {
-            val response = fromASeparateProcess(server, "GET /v1/models HTTP/1.1", token = "wrong-token")
 
-            assertTrue(
-                "a caller with the wrong token must not be served: $response",
-                response.startsWith("HTTP/1.1 401"),
-            )
-        } finally {
-            context.stopService(android.content.Intent(context, RouterService::class.java))
-        }
+        val response = request(server, "/v1/models", token = "wrong-token")
+
+        assertEquals(
+            "a caller with the wrong token must not be served. Response: $response",
+            401,
+            response.status,
+        )
     }
 
     @Test
     fun aClaudeCodeShapedRequestTravelsTheChain() {
         val server = startRouter()
-        try {
-            // The body Claude Code 2.1.296 actually sends, trimmed: a query string on the path, a
-            // system prompt as an array, and a system role inside messages.
-            val response =
-                fromASeparateProcess(
-                    server,
-                    "POST /v1/messages?beta=true HTTP/1.1",
-                    body =
-                        """
-                        {"model":"claude-sonnet-4-5","max_tokens":100,"stream":false,
-                        "system":[{"type":"text","text":"you are a coding agent"}],
-                        "messages":[{"role":"system","content":[]},
-                                   {"role":"user","content":[{"type":"text","text":"hi"}]}]}
-                        """.trimIndent().replace("\n", ""),
-                )
 
-            // The upstream here is a placeholder key, so this is expected to end in a gateway error.
-            // What matters is that the request was accepted, understood and routed - a 400 or 404
-            // would mean the server never got as far as asking a provider anything.
-            assertTrue(
-                "the request should have reached the chain, not been rejected: $response",
-                response.startsWith("HTTP/1.1 200") || response.startsWith("HTTP/1.1 502"),
+        // What Claude Code 2.1.296 actually sends, trimmed: a query string on the path, a system
+        // prompt as an array, and a system role inside messages.
+        val response =
+            request(
+                server,
+                "/v1/messages?beta=true",
+                method = "POST",
+                body =
+                    """
+                    {"model":"claude-sonnet-4-5","max_tokens":100,"stream":false,
+                    "system":[{"type":"text","text":"you are a coding agent"}],
+                    "messages":[{"role":"system","content":[]},
+                               {"role":"user","content":[{"type":"text","text":"hi"}]}]}
+                    """.trimIndent().replace("\n", ""),
             )
-            assertTrue(
-                "a rejected body would mean the request never parsed: $response",
-                !response.contains("400") && !response.contains("404"),
-            )
-        } finally {
-            context.stopService(android.content.Intent(context, RouterService::class.java))
-        }
+
+        // The upstream is a placeholder key, so a gateway error is the expected end. What matters is
+        // that the request was accepted, understood and routed: a 400 or 404 would mean the server
+        // never got as far as asking a provider anything.
+        assertEquals(
+            "the request never reached the chain. Response: $response. Service log: ${logcat()}",
+            502,
+            response.status,
+        )
     }
 
     // --- helpers ----------------------------------------------------------------------------
@@ -135,6 +105,12 @@ class RouterServiceReachabilityTest {
     private class Running(
         val port: Int,
         val token: String,
+        val pid: Int,
+    )
+
+    private class Reply(
+        val status: Int,
+        val body: String,
     )
 
     private fun startRouter(): Running {
@@ -145,56 +121,50 @@ class RouterServiceReachabilityTest {
             if (file.isFile) {
                 val values =
                     file.readLines().mapNotNull { line ->
-                        val name = line.substringBefore('=')
                         val value = line.substringAfter('=', "")
-                        if (value.isNotBlank()) name to value else null
+                        if (value.isBlank()) null else line.substringBefore('=') to value
                     }.toMap()
                 val url = values["ANTHROPIC_BASE_URL"]
                 val token = values["ANTHROPIC_AUTH_TOKEN"]
-                if (url != null && token != null) return Running(url.substringAfterLast(':').toInt(), token)
+                val pid = values["ROUTER_PID"]
+                if (url != null && token != null && pid != null) {
+                    return Running(url.substringAfterLast(':').toInt(), token, pid.toInt())
+                }
             }
             Thread.sleep(200)
         }
         throw AssertionError("the router never wrote its endpoint file")
     }
 
-    /**
-     * Makes the request from a process that is not this one.
-     *
-     * `nc` is used rather than an HTTP client from the test, because an in-process client would prove
-     * nothing: the question is whether something outside the app can reach the socket at all.
-     */
-    private fun fromASeparateProcess(
+    private fun request(
         server: Running,
-        requestLine: String,
+        path: String,
+        method: String = "GET",
         token: String? = null,
         body: String? = null,
-    ): String {
-        val request =
-            buildString {
-                appendLine(requestLine)
-                appendLine("Host: 127.0.0.1:${server.port}")
-                appendLine("Authorization: Bearer ${token ?: server.token}")
-                appendLine("Content-Type: application/json")
-                if (body != null) appendLine("Content-Length: ${body.toByteArray().size}")
-                appendLine("Connection: close")
-                appendLine()
-                if (body != null) append(body)
-            }
-        val command = listOf("nc", "127.0.0.1", server.port.toString())
-        val process = ProcessBuilder(command).start()
-
-        // Left open on purpose. Closing stdin is how nc is told the request is finished, and it then
-        // tears the connection down - which races the server's reply. The first version closed it
-        // immediately and lost the response for the larger of the two cases. The server sends
-        // Connection: close, so reading to EOF terminates on its own.
-        val stdin = process.outputStream
-        stdin.write(request.toByteArray())
-        stdin.flush()
-
-        val response = process.inputStream.bufferedReader().readText()
-        runCatching { stdin.close() }
-        if (!process.waitFor(20, TimeUnit.SECONDS)) process.destroy()
-        return response
+    ): Reply {
+        val connection = URL("http://127.0.0.1:${server.port}$path").openConnection() as HttpURLConnection
+        connection.requestMethod = method
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 30_000
+        connection.setRequestProperty("Authorization", "Bearer ${token ?: server.token}")
+        if (body != null) {
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.outputStream.use { it.write(body.toByteArray()) }
+        }
+        return runCatching {
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            Reply(status, stream?.bufferedReader()?.readText().orEmpty())
+        }.getOrElse { Reply(-1, "threw ${it::class.simpleName}: ${it.message}") }
+            .also { connection.disconnect() }
     }
+
+    /** Whatever the service logged, so a failure says why rather than only that it happened. */
+    private fun logcat(): String =
+        runCatching {
+            val process = ProcessBuilder("logcat", "-d", "-s", "RouterService:V").start()
+            process.inputStream.bufferedReader().readText().takeLast(600)
+        }.getOrDefault("logcat unavailable")
 }
