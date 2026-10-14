@@ -1,0 +1,184 @@
+package com.konprostart.tariffiacode.core.router
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.os.IBinder
+import android.util.Log
+import com.konprostart.tariffiacode.MainActivity
+import java.io.File
+
+/**
+ * Runs the router inside the app process, so an agent on this device can reach it on loopback.
+ *
+ * Nothing here knows about agents. It starts a server, hands out its address, and gets out of the way;
+ * that separation is what lets the router be pointed at from anywhere without this file changing.
+ *
+ * The address is written where the guest can read it rather than only to the log, because the whole
+ * point is that something *else* - a process in the userland - needs to dial in. The file holds a
+ * live bearer token, so it lives inside the app's private directory and is deleted on stop: any
+ * process that can read it is already root on the device, which is the only kind of process that has
+ * any business reaching the router.
+ */
+class RouterService : Service() {
+    private var server: RouterServer? = null
+    private var endpointFile: File? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        createChannel()
+        startForeground(NOTIFICATION_ID, notification("starting"))
+    }
+
+    private fun createChannel() {
+        getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "Router", NotificationManager.IMPORTANCE_LOW),
+            )
+    }
+
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
+        if (server != null) return START_STICKY
+        start()
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        stop()
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun start() {
+        val loaded = RouterConfigLoader(applicationContext).load()
+        if (!loaded.isUsable) {
+            Log.e(TAG, "routing table unusable: ${loaded.rejected}")
+            stopSelf()
+            return
+        }
+        if (loaded.rejected.isNotEmpty()) Log.w(TAG, "validation dropped: ${loaded.rejected}")
+
+        // A placeholder key, on purpose. This service exists to answer one question - can a process
+        // in the guest reach a server the app opened - and the upstream's opinion of the key is
+        // irrelevant to that. A provider that refuses still proves the request arrived, which is the
+        // whole point; a real key is one step later, and belongs in the store rather than here.
+        val keys = MapKeyStore(mapOf("deepseek" to PLACEHOLDER_KEY))
+        val engine = RouterEngine(keys = { keys.snapshot() }, config = { loaded.config })
+
+        // A fixed token, because a guest that has to be told the address out of band cannot prove
+        // anything yet. Per-session and unguessable once the store is wired to a real UI.
+        val token = PLACEHOLDER_TOKEN
+        val running = RouterServer(LoggingGateway(engine, Log::info), token)
+        val port = running.start()
+
+        val file = writeEndpoint(port, token)
+        endpointFile = file
+        server = running
+        Log.i(TAG, "router listening on http://127.0.0.1:$port (endpoint written to $file)")
+    }
+
+    private fun writeEndpoint(
+        port: Int,
+        token: String,
+    ): File {
+        val file = File(filesDir, "$ENDPOINT_DIRECTORY/$ENDPOINT_FILE")
+        file.parentFile?.mkdirs()
+        file.writeText(
+            buildString {
+                appendLine("ANTHROPIC_BASE_URL=http://127.0.0.1:$port")
+                appendLine("ANTHROPIC_AUTH_TOKEN=$token")
+                appendLine("ANTHROPIC_API_KEY=$token")
+            },
+        )
+        return file
+    }
+
+    private fun stop() {
+        server?.stop()
+        server = null
+        endpointFile?.delete()
+        endpointFile = null
+    }
+
+    private fun notification(state: String): Notification =
+        Notification.Builder(this, CHANNEL_ID)
+            .setContentTitle("Router")
+            .setContentText("Loopback proxy for AI providers - $state")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setOngoing(true)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    Intent(this, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                ),
+            )
+            .build()
+
+    companion object {
+        private const val TAG = "RouterService"
+        private const val CHANNEL_ID = "router"
+        private const val NOTIFICATION_ID = 4201
+
+        /** Inside the app's private storage, which is where the guest looks for runtime state. */
+        private const val ENDPOINT_DIRECTORY = "runtime"
+        private const val ENDPOINT_FILE = "router-endpoint.txt"
+
+        private const val PLACEHOLDER_KEY = "not-a-real-key-this-service-only-proves-reachability"
+        private const val PLACEHOLDER_TOKEN = "placeholder-token-for-reachability-proof"
+
+        fun start(context: Context) = context.startForegroundService(Intent(context, RouterService::class.java))
+
+        fun stop(context: Context) = context.stopService(Intent(context, RouterService::class.java))
+
+        /** Where an agent on this device finds the router's address. */
+        fun endpointFile(context: Context): File = File(context.filesDir, "$ENDPOINT_DIRECTORY/$ENDPOINT_FILE")
+    }
+}
+
+/**
+ * Logs what passes through, and delegates.
+ *
+ * This exists because proving the loopback works means watching a request arrive, and without a line
+ * in the log the only available evidence is an answer that came from somewhere.
+ */
+private class LoggingGateway(
+    private val delegate: RouterGateway,
+    private val log: (String) -> Unit,
+) : RouterGateway {
+    override fun isStreaming(rawRequest: String): Boolean = delegate.isStreaming(rawRequest)
+
+    override fun handle(rawRequest: String): String? {
+        log("POST /v1/messages (${rawRequest.length} bytes)")
+        return delegate.handle(rawRequest)
+    }
+
+    override fun stream(
+        rawRequest: String,
+        onEvent: (String) -> Unit,
+    ) {
+        log("POST /v1/messages stream=true (${rawRequest.length} bytes)")
+        delegate.stream(rawRequest, onEvent)
+    }
+
+    override fun listModels(): String = delegate.listModels()
+
+    override fun countTokens(rawRequest: String): String = delegate.countTokens(rawRequest)
+
+    override fun errorEvent(failure: Exception): String = delegate.errorEvent(failure)
+
+    override fun onServerFailure(failure: Exception) {
+        log("server failure: ${failure.message}")
+        delegate.onServerFailure(failure)
+    }
+}

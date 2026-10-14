@@ -95,6 +95,15 @@
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
 
         <service
+            android:name=".core.router.RouterService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                    android:value="Runs the user's own AI provider router on device loopback so local coding agents can reach it." />
+        </service>
+
+        <service
             android:name=".runtime.local.LocalRuntimeService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
