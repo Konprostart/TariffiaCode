@@ -291,6 +291,24 @@ jobs:
             -Pandroid.testInstrumentationRunnerArguments.sshTestUsername=$SSH_TEST_USERNAME
             -Pandroid.testInstrumentationRunnerArguments.sshTestPassword=$SSH_TEST_PASSWORD
 
+      # Runs on the same emulator that is already booted above. The question it answers - can a
+      # process that is not the app reach a loopback port the app opened - is the one nothing else
+      # has been able to answer, because every previous check ran inside the app or on a desktop JVM.
+      - name: Run router loopback reachability test on Android ART
+        if: always() && steps.prepare-fixture.outcome == 'success'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 26
+          target: default
+          arch: x86_64
+          disable-linux-hw-accel: true
+          emulator-boot-timeout: 1200
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel off
+          disable-animations: true
+          script: >-
+            ./gradlew :app:connectedGithubDebugAndroidTest
+            -Pandroid.testInstrumentationRunnerArguments.class=com.konprostart.tariffiacode.core.router.RouterServiceReachabilityTest
+
       - name: Upload persisted-password SSH test reports
         if: always() && steps.prepare-fixture.outcome == 'success'
         uses: actions/upload-artifact@v4
