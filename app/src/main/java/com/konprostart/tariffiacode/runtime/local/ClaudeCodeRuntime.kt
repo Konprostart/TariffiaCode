@@ -8,6 +8,7 @@ import com.konprostart.tariffiacode.core.api.OpenCodeTime
 import com.konprostart.tariffiacode.core.api.OpenCodeTodo
 import com.konprostart.tariffiacode.core.api.PromptAttachment
 import com.konprostart.tariffiacode.core.api.QuestionRequest
+import com.konprostart.tariffiacode.core.router.AgentRouterEndpoint
 import com.konprostart.tariffiacode.runtime.PermissionResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -381,6 +382,9 @@ class ClaudeCodeRuntime(
                     environment().clear()
                     environment().putAll(
                         ClaudeSandboxLauncher.environment(runtime, File(runtimeDirectory, "proot-tmp").apply { mkdirs() }, githubToken()) +
+                            // Where the on-device router is, when it is running. Empty otherwise,
+                            // and the agent then uses whatever it would have used anyway.
+                            AgentRouterEndpoint.environmentFor(runtimeDirectory) +
                             mapOf("TARIFFIACODE_ANDROID_SESSION_ID" to sessionId),
                     )
                 }
@@ -673,7 +677,7 @@ class ClaudeCodeRuntime(
                                 runtime,
                                 File(runtimeDirectory, "proot-tmp").apply { mkdirs() },
                                 githubToken(),
-                            ),
+                            ) + AgentRouterEndpoint.environmentFor(runtimeDirectory),
                         )
                     }
                     .start()
@@ -730,7 +734,7 @@ class ClaudeCodeRuntime(
                                     runtime,
                                     File(runtimeDirectory, "proot-tmp").apply { mkdirs() },
                                     githubToken(),
-                                ),
+                                ) + AgentRouterEndpoint.environmentFor(runtimeDirectory),
                             )
                         }
                         .start()
