@@ -3,6 +3,7 @@ package com.konprostart.tariffiacode.feature.settings
 import android.app.Application
 import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.konprostart.tariffiacode.core.router.RouterService
 import com.konprostart.tariffiacode.core.router.RouterStatus
 import kotlinx.coroutines.Dispatchers

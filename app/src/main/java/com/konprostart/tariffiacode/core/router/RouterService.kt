@@ -63,7 +63,7 @@ class RouterService : Service() {
         if (!loaded.isUsable) {
             val reason = "routing table unusable: ${loaded.table.rejected}"
             Log.e(TAG, reason)
-            recordFailure(context, reason)
+            recordFailure(reason)
             stopSelf()
             return
         }
@@ -126,11 +126,8 @@ class RouterService : Service() {
     }
 
     /** Why the last attempt did not work, so the screen can say it rather than showing nothing. */
-    private fun recordFailure(
-        context: Context,
-        reason: String,
-    ) {
-        runCatching { File(context.filesDir, "runtime/router-failure.txt").writeText(reason) }
+    private fun recordFailure(reason: String) {
+        runCatching { File(filesDir, "runtime/router-failure.txt").writeText(reason) }
     }
 
     private fun stop() {
