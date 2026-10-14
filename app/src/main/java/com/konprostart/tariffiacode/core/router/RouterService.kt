@@ -61,18 +61,23 @@ class RouterService : Service() {
     private fun start() {
         val loaded = RouterConfigLoader(applicationContext).load()
         if (!loaded.isUsable) {
-            Log.e(TAG, "routing table unusable: ${loaded.rejected}")
+            Log.e(TAG, "routing table unusable: ${loaded.table.rejected}")
             stopSelf()
             return
         }
-        if (loaded.rejected.isNotEmpty()) Log.w(TAG, "validation dropped: ${loaded.rejected}")
+        if (loaded.table.rejected.isNotEmpty()) Log.w(TAG, "validation dropped: ${loaded.table.rejected}")
+
+        // Which table is actually running, and whether the user's own was the one that got ignored.
+        // Someone editing a file that is not being read has no other way to find out.
+        Log.i(TAG, "routing table from ${loaded.origin} (${RouterConfigLoader(applicationContext).userTableFile()})")
+        loaded.rejected?.let { Log.w(TAG, "falling back to the bundled table: $it") }
 
         // A placeholder key, on purpose. This service exists to answer one question - can a process
         // in the guest reach a server the app opened - and the upstream's opinion of the key is
         // irrelevant to that. A provider that refuses still proves the request arrived, which is the
         // whole point; a real key is one step later, and belongs in the store rather than here.
         val keys = MapKeyStore(mapOf("deepseek" to PLACEHOLDER_KEY))
-        val engine = RouterEngine(keys = { keys.snapshot() }, config = { loaded.config })
+        val engine = RouterEngine(keys = { keys.snapshot() }, config = { loaded.table.config })
 
         // A fixed token, because a guest that has to be told the address out of band cannot prove
         // anything yet. Per-session and unguessable once the store is wired to a real UI.
