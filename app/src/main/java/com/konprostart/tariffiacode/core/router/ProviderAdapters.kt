@@ -31,7 +31,7 @@ class OllamaAdapter(
     override fun buildRequest(
         request: AnthropicRequest,
         model: RouterModel,
-        rawBody: String? = null,
+        rawBody: String?,
     ): TranslatedRequest {
         // The body is OpenAI's; only the address differs.
         val translated = openAi.buildRequest(request, model)
@@ -76,7 +76,7 @@ class GeminiAdapter(
     override fun buildRequest(
         request: AnthropicRequest,
         model: RouterModel,
-        rawBody: String? = null,
+        rawBody: String?,
     ): TranslatedRequest {
         val contents =
             buildJsonArray {
