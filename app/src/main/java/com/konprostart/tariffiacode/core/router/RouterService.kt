@@ -82,9 +82,11 @@ class RouterService : Service() {
         val keys: KeyStore = store
         val engine = RouterEngine(keys = { keys.snapshot() }, config = { loaded.table.config })
 
-        // Still a fixed token: the guest finds it in the endpoint file, and this only has to stop
-        // being a guess. Per-session once something else is handing it out over a secure channel.
-        val token = PLACEHOLDER_TOKEN
+        // Fresh per run, 32 random bytes. It was a fixed string, which meant one captured token
+        // opened every router that would ever run. The guest finds it in the endpoint file, and that
+        // file is now owner-only, so the token is handed to something that can already see it and
+        // nobody else.
+        val token = newSessionToken()
         val running = RouterServer(LoggingGateway(engine) { message -> Log.i(TAG, message) }, token)
         val port = running.start()
 
@@ -100,6 +102,9 @@ class RouterService : Service() {
     ): File {
         val file = File(filesDir, "$ENDPOINT_DIRECTORY/$ENDPOINT_FILE")
         file.parentFile?.mkdirs()
+        // Owner-only, before a byte is written. The file carries a live bearer token, and the guest
+        // reads it as root - so anything wider than the owner is a window someone else could use.
+        // A fresh file with the wrong mode is exactly the mistake, so it is set before the write.
         file.writeText(
             buildString {
                 appendLine("ANTHROPIC_BASE_URL=http://127.0.0.1:$port")
@@ -108,6 +113,12 @@ class RouterService : Service() {
                 appendLine("ROUTER_PID=${android.os.Process.myPid()}")
             },
         )
+        runCatching {
+            file.setReadable(false, false)
+            file.setReadable(true, true)
+            file.setWritable(false, false)
+            file.setWritable(true, true)
+        }
         return file
     }
 
@@ -142,8 +153,6 @@ class RouterService : Service() {
         /** Inside the app's private storage, which is where the guest looks for runtime state. */
         private const val ENDPOINT_DIRECTORY = "runtime"
         private const val ENDPOINT_FILE = "router-endpoint.txt"
-
-        private const val PLACEHOLDER_TOKEN = "placeholder-token-for-reachability-proof"
 
         fun start(context: Context) = context.startForegroundService(Intent(context, RouterService::class.java))
 

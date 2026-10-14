@@ -58,6 +58,24 @@ class RouterServiceReachabilityTest {
     }
 
     @Test
+    fun eachRunIssuesItsOwnToken() {
+        val first = startRouter().token
+        stopRouter()
+        // stopService is asynchronous. Asking again before the service has actually gone would be
+        // answered by the service that is still running, with the token it already had - and the
+        // test would be comparing a token to itself.
+        awaitRouterStopped()
+
+        val second = startRouter().token
+
+        // A fixed token meant one captured value opened every router that would ever run, and for
+        // as long as that build was installed. 32 random bytes per run is what makes a token a
+        // secret rather than a label.
+        assertTrue("the token must not be a constant across runs", first != second)
+        assertTrue("and it must be long enough to be worth guessing: ${first.length}", first.length >= 32)
+    }
+
+    @Test
     fun theRouterRefusesAProcessWithoutTheToken() {
         val server = startRouter()
 
@@ -98,6 +116,15 @@ class RouterServiceReachabilityTest {
             502,
             response.status,
         )
+    }
+
+    /** Waits for the service to be gone, so the next start really is a new one. */
+    private fun awaitRouterStopped() {
+        val deadline = System.currentTimeMillis() + 15_000
+        while (System.currentTimeMillis() < deadline) {
+            if (!RouterService.endpointFile(context).exists()) return
+            Thread.sleep(100)
+        }
     }
 
     // --- helpers ----------------------------------------------------------------------------

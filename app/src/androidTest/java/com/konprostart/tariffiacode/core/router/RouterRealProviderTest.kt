@@ -57,11 +57,11 @@ class RouterRealProviderTest {
 
     @Test
     fun aRealProviderAnswersThroughTheRouter() {
-        val port = startRouterAndWaitForItsPort()
+        val endpoint = startRouterAndWaitForEndpoint()
 
         val response =
             request(
-                port = port,
+                endpoint = endpoint,
                 path = "/v1/messages?beta=true",
                 body =
                     """
@@ -102,14 +102,34 @@ class RouterRealProviderTest {
         file.writeText("""{"chains":[$chains]}""")
     }
 
-    private fun startRouterAndWaitForItsPort(): Int {
-        context.startService(android.content.Intent(context, RouterService::class.java))
+    private class Endpoint(
+        val port: Int,
+        val token: String,
+    )
+
+    /**
+     * Port and token from the same read of the file.
+     *
+     * The token is per-run now, so it can only be had from here - hardcoding one would be testing
+     * against a token the router no longer accepts.
+     */
+    private fun startRouterAndWaitForEndpoint(): Endpoint {
         val file = RouterService.endpointFile(context)
+        file.delete()
+        context.startService(android.content.Intent(context, RouterService::class.java))
         val deadline = System.currentTimeMillis() + 45_000
         while (System.currentTimeMillis() < deadline) {
             if (file.isFile) {
-                val url = file.readLines().firstOrNull { it.startsWith("ANTHROPIC_BASE_URL=") }
-                if (url != null) return url.substringAfterLast(':').trim().toInt()
+                val values =
+                    file.readLines().mapNotNull { line ->
+                        val value = line.substringAfter('=', "")
+                        if (value.isBlank()) null else line.substringBefore('=') to value
+                    }.toMap()
+                val url = values["ANTHROPIC_BASE_URL"]
+                val token = values["ANTHROPIC_AUTH_TOKEN"]
+                if (url != null && token != null) {
+                    return Endpoint(url.substringAfterLast(':').trim().toInt(), token)
+                }
             }
             Thread.sleep(250)
         }
@@ -122,10 +142,12 @@ class RouterRealProviderTest {
     )
 
     private fun request(
-        port: Int,
+        endpoint: Endpoint,
         path: String,
         body: String,
     ): Reply {
+        val port = endpoint.port
+        val token = endpoint.token
         val connection = URL("http://127.0.0.1:$port$path").openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
         connection.connectTimeout = 15_000
@@ -133,7 +155,7 @@ class RouterRealProviderTest {
         // indistinguishable from a translation failure.
         connection.readTimeout = 90_000
         connection.setRequestProperty("Content-Type", "application/json")
-        connection.setRequestProperty("Authorization", "Bearer router-test-token")
+        connection.setRequestProperty("Authorization", "Bearer $token")
         connection.doOutput = true
         connection.outputStream.use { it.write(body.toByteArray()) }
         return runCatching {
