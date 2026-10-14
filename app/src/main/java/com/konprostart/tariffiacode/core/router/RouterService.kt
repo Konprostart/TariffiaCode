@@ -77,7 +77,7 @@ class RouterService : Service() {
         // A fixed token, because a guest that has to be told the address out of band cannot prove
         // anything yet. Per-session and unguessable once the store is wired to a real UI.
         val token = PLACEHOLDER_TOKEN
-        val running = RouterServer(LoggingGateway(engine, Log::info), token)
+        val running = RouterServer(LoggingGateway(engine) { message -> Log.i(TAG, message) }, token)
         val port = running.start()
 
         val file = writeEndpoint(port, token)
