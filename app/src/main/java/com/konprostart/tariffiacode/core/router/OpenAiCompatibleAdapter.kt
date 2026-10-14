@@ -210,13 +210,8 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
                 event(
                     "content_block_delta",
                     buildJsonObject {
-                        put(
-                            "delta",
-                            buildJsonObject {
-                                put("type", "text_delta")
-                                put("text", it)
-                            },
-                        )
+                        put("type", "text_delta")
+                        put("text", it)
                     },
                 ),
             )
@@ -228,13 +223,8 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
                     event(
                         "content_block_delta",
                         buildJsonObject {
-                            put(
-                                "delta",
-                                buildJsonObject {
-                                    put("type", "input_json_delta")
-                                    put("partial_json", it)
-                                },
-                            )
+                            put("type", "input_json_delta")
+                            put("partial_json", it)
                         },
                     ),
                 )
