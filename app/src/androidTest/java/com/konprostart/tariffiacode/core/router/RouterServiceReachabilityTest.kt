@@ -41,7 +41,7 @@ class RouterServiceReachabilityTest {
 
         assertTrue(
             "the test would prove nothing from inside the router's own process",
-            server.pid != Process.myPid(),
+            server.pid != android.os.Process.myPid(),
         )
 
         val response = request(server, "/v1/models")
