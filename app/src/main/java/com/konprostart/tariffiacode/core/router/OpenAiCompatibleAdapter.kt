@@ -134,6 +134,7 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
     override fun buildRequest(
         request: AnthropicRequest,
         model: RouterModel,
+        rawBody: String? = null,
     ): TranslatedRequest {
         val messages =
             buildJsonArray {
