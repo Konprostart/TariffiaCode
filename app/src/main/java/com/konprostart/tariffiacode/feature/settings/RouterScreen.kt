@@ -93,13 +93,14 @@ fun RouterScreen(
                                     text = if (routerState.isRunning) "Running" else "Stopped",
                                     style = MaterialTheme.typography.titleMedium,
                                 )
+                                val failure = routerState.failure
                                 Text(
                                     text =
                                         when {
                                             routerState.isRunning ->
                                                 "Serving on 127.0.0.1:${routerState.port}"
-                                            routerState.failure != null ->
-                                                routerState.failure
+                                            failure != null ->
+                                                failure
                                             else ->
                                                 "Agents will reach providers directly"
                                         },
@@ -136,9 +137,9 @@ fun RouterScreen(
                     )
                 }
             }
-            if (keyState.message != null) {
-                val message = keyState.message
-                item { Text(message, style = MaterialTheme.typography.bodySmall) }
+            val keyMessage = keyState.message
+            if (keyMessage != null) {
+                item { Text(keyMessage, style = MaterialTheme.typography.bodySmall) }
             }
 
             items(keyState.providers) { provider ->
