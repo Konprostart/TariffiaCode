@@ -18,6 +18,17 @@
             </intent-filter>
         </receiver>
 
+
+        <!--
+          Started last among providers so the app is fully constructed before the router asks for its
+          routing table, which is a question the Application has to be able to answer.
+        -->
+        <provider
+            android:name=".core.router.RouterAutostartProvider"
+            android:authorities="com.konprostart.tariffiacode.debug.router-autostart"
+            android:exported="false"
+            android:initOrder="100" />
+
     </application>
 
 </manifest>
