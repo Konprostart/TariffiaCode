@@ -79,11 +79,12 @@ fun RouterKeysScreen(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            if (state.tableWarning != null) {
+            val warning = state.tableWarning
+            if (warning != null) {
                 item {
                     Card {
                         Text(
-                            text = state.tableWarning,
+                            text = warning,
                             modifier = Modifier.padding(12.dp),
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -107,8 +108,9 @@ fun RouterKeysScreen(
                     )
                 }
             }
-            if (state.message != null) {
-                item { Text(state.message!!, style = MaterialTheme.typography.bodySmall) }
+            val message = state.message
+            if (message != null) {
+                item { Text(message, style = MaterialTheme.typography.bodySmall) }
             }
 
             items(state.providers) { provider ->
