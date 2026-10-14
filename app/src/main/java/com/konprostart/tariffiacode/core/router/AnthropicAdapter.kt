@@ -2,10 +2,9 @@ package com.konprostart.tariffiacode.core.router
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 
 /**
  * Anthropic itself, as a provider in the chain.
@@ -49,7 +48,7 @@ class AnthropicAdapter(
         // effort - and this provider understands all of it perfectly well already.
         val fields =
             runCatching { json.parseToJsonElement(rawBody ?: "{}").jsonObject }.getOrElse { JsonObject(emptyMap()) }
-        val body = JsonObject(fields + ("model" to buildJsonObject { put("model", model.model) }))
+        val body = JsonObject(fields + ("model" to JsonPrimitive(model.model)))
         return TranslatedRequest(path = MESSAGES_PATH, body = body.toString(), stream = request.stream)
     }
 
