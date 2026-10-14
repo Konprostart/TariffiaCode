@@ -77,7 +77,7 @@ class RouterService : Service() {
         // irrelevant to that. A provider that refuses still proves the request arrived, which is the
         // whole point; a real key is one step later, and belongs in the store rather than here.
         val keys = MapKeyStore(mapOf("deepseek" to PLACEHOLDER_KEY))
-        val engine = RouterEngine(keys = { keys.snapshot() }, config = { loaded.config })
+        val engine = RouterEngine(keys = { keys.snapshot() }, config = { loaded.table.config })
 
         // A fixed token, because a guest that has to be told the address out of band cannot prove
         // anything yet. Per-session and unguessable once the store is wired to a real UI.
