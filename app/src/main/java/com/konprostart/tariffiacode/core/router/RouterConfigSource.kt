@@ -52,7 +52,8 @@ object RouterConfigSource {
         readUserTable: () -> String?,
         readBundledTable: () -> String,
     ): Loaded {
-        val userText = runCatching { readUserTable() }.getOrNull()
+        val userAttempt = runCatching { readUserTable() }
+        val userText = userAttempt.getOrNull()
         if (userText != null) {
             val parsed = RouterConfigTable.fromJson(userText)
             if (parsed.isUsable) return Loaded(parsed, Origin.USER_FILE)
@@ -62,7 +63,10 @@ object RouterConfigSource {
                 "user table rejected: ${parsed.rejected.joinToString(", ")}",
             )
         }
-        return Loaded(bundled(readBundledTable), Origin.BUNDLED)
+        // No file is the ordinary case and says nothing. A file that is there but cannot be read is
+        // not: that is a user who wrote a table and is being ignored without being told.
+        val unreadable = userAttempt.exceptionOrNull()?.let { "user table unreadable: ${it.message}" }
+        return Loaded(bundled(readBundledTable), Origin.BUNDLED, unreadable)
     }
 
     private fun bundled(read: () -> String): RouterConfigTable.Result =
