@@ -86,7 +86,7 @@ class RouterService : Service() {
         // opened every router that would ever run. The guest finds it in the endpoint file, and that
         // file is now owner-only, so the token is handed to something that can already see it and
         // nobody else.
-        val token = newSessionToken()
+        val token = RouterServer.newSessionToken()
         val running = RouterServer(LoggingGateway(engine) { message -> Log.i(TAG, message) }, token)
         val port = running.start()
 
