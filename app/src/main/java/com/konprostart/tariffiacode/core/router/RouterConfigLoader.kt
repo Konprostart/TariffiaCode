@@ -1,39 +1,36 @@
 package com.konprostart.tariffiacode.core.router
 
 import android.content.Context
+import java.io.File
 
 /**
- * Reads the routing table out of the app's assets.
+ * Reads the routing table, from wherever it lives.
  *
- * The table ships as an asset because it changes far more often than the app does, and a chain that
- * names a model which no longer exists would otherwise surface as a provider outage: the chain would
- * burn its fallbacks on a model that can never answer, and the real cause would stay invisible.
- *
- * Reading and validating are kept apart - this knows about assets, [RouterConfigTable] knows about
- * what a valid chain is - so the table can be loaded somewhere that has no asset bundle at all.
+ * Reading and validating are kept apart - this knows where files are, [RouterConfigTable] knows what
+ * a valid chain is - and choosing between them is [RouterConfigSource]'s job, so the rule can be
+ * tested without a device.
  */
 class RouterConfigLoader(
     private val context: Context,
     private val assetName: String = DEFAULT_ASSET_NAME,
 ) {
     /**
-     * The table, plus what was rejected.
+     * The table, where it came from, and why an override was not used.
      *
-     * A missing or malformed asset yields an empty table and a populated [Result.rejected] rather
-     * than an exception: the router's failure mode when it cannot be configured should be "no
-     * routing", not "the app will not start".
+     * A missing or malformed asset yields an empty table and a populated rejection list rather than an
+     * exception: the failure mode of a router that cannot be configured should be "no routing", not
+     * "the app will not start".
      */
-    fun load(): RouterConfigTable.Result =
-        runCatching { context.assets.open(assetName).bufferedReader().use { it.readText() } }
-            .fold(
-                onSuccess = { RouterConfigTable.fromJson(it) },
-                onFailure = {
-                    RouterConfigTable.Result(
-                        RouterConfig(),
-                        listOf(it.message ?: it::class.simpleName.orEmpty()),
-                    )
-                },
-            )
+    fun load(): RouterConfigSource.Loaded {
+        val userFile = userTableFile()
+        return RouterConfigSource.resolve(
+            readUserTable = { userFile?.takeIf { it.isFile }?.readText() },
+            readBundledTable = { context.assets.open(assetName).bufferedReader().use { it.readText() } },
+        )
+    }
+
+    /** Where a user's editable table would be, whether or not one is there. */
+    fun userTableFile(): File? = RouterConfigSource.userTableFile(context.getExternalFilesDir(null), assetName)
 
     companion object {
         const val DEFAULT_ASSET_NAME = "claude_tiers.json"

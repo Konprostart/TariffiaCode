@@ -61,11 +61,16 @@ class RouterService : Service() {
     private fun start() {
         val loaded = RouterConfigLoader(applicationContext).load()
         if (!loaded.isUsable) {
-            Log.e(TAG, "routing table unusable: ${loaded.rejected}")
+            Log.e(TAG, "routing table unusable: ${loaded.table.rejected}")
             stopSelf()
             return
         }
-        if (loaded.rejected.isNotEmpty()) Log.w(TAG, "validation dropped: ${loaded.rejected}")
+        if (loaded.table.rejected.isNotEmpty()) Log.w(TAG, "validation dropped: ${loaded.table.rejected}")
+
+        // Which table is actually running, and whether the user's own was the one that got ignored.
+        // Someone editing a file that is not being read has no other way to find out.
+        Log.i(TAG, "routing table from ${loaded.origin} (${RouterConfigLoader(applicationContext).userTableFile()})")
+        loaded.rejected?.let { Log.w(TAG, "falling back to the bundled table: $it") }
 
         // A placeholder key, on purpose. This service exists to answer one question - can a process
         // in the guest reach a server the app opened - and the upstream's opinion of the key is
