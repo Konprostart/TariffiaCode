@@ -31,6 +31,7 @@ class OllamaAdapter(
     override fun buildRequest(
         request: AnthropicRequest,
         model: RouterModel,
+        rawBody: String?,
     ): TranslatedRequest {
         // The body is OpenAI's; only the address differs.
         val translated = openAi.buildRequest(request, model)
@@ -75,6 +76,7 @@ class GeminiAdapter(
     override fun buildRequest(
         request: AnthropicRequest,
         model: RouterModel,
+        rawBody: String?,
     ): TranslatedRequest {
         val contents =
             buildJsonArray {
@@ -237,6 +239,7 @@ object ProviderAdapters {
         when {
             provider.equals("ollama", true) || provider.equals("lmstudio", true) -> OllamaAdapter(ollamaPort)
             provider.equals("gemini", true) || provider.equals("google", true) -> keys[provider]?.let { GeminiAdapter(it) }
+            provider.equals("anthropic", true) -> keys[provider]?.let { AnthropicAdapter(it) }
             RouterProviderKind.of(provider) != null -> OpenAiCompatibleAdapter()
             else -> null
         }

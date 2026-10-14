@@ -29,10 +29,27 @@ interface ProviderAdapter {
     /** The protocol this adapter speaks, as named in the routing table. */
     val kind: RouterProviderKind
 
-    /** Builds the request body and the URL path for [model]. */
+    /**
+     * Headers this provider needs beyond the bearer token.
+     *
+     * Empty for the OpenAI-compatible shape, which authenticates with `Authorization: Bearer`. It
+     * exists for the ones that do not: Anthropic takes the key in `x-api-key` and refuses the
+     * request without a version header. Encoding that here keeps it out of the transport, which
+     * should not have to know which vendor it is talking to.
+     */
+    fun extraHeaders(): Map<String, String> = emptyMap()
+
+    /**
+     * Builds the request body and the URL path for [model].
+     *
+     * [rawBody] is the request exactly as it arrived, for adapters that pass it through rather than
+     * rebuild it. Null when the caller has no original to offer, which is the case a translating
+     * adapter is indifferent to and a passing-through one is not.
+     */
     fun buildRequest(
         request: AnthropicRequest,
         model: RouterModel,
+        rawBody: String? = null,
     ): TranslatedRequest
 
     /**
@@ -117,6 +134,7 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
     override fun buildRequest(
         request: AnthropicRequest,
         model: RouterModel,
+        rawBody: String?,
     ): TranslatedRequest {
         val messages =
             buildJsonArray {
