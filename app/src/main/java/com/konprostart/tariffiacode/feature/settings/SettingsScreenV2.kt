@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
@@ -92,6 +93,7 @@ fun SettingsScreenV2(
     onOpenDiagnostics: () -> Unit,
     onOpenSupport: () -> Unit = {},
     onOpenMcp: () -> Unit = {},
+    onOpenRouterKeys: () -> Unit = {},
     onOpenServerInfo: () -> Unit = {},
     onOpenLegal: () -> Unit = {},
     currentTheme: String = "dark",
@@ -314,6 +316,12 @@ fun SettingsScreenV2(
                     icon = Icons.Default.Build,
                     title = stringResource(R.string.server_info_settings_row),
                     onClick = onOpenServerInfo,
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Key,
+                    title = "Router keys",
+                    onClick = onOpenRouterKeys,
                 )
                 SettingsDivider()
                 SettingsRow(
