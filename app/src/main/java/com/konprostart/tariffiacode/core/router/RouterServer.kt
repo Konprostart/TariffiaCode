@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class RouterServer(
     private val gateway: RouterGateway,
-    private val token: String = RouterKeys.newSessionToken(),
+    private val token: String = newSessionToken(),
 ) {
     private val running = AtomicBoolean(false)
 
@@ -429,6 +429,20 @@ class RouterServer(
         const val MESSAGES_PATH = "/v1/messages"
         const val COUNT_TOKENS_PATH = "/v1/messages/count_tokens"
         const val MODELS_PATH = "/v1/models"
+
+        /**
+         * A fresh bearer token for one server run.
+         *
+         * 32 random bytes per session, so nothing about the port or the key store has any bearing on
+         * whether a caller can reach the router: knowing one server's token tells an attacker nothing
+         * about the next one's.
+         */
+        fun newSessionToken(): String {
+            val bytes = ByteArray(32)
+            java.security.SecureRandom().nextBytes(bytes)
+            return bytes.joinToString("") { "%02x".format(it) }
+        }
+
         const val STOP_EVENT = "message_stop"
         const val MAX_BODY_BYTES = 8 * 1024 * 1024
         const val MAX_HEADER_LINE_BYTES = 8 * 1024
