@@ -4,28 +4,106 @@
     {
       "tier": "haiku",
       "models": [
-        { "provider": "ollama", "model": "qwen3-coder:30b", "contextWindow": 262144, "supportsTools": true },
-        { "provider": "openrouter", "model": "google/gemini-2.0-flash-exp:free", "contextWindow": 1048576, "supportsTools": true },
-        { "provider": "deepseek", "model": "deepseek-chat", "contextWindow": 131072, "supportsTools": true }
+        {
+          "provider": "ollama",
+          "model": "qwen3-coder:30b",
+          "contextWindow": 262144,
+          "supportsTools": true
+        },
+        {
+          "provider": "openrouter",
+          "model": "google/gemini-2.0-flash-exp:free",
+          "contextWindow": 1048576,
+          "supportsTools": true
+        },
+        {
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "contextWindow": 131072,
+          "supportsTools": true
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-sonnet-4-5",
+          "contextWindow": 200000,
+          "supportsTools": true
+        }
       ]
     },
     {
       "tier": "sonnet",
       "models": [
-        { "provider": "ollama", "model": "qwen3-coder:30b", "contextWindow": 262144, "supportsTools": true },
-        { "provider": "deepseek", "model": "deepseek-chat", "contextWindow": 131072, "supportsTools": true },
-        { "provider": "openrouter", "model": "google/gemini-2.5-pro", "contextWindow": 1048576, "supportsTools": true },
-        { "provider": "gemini", "model": "gemini-2.5-flash", "contextWindow": 1048576, "supportsTools": true },
-        { "provider": "groq", "model": "llama-3.3-70b-versatile", "contextWindow": 131072, "supportsTools": true }
+        {
+          "provider": "ollama",
+          "model": "qwen3-coder:30b",
+          "contextWindow": 262144,
+          "supportsTools": true
+        },
+        {
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "contextWindow": 131072,
+          "supportsTools": true
+        },
+        {
+          "provider": "openrouter",
+          "model": "google/gemini-2.5-pro",
+          "contextWindow": 1048576,
+          "supportsTools": true
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-2.5-flash",
+          "contextWindow": 1048576,
+          "supportsTools": true
+        },
+        {
+          "provider": "groq",
+          "model": "llama-3.3-70b-versatile",
+          "contextWindow": 131072,
+          "supportsTools": true
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-sonnet-4-5",
+          "contextWindow": 200000,
+          "supportsTools": true
+        }
       ]
     },
     {
       "tier": "opus",
       "models": [
-        { "provider": "deepseek", "model": "deepseek-reasoner", "contextWindow": 131072, "supportsTools": true },
-        { "provider": "openrouter", "model": "anthropic/claude-sonnet-4.5", "contextWindow": 200000, "supportsTools": true },
-        { "provider": "gemini", "model": "gemini-2.5-pro", "contextWindow": 1048576, "supportsTools": true },
-        { "provider": "groq", "model": "llama-3.3-70b-versatile", "contextWindow": 131072, "supportsTools": true }
+        {
+          "provider": "deepseek",
+          "model": "deepseek-reasoner",
+          "contextWindow": 131072,
+          "supportsTools": true
+        },
+        {
+          "provider": "openrouter",
+          "model": "anthropic/claude-sonnet-4.5",
+          "contextWindow": 200000,
+          "supportsTools": true
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-2.5-pro",
+          "contextWindow": 1048576,
+          "supportsTools": true
+        },
+        {
+          "provider": "groq",
+          "model": "llama-3.3-70b-versatile",
+          "contextWindow": 131072,
+          "supportsTools": true
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-sonnet-4-5",
+          "contextWindow": 200000,
+          "supportsTools": true
+        }
       ]
     }
   ]

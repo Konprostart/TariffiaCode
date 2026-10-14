@@ -74,7 +74,7 @@ class RouterEngine(
     override fun handle(rawRequest: String): String? {
         val request = decode(rawRequest) ?: return null
         for (model in usableChain(request.tier)) {
-            val answer = runCatching { answerOnce(request, model) }.getOrNull()
+            val answer = runCatching { answerOnce(request, model, rawRequest) }.getOrNull()
             if (answer != null) {
                 breakers.recordSuccess(model.provider)
                 return answer
@@ -121,10 +121,11 @@ class RouterEngine(
     private fun answerOnce(
         request: AnthropicRequest,
         model: RouterModel,
+        rawBody: String,
     ): String {
         val adapter = ProviderAdapters.forProvider(model.provider, keys()) ?: throw IOException("No adapter")
-        val translated = adapter.buildRequest(request, model)
-        client.newCall(call(translated, model)).execute().use { response ->
+        val translated = adapter.buildRequest(request, model, rawBody)
+        client.newCall(call(translated, model, adapter)).execute().use { response ->
             if (!response.isSuccessful) throw ProviderRefused(response.code)
             val parsed =
                 adapter.parseResponse(response.code, response.body?.string().orEmpty(), request.model)
@@ -154,12 +155,18 @@ class RouterEngine(
     private fun call(
         translated: TranslatedRequest,
         model: RouterModel,
+        adapter: ProviderAdapter,
     ): Request {
         val endpoint = endpointFor(model.provider) ?: throw IOException("No endpoint for ${model.provider}")
         return Request.Builder()
             .url("${endpoint.baseUrl}${translated.path}")
             .post(translated.body.toRequestBody(JSON_MEDIA_TYPE))
-            .apply { endpoint.apiKey?.let { header("Authorization", "Bearer $it") } }
+            .apply {
+                endpoint.apiKey?.let { header("Authorization", "Bearer $it") }
+                // Some vendors do not authenticate with a bearer token, and the transport should not
+                // need to know which is which.
+                adapter.extraHeaders().forEach { (name, value) -> header(name, value) }
+            }
             .build()
     }
 
@@ -257,6 +264,7 @@ class RouterEngine(
             when (provider.trim().lowercase()) {
                 "ollama", "lmstudio" -> ProviderEndpoint("http://127.0.0.1:$OLLAMA_PORT")
                 "gemini", "google" -> key?.let { ProviderEndpoint("https://generativelanguage.googleapis.com") }
+                "anthropic" -> key?.let { ProviderEndpoint("https://api.anthropic.com", it) }
                 "deepseek" -> key?.let { ProviderEndpoint("https://api.deepseek.com", it) }
                 "groq" -> key?.let { ProviderEndpoint("https://api.groq.com", it) }
                 "openrouter" -> key?.let { ProviderEndpoint("https://openrouter.ai/api", it) }

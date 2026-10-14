@@ -127,6 +127,9 @@ enum class RouterProviderKind {
     /** OpenAI Chat Completions shape: most third-party gateways. */
     OPENAI_COMPATIBLE,
 
+    /** Anthropic's own Messages shape - the one the router already speaks, passed through. */
+    ANTHROPIC,
+
     /** Google's generative-language shape, which differs in several small ways. */
     GEMINI,
 
@@ -144,6 +147,7 @@ enum class RouterProviderKind {
          */
         private val BY_VENDOR =
             mapOf(
+                "anthropic" to ANTHROPIC,
                 "deepseek" to OPENAI_COMPATIBLE,
                 "openrouter" to OPENAI_COMPATIBLE,
                 "groq" to OPENAI_COMPATIBLE,

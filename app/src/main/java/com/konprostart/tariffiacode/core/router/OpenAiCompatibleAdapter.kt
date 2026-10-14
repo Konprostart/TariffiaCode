@@ -29,10 +29,17 @@ interface ProviderAdapter {
     /** The protocol this adapter speaks, as named in the routing table. */
     val kind: RouterProviderKind
 
-    /** Builds the request body and the URL path for [model]. */
+    /**
+     * Builds the request body and the URL path for [model].
+     *
+     * [rawBody] is the request exactly as it arrived, for adapters that pass it through rather than
+     * rebuild it. Null when the caller has no original to offer, which is the case a translating
+     * adapter is indifferent to and a passing-through one is not.
+     */
     fun buildRequest(
         request: AnthropicRequest,
         model: RouterModel,
+        rawBody: String? = null,
     ): TranslatedRequest
 
     /**

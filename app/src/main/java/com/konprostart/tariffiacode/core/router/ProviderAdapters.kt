@@ -237,6 +237,7 @@ object ProviderAdapters {
         when {
             provider.equals("ollama", true) || provider.equals("lmstudio", true) -> OllamaAdapter(ollamaPort)
             provider.equals("gemini", true) || provider.equals("google", true) -> keys[provider]?.let { GeminiAdapter(it) }
+            provider.equals("anthropic", true) -> keys[provider]?.let { AnthropicAdapter(it) }
             RouterProviderKind.of(provider) != null -> OpenAiCompatibleAdapter()
             else -> null
         }
