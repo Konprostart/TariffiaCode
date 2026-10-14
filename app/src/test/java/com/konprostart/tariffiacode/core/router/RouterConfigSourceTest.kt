@@ -15,14 +15,37 @@ import org.junit.Test
  * it and nothing happened", which is the worst possible failure for a routing table.
  */
 class RouterConfigSourceTest {
-    private val usable = """{"chains":[{"tier":"sonnet","models":[{"provider":"deepseek","model":"deepseek-chat","contextWindow":200000}]}]}"""
+    /**
+     * A table the loader accepts: every tier present and servable.
+     *
+     * All three, not one - a table missing tiers is exactly the case that falls back, and a fixture
+     * that quietly exercises the wrong path makes the test mean something other than it says.
+     */
+    private val usable =
+        """
+        {"chains":[
+          {"tier":"haiku","models":[{"provider":"groq","model":"small","contextWindow":200000}]},
+          {"tier":"sonnet","models":[{"provider":"deepseek","model":"deepseek-chat","contextWindow":200000}]},
+          {"tier":"opus","models":[{"provider":"deepseek","model":"deepseek-reasoner","contextWindow":200000}]}
+        ]}
+        """.trimIndent()
+
+    /** Well formed, but validation empties every chain. */
+    private val everyChainEmpty =
+        """
+        {"chains":[
+          {"tier":"haiku","models":[]},
+          {"tier":"sonnet","models":[]},
+          {"tier":"opus","models":[]}
+        ]}
+        """.trimIndent()
 
     @Test
     fun `a user table wins over the bundled one`() {
         val loaded = RouterConfigSource.resolve({ usable }, { throw AssertionError("bundled must not be read") })
 
         assertEquals(RouterConfigSource.Origin.USER_FILE, loaded.origin)
-        assertEquals(1, loaded.table.config.chainFor(RouterTier.SONNET).size)
+        assertEquals("deepseek-chat", loaded.table.config.chainFor(RouterTier.SONNET).single().model)
         assertNull("nothing was ignored, so nothing needs explaining", loaded.rejected)
     }
 
@@ -47,8 +70,7 @@ class RouterConfigSourceTest {
     @Test
     fun `a user table with nothing servable in it falls back and says so`() {
         // Every chain emptied by validation: this is the shape of "the user deleted too much".
-        val empty = """{"chains":[{"tier":"sonnet","models":[]}]}"""
-        val loaded = RouterConfigSource.resolve({ empty }, { usable })
+        val loaded = RouterConfigSource.resolve({ everyChainEmpty }, { usable })
 
         assertEquals(RouterConfigSource.Origin.BUNDLED, loaded.origin)
         assertTrue(loaded.isUsable)
