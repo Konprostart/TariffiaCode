@@ -146,8 +146,17 @@ class RouterServiceReachabilityTest {
             }
         val command = listOf("nc", "127.0.0.1", server.port.toString())
         val process = ProcessBuilder(command).start()
-        process.outputStream.use { it.write(request.toByteArray()) }
+
+        // Left open on purpose. Closing stdin is how nc is told the request is finished, and it then
+        // tears the connection down - which races the server's reply. The first version closed it
+        // immediately and lost the response for the larger of the two cases. The server sends
+        // Connection: close, so reading to EOF terminates on its own.
+        val stdin = process.outputStream
+        stdin.write(request.toByteArray())
+        stdin.flush()
+
         val response = process.inputStream.bufferedReader().readText()
+        runCatching { stdin.close() }
         if (!process.waitFor(20, TimeUnit.SECONDS)) process.destroy()
         return response
     }
