@@ -72,15 +72,18 @@ class RouterService : Service() {
         Log.i(TAG, "routing table from ${loaded.origin} (${RouterConfigLoader(applicationContext).userTableFile()})")
         loaded.rejected?.let { Log.w(TAG, "falling back to the bundled table: $it") }
 
-        // A placeholder key, on purpose. This service exists to answer one question - can a process
-        // in the guest reach a server the app opened - and the upstream's opinion of the key is
-        // irrelevant to that. A provider that refuses still proves the request arrived, which is the
-        // whole point; a real key is one step later, and belongs in the store rather than here.
-        val keys = MapKeyStore(mapOf("deepseek" to PLACEHOLDER_KEY))
+        // The real store, re-read on every routing pass so a key the user just saved takes effect
+        // without restarting the service. The placeholder that used to be here proved the loopback
+        // and has no business surviving now that keys can actually be entered.
+        val store = RouterKeys(applicationContext)
+        if (!store.isAvailable()) {
+            Log.e(TAG, "encrypted key store could not be opened; no provider can be called")
+        }
+        val keys: KeyStore = store
         val engine = RouterEngine(keys = { keys.snapshot() }, config = { loaded.table.config })
 
-        // A fixed token, because a guest that has to be told the address out of band cannot prove
-        // anything yet. Per-session and unguessable once the store is wired to a real UI.
+        // Still a fixed token: the guest finds it in the endpoint file, and this only has to stop
+        // being a guess. Per-session once something else is handing it out over a secure channel.
         val token = PLACEHOLDER_TOKEN
         val running = RouterServer(LoggingGateway(engine) { message -> Log.i(TAG, message) }, token)
         val port = running.start()
@@ -140,7 +143,6 @@ class RouterService : Service() {
         private const val ENDPOINT_DIRECTORY = "runtime"
         private const val ENDPOINT_FILE = "router-endpoint.txt"
 
-        private const val PLACEHOLDER_KEY = "not-a-real-key-this-service-only-proves-reachability"
         private const val PLACEHOLDER_TOKEN = "placeholder-token-for-reachability-proof"
 
         fun start(context: Context) = context.startForegroundService(Intent(context, RouterService::class.java))

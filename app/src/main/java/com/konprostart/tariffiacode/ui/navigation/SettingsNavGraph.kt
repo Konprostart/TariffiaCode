@@ -130,6 +130,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onOpenDiagnostics = onShowDiagnostics,
             onOpenSupport = { showSupportSheet = true },
             onOpenMcp = { navController.navigate(ROUTE_SETTINGS_MCP) },
+            onOpenRouterKeys = { navController.navigate(ROUTE_SETTINGS_ROUTER_KEYS) },
             onOpenServerInfo = { navController.navigate(ROUTE_SETTINGS_SERVER_INFO) },
             onOpenLegal = { navController.navigate(ROUTE_SETTINGS_LEGAL) },
             currentTheme = preferences().theme,
@@ -782,6 +783,12 @@ fun NavGraphBuilder.settingsNavGraph(
             onStop = previewViewModel::stop,
             onTrustHostKey = previewViewModel::trustPendingHostKey,
             onDismissHostKey = previewViewModel::dismissPendingHostKey,
+        )
+    }
+
+    composable(ROUTE_SETTINGS_ROUTER_KEYS) {
+        com.konprostart.tariffiacode.feature.settings.RouterKeysScreen(
+            onBack = { navController.popBackStack() },
         )
     }
 
