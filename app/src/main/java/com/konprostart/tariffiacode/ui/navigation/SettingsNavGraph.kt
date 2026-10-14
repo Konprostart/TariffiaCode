@@ -787,7 +787,7 @@ fun NavGraphBuilder.settingsNavGraph(
     }
 
     composable(ROUTE_SETTINGS_ROUTER_KEYS) {
-        com.konprostart.tariffiacode.feature.settings.RouterKeysScreen(
+        com.konprostart.tariffiacode.feature.settings.RouterScreen(
             onBack = { navController.popBackStack() },
         )
     }

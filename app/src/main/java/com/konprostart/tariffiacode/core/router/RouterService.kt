@@ -61,7 +61,9 @@ class RouterService : Service() {
     private fun start() {
         val loaded = RouterConfigLoader(applicationContext).load()
         if (!loaded.isUsable) {
-            Log.e(TAG, "routing table unusable: ${loaded.table.rejected}")
+            val reason = "routing table unusable: ${loaded.table.rejected}"
+            Log.e(TAG, reason)
+            recordFailure(context, reason)
             stopSelf()
             return
         }
@@ -90,6 +92,7 @@ class RouterService : Service() {
         val running = RouterServer(LoggingGateway(engine) { message -> Log.i(TAG, message) }, token)
         val port = running.start()
 
+        runCatching { File(filesDir, "runtime/router-failure.txt").delete() }
         val file = writeEndpoint(port, token)
         endpointFile = file
         server = running
@@ -120,6 +123,14 @@ class RouterService : Service() {
             file.setWritable(true, true)
         }
         return file
+    }
+
+    /** Why the last attempt did not work, so the screen can say it rather than showing nothing. */
+    private fun recordFailure(
+        context: Context,
+        reason: String,
+    ) {
+        runCatching { File(context.filesDir, "runtime/router-failure.txt").writeText(reason) }
     }
 
     private fun stop() {
@@ -153,6 +164,35 @@ class RouterService : Service() {
         /** Inside the app's private storage, which is where the guest looks for runtime state. */
         private const val ENDPOINT_DIRECTORY = "runtime"
         private const val ENDPOINT_FILE = AgentRouterEndpoint.ENDPOINT_FILE_NAME
+        private const val FAILURE_FILE = "router-failure.txt"
+
+        /**
+         * Where the router actually got to.
+         *
+         * Read from the file the service writes rather than guessed at, so a screen cannot show
+         * "running" over a service that failed two lines after starting - which is the one thing a
+         * status indicator must never do.
+         */
+        fun status(context: Context): RouterStatus {
+            val file = endpointFile(context)
+            if (!file.isFile) return RouterStatus.NotRunning
+            val values =
+                runCatching {
+                    file.readLines().mapNotNull { line ->
+                        val value = line.substringAfter('=', "")
+                        if (value.isBlank()) null else line.substringBefore('=') to value
+                    }.toMap()
+                }.getOrDefault(emptyMap())
+            val url = values["ANTHROPIC_BASE_URL"] ?: return RouterStatus.NotRunning
+            val port = url.substringAfterLast(':').trim().toIntOrNull() ?: return RouterStatus.NotRunning
+            return RouterStatus.Running(port)
+        }
+
+        /** A table that could not be loaded: the service refused to start, and the screen must say so. */
+        fun lastFailure(context: Context): String? =
+            runCatching { File(context.filesDir, "$ENDPOINT_DIRECTORY/$FAILURE_FILE").readText() }
+                .getOrNull()
+                ?.takeIf { it.isNotBlank() }
 
         fun start(context: Context) = context.startForegroundService(Intent(context, RouterService::class.java))
 
@@ -198,4 +238,13 @@ private class LoggingGateway(
         log("server failure: ${failure.message}")
         delegate.onServerFailure(failure)
     }
+}
+
+/** Whether the router is serving, and where. */
+sealed interface RouterStatus {
+    /** Not serving. The usual state when the user has not switched it on. */
+    data object NotRunning : RouterStatus
+
+    /** Serving on [port] at the given loopback address. */
+    data class Running(val port: Int) : RouterStatus
 }
