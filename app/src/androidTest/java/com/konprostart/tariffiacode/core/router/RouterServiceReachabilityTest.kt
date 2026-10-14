@@ -5,6 +5,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.TimeUnit
 
 /**
@@ -28,20 +30,55 @@ class RouterServiceReachabilityTest {
     fun theRouterAnswersARequestFromAnotherProcess() {
         val server = startRouter()
         try {
-            val response = fromASeparateProcess(server, "GET /v1/models HTTP/1.1")
+            // Control first. If this fails too, the router is not answering this path at all and the
+            // separate process is a red herring; if it passes, the socket works and the problem is in
+            // how the outside process is being talked to.
+            val inProcess = fromInsideThisProcess(server, "/v1/models")
+            val external = fromASeparateProcess(server, "GET /v1/models HTTP/1.1")
+            val serviceLog = logcat()
 
             assertTrue(
-                "a separate process got no HTTP response at all: $response",
-                response.startsWith("HTTP/1.1 200"),
+                "the router did not answer /v1/models even in process ($inProcess). " +
+                    "From a separate process: $external. Service log: $serviceLog",
+                inProcess.startsWith("HTTP/1.1 200"),
             )
             assertTrue(
-                "the model list should have come back: $response",
-                response.contains("\"object\":\"model\""),
+                "a separate process got no HTTP response at all: $external. Service log: $serviceLog",
+                external.startsWith("HTTP/1.1 200"),
+            )
+            assertTrue(
+                "the model list should have come back: $external",
+                external.contains("\"object\":\"model\""),
             )
         } finally {
             context.stopService(android.content.Intent(context, RouterService::class.java))
         }
     }
+
+    /** The same request from inside the app, to separate a router fault from a transport one. */
+    private fun fromInsideThisProcess(
+        server: Running,
+        path: String,
+    ): String {
+        val connection = URL("http://127.0.0.1:${server.port}$path").openConnection() as HttpURLConnection
+        connection.connectTimeout = 5_000
+        connection.readTimeout = 5_000
+        connection.setRequestProperty("Authorization", "Bearer ${server.token}")
+        return runCatching {
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val body = stream?.bufferedReader()?.readText().orEmpty()
+            "HTTP/1.1 $code ${body.take(120)}"
+        }.getOrElse { "threw ${it::class.simpleName}: ${it.message}" }
+            .also { connection.disconnect() }
+    }
+
+    /** Whatever the service logged, so a failure says why rather than just that it happened. */
+    private fun logcat(): String =
+        runCatching {
+            val process = ProcessBuilder("logcat", "-d", "-s", "RouterService:V").start()
+            process.inputStream.bufferedReader().readText().takeLast(600)
+        }.getOrDefault("logcat unavailable")
 
     @Test
     fun theRouterRefusesAProcessWithoutTheToken() {
