@@ -140,7 +140,7 @@ class RouterEngine(
         adapter: ProviderAdapter,
         relay: (String) -> Unit,
     ) {
-        client.newCall(call(translated, model)).execute().use { response ->
+        client.newCall(call(translated, model, adapter)).execute().use { response ->
             if (!response.isSuccessful) throw ProviderRefused(response.code)
             val reader = response.body?.charStream()?.buffered() ?: throw IOException("Empty stream")
             while (true) {
