@@ -30,6 +30,16 @@ interface ProviderAdapter {
     val kind: RouterProviderKind
 
     /**
+     * Headers this provider needs beyond the bearer token.
+     *
+     * Empty for the OpenAI-compatible shape, which authenticates with `Authorization: Bearer`. It
+     * exists for the ones that do not: Anthropic takes the key in `x-api-key` and refuses the
+     * request without a version header. Encoding that here keeps it out of the transport, which
+     * should not have to know which vendor it is talking to.
+     */
+    fun extraHeaders(): Map<String, String> = emptyMap()
+
+    /**
      * Builds the request body and the URL path for [model].
      *
      * [rawBody] is the request exactly as it arrived, for adapters that pass it through rather than
