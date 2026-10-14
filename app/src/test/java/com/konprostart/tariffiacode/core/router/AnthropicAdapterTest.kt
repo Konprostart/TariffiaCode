@@ -94,5 +94,15 @@ class AnthropicAdapterTest {
         assertNull(adapter.parseStreamEvent("data: "))
     }
 
-    private fun request(raw: String) = Json.decodeFromString<AnthropicRequest>(raw)
+    /**
+     * The parsed request, built from a minimal body.
+     *
+     * Deliberately not the rich body: what is under test here is the original string surviving, and
+     * the original string is passed to buildRequest separately. Decoding the elaborate one would only
+     * be asserting that AnthropicRequest models every field a client might send, which is the opposite
+     * of the point - a passthrough must not need to.
+     */
+    private fun request(
+        @Suppress("UNUSED_PARAMETER") raw: String,
+    ) = Json.decodeFromString<AnthropicRequest>("""{"model":"claude-opus-5-5","messages":[]}""")
 }
