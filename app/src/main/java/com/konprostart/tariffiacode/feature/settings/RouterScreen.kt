@@ -21,10 +21,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -33,28 +36,38 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.konprostart.tariffiacode.core.router.RouterConfigSource
 
 /**
- * Keys for the router, and nothing else.
+ * The router, on one screen: whether it is on, and which keys it has.
  *
- * The screen shows which providers the routing table can actually reach and whether each one is
- * ready, which is the question that matters - a key entered for a provider that is not in any chain
- * is a key that will never be used, and one that looks set when it is not is worse.
+ * These are two halves of one thing and were two screens, which meant the answer to "is my key
+ * being used" was always on a different page from the switch that uses it. A provider with no key
+ * while the router is switched on looks like a failure and is not - it is a chain entry that will be
+ * skipped - so both belong where the other is visible.
  *
- * Keys are never displayed. A stored key is shown as its last four characters, and the field for
- * entering a new one starts blank rather than pre-filled: anything that can put a key on screen is a
- * place it ends up in a screenshot, a clipboard, or a bug report.
+ * The state is the service's own, read from the file the service writes. A switch that showed "on"
+ * over a service that had died two lines after starting would be worse than no switch.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RouterKeysScreen(
+fun RouterScreen(
     onBack: () -> Unit,
-    viewModel: RouterKeysViewModel = viewModel(),
+    control: RouterControlViewModel = viewModel(),
+    keys: RouterKeysViewModel = viewModel(),
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    val routerState by control.state.collectAsStateWithLifecycle()
+    val keyState by keys.state.collectAsStateWithLifecycle()
+
+    // The service runs in its own process, so nothing pushes a change here; the screen looks.
+    LaunchedEffect(Unit) {
+        while (true) {
+            control.refresh()
+            kotlinx.coroutines.delay(2_000)
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Router keys") },
+                title = { Text("Router") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -68,10 +81,47 @@ fun RouterKeysScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (routerState.isRunning) "Running" else "Stopped",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                val failure = routerState.failure
+                                Text(
+                                    text =
+                                        when {
+                                            routerState.isRunning ->
+                                                "Serving on 127.0.0.1:${routerState.port}"
+                                            failure != null ->
+                                                failure
+                                            else ->
+                                                "Agents will reach providers directly"
+                                        },
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            Switch(
+                                checked = routerState.isRunning,
+                                enabled = !routerState.pending,
+                                onCheckedChange = { on -> if (on) control.start() else control.stop() },
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
                 Text(
                     text =
-                        "Which routing table is running: " +
-                            when (state.tableOrigin) {
+                        "Routing table: " +
+                            when (keyState.tableOrigin) {
                                 RouterConfigSource.Origin.USER_FILE -> "your file"
                                 RouterConfigSource.Origin.BUNDLED -> "the bundled copy"
                                 null -> "unknown"
@@ -79,52 +129,32 @@ fun RouterKeysScreen(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            val warning = state.tableWarning
-            if (warning != null) {
-                item {
-                    Card {
-                        Text(
-                            text = warning,
-                            modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-            }
-            if (state.userTablePath != null) {
+            if (keyState.userTablePath != null) {
                 item {
                     Text(
-                        text = "Edit your table at: ${state.userTablePath}",
+                        text = "Edit your table at: ${keyState.userTablePath}",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
-            if (!state.storeAvailable) {
-                item {
-                    Text(
-                        text = "The encrypted key store could not be opened. No provider can be called.",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-            val message = state.message
-            if (message != null) {
-                item { Text(message, style = MaterialTheme.typography.bodySmall) }
+            val keyMessage = keyState.message
+            if (keyMessage != null) {
+                item { Text(keyMessage, style = MaterialTheme.typography.bodySmall) }
             }
 
-            items(state.providers) { provider ->
+            items(keyState.providers) { provider ->
                 ProviderRow(
                     provider = provider,
-                    editing = state.editing == provider.provider,
-                    draft = if (state.editing == provider.provider) state.draft else "",
-                    onStartEditing = { viewModel.startEditing(provider.provider) },
-                    onDraftChanged = viewModel::onDraftChanged,
-                    onSave = viewModel::save,
-                    onCancel = viewModel::cancelEditing,
-                    onRemove = { viewModel.remove(provider.provider) },
+                    editing = keyState.editing == provider.provider,
+                    draft = if (keyState.editing == provider.provider) keyState.draft else "",
+                    onStartEditing = { keys.startEditing(provider.provider) },
+                    onDraftChanged = keys::onDraftChanged,
+                    onSave = keys::save,
+                    onCancel = keys::cancelEditing,
+                    onRemove = { keys.remove(provider.provider) },
                 )
             }
+            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 }
@@ -149,12 +179,7 @@ private fun ProviderRow(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(provider.provider, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text =
-                            if (provider.hasKey) {
-                                "key set (${provider.keyHint})"
-                            } else {
-                                "no key - this provider will be skipped"
-                            },
+                        text = if (provider.hasKey) "key set (${provider.keyHint})" else "no key - will be skipped",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -169,7 +194,6 @@ private fun ProviderRow(
                     }
                 }
             }
-
             if (editing) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(

@@ -320,7 +320,7 @@ fun SettingsScreenV2(
                 SettingsDivider()
                 SettingsRow(
                     icon = Icons.Default.Key,
-                    title = "Router keys",
+                    title = "Router",
                     onClick = onOpenRouterKeys,
                 )
                 SettingsDivider()
