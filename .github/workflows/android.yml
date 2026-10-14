@@ -309,6 +309,29 @@ jobs:
             ./gradlew :app:connectedGithubDebugAndroidTest
             -Pandroid.testInstrumentationRunnerArguments.class=com.konprostart.tariffiacode.core.router.RouterServiceReachabilityTest
 
+      # The one test that asks a real vendor a real question. Every other router test runs against a
+      # mock, which can only prove the router talks to itself. This one proves the translation is
+      # right against a provider that is actually there.
+      #
+      # The key comes from a repository secret and is passed straight into instrumentation; it is
+      # never committed and never printed. Without the secret the test skips itself rather than
+      # failing, so a fork or a routine run is not reddened by a key it was never given.
+      - name: Run router real-provider round trip on Android ART
+        if: always() && steps.prepare-fixture.outcome == 'success'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 26
+          target: default
+          arch: x86_64
+          disable-linux-hw-accel: true
+          emulator-boot-timeout: 1200
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel off
+          disable-animations: true
+          script: >-
+            ./gradlew :app:connectedGithubDebugAndroidTest
+            -Pandroid.testInstrumentationRunnerArguments.class=com.konprostart.tariffiacode.core.router.RouterRealProviderTest
+            -Pandroid.testInstrumentationRunnerArguments.routerRealProviderKey=${{ secrets.DEEPSEEK_API_KEY }}
+
       - name: Upload persisted-password SSH test reports
         if: always() && steps.prepare-fixture.outcome == 'success'
         uses: actions/upload-artifact@v4
