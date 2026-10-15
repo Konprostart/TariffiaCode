@@ -502,7 +502,13 @@ class RouterServer(
             WORKER_MAX_THREADS,
             WORKER_IDLE_SECONDS,
             TimeUnit.SECONDS,
-            java.util.concurrent.ArrayBlockingQueue(WORKER_QUEUE_DEPTH),
+            // A hand-off queue, not a waiting queue. With a deep queue the pool never grows past
+            // its core threads - the connections sit in the queue instead - so a handful of idle
+            // connections is enough to park every real request behind them until the read timeout
+            // expires. Handing off means "a thread now or not at all", which is also the truth here:
+            // work that is not being done right now should be refused while it is still cheap to
+            // refuse, not queued behind work that will never finish.
+            java.util.concurrent.SynchronousQueue(),
             ThreadFactory { runnable ->
                 Thread(runnable, "router-conn-${connectionIds.incrementAndGet()}").apply {
                     isDaemon = true
@@ -719,14 +725,11 @@ class RouterServer(
          */
         const val READ_TIMEOUT_MILLIS = 30_000
 
-        /** Workers started eagerly; above [WORKER_QUEUE_DEPTH] waiting connections the pool grows. */
+        /** Workers started before any rejection is possible. */
         const val WORKER_CORE_THREADS = 4
 
         /** The ceiling on workers, whatever the caller does. */
         const val WORKER_MAX_THREADS = 16
-
-        /** How many connections may wait for a worker before the pool opens more. */
-        const val WORKER_QUEUE_DEPTH = 64
 
         /** Idle seconds before an extra worker is returned. */
         const val WORKER_IDLE_SECONDS = 30L

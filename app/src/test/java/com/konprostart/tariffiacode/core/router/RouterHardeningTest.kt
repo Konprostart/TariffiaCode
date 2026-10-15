@@ -115,10 +115,17 @@ class RouterHardeningTest {
             runCatching {
                 engine.handle("""{"model":"claude-sonnet-4-5","messages":[],"stream":false}""")
             }.getOrNull()
+
+        // Awaited before the stand-in is closed, and asserted one stage at a time: "not dialled"
+        // and "dialled but not understood" are different failures and must not share an assertion.
+        val dialled = served.await(10, TimeUnit.SECONDS)
         responder.join(5_000)
         standIn.close()
 
-        assertTrue("the custom provider must actually have been dialled", served.await(5, TimeUnit.SECONDS))
+        assertTrue(
+            "the custom provider must actually have been dialled (request line seen: '$requestLine')",
+            dialled,
+        )
         assertEquals(
             "and it must be dialled with the OpenAI chat-completions path: $requestLine",
             "POST /v1/chat/completions HTTP/1.1",
