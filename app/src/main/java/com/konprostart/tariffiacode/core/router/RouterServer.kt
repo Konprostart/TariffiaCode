@@ -424,7 +424,9 @@ class RouterServer(
      */
     private fun sseFrames(payload: String): ByteArray {
         val objects = splitTopLevelObjects(payload)
-        if (objects.isEmpty()) return frame(payload, eventName = null)
+        // One object is the ordinary case, and it still carries its own name - taking the name only
+        // on the split path is what left a single event with a payload and no `event:` line at all.
+        if (objects.isEmpty()) return frame(payload, eventName = eventNameOf(payload))
         val out = java.io.ByteArrayOutputStream()
         objects.forEach { object_ -> out.write(frame(object_, eventName = eventNameOf(object_))) }
         return out.toByteArray()
