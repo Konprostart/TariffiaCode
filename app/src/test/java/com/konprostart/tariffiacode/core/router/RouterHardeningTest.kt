@@ -137,13 +137,6 @@ class RouterHardeningTest {
     /**
      * A flood of connections must not be able to spend the process.
      *
-     * The router still answers afterwards, which is the property that matters: past the cap a
-     * connection is closed unread, so a caller opening sockets costs it a descriptor for the length
-     * of a handshake rather than a worker for the length of a turn.
-     */
-    /**
-     * A flood of connections must not be able to spend the process.
-     *
      * Two properties, asserted separately because they are separate guarantees. The flood is
      * *refused* - the connections past the pool's ceiling are closed by the server without ever
      * being served, which is what stops one client turning into an unbounded number of threads and
