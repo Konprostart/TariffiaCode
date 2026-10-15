@@ -9,6 +9,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
@@ -103,19 +104,22 @@ class RouterServer(
      * no router.
      */
     fun start(): Int {
+        // Bind before anything is published, so a bind failure leaves no socket behind and no
+        // half-started server. On Android (and under a killed-and-restarted service) the loopback
+        // port chosen previously can still be in TIME_WAIT; binding with SO_REUSEADDR and a
+        // short retry avoids a START_STICKY cycle that reports "running" over nothing - which is
+        // the ECONNREFUSED the user sees when the listener never became live.
+        val server = bindLoopback()
+        val executor =
+            Executors.newCachedThreadPool(
+                ThreadFactory { runnable ->
+                    Thread(runnable, "router-conn-${connectionIds.incrementAndGet()}").apply {
+                        isDaemon = true
+                    }
+                },
+            )
         synchronized(lifecycleLock) {
             check(!running.get()) { "Router is already running" }
-            // Nothing has been published and `running` is still false, so a bind failure needs no
-            // undo - it propagates to the caller with the object exactly as it was.
-            val server = ServerSocket(0, BACKLOG, InetAddress.getByName(LOOPBACK))
-            val executor =
-                Executors.newCachedThreadPool(
-                    ThreadFactory { runnable ->
-                        Thread(runnable, "router-conn-${connectionIds.incrementAndGet()}").apply {
-                            isDaemon = true
-                        }
-                    },
-                )
             // Everything a concurrent stop() needs is published before `running` flips. Publishing
             // the flag first is what let a stop() complete against a half-built server and strand
             // the listener.
@@ -123,12 +127,38 @@ class RouterServer(
             port = server.localPort
             acceptExecutor = executor
             running.set(true)
-            Thread({ accept(server, executor) }, "router-accept").apply {
-                isDaemon = true
-                start()
-            }
-            return port
         }
+        // Launched after publication so the accept thread sees a consistent server, but outside
+        // the lock so the thread is never (re)scheduled while it is held.
+        Thread({ accept(server, executor) }, "router-accept").apply {
+            isDaemon = true
+        }.start()
+        return server.localPort
+    }
+
+    /** Bind a loopback listener, tolerating a port that is still in TIME_WAIT. */
+    private fun bindLoopback(): ServerSocket {
+        val address = InetAddress.getByName(LOOPBACK)
+        var lastFailure: java.io.IOException? = null
+        repeat(BIND_ATTEMPTS) { attempt ->
+            val candidate = ServerSocket()
+            candidate.reuseAddress = true
+            try {
+                candidate.bind(InetSocketAddress(address, 0), BACKLOG)
+                return candidate
+            } catch (bindFailure: java.io.IOException) {
+                lastFailure = bindFailure
+                runCatching { candidate.close() }
+                if (attempt < BIND_ATTEMPTS - 1) {
+                    try {
+                        Thread.sleep(BIND_RETRY_MILLIS)
+                    } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                    }
+                }
+            }
+        }
+        throw lastFailure ?: java.io.IOException("could not bind the router listener")
     }
 
     /**
@@ -552,6 +582,12 @@ class RouterServer(
 
         /** Pause between accept retries. Short: these failures are descriptor exhaustion, not backoff-worthy. */
         const val ACCEPT_RETRY_MILLIS = 200L
+
+        /** How many times a loopback bind is retried when the port is still in TIME_WAIT. */
+        const val BIND_ATTEMPTS = 5
+
+        /** Pause between bind retries. Short: loopback bind recovery is quick. */
+        const val BIND_RETRY_MILLIS = 50L
 
         val CHARSET = Charsets.UTF_8
         val DONE_EVENT = """{"type":"message_stop"}"""
