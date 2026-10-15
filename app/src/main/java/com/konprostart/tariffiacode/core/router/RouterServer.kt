@@ -493,11 +493,17 @@ class RouterServer(
                 // Everything else is measured so the connection can be closed cleanly instead of hanging.
                 if (chunked) {
                     append("Transfer-Encoding: chunked\r\n")
-                } else if (contentLength != null) {
-                    append("Content-Length: $contentLength\r\n")
+                    append("Connection: keep-alive\r\n")
+                    append("Cache-Control: no-cache\r\n")
+                    append("X-Accel-Buffering: no\r\n")
+                } else {
+                    if (contentLength != null) {
+                        append("Content-Length: $contentLength\r\n")
+                    }
+                    append("Cache-Control: no-store\r\n")
+                    append("Connection: close\r\n")
                 }
-                append("Cache-Control: no-store\r\n")
-                append("Connection: close\r\n\r\n")
+                append("\r\n")
             }
         out.write(headers.toByteArray(CHARSET))
         out.flush()
