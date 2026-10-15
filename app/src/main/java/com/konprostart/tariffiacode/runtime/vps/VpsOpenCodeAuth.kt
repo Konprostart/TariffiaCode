@@ -1,5 +1,6 @@
 package com.konprostart.tariffiacode.runtime.vps
 
+import com.konprostart.tariffiacode.core.ssh.SshPortForward
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
