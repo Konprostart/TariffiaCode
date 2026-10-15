@@ -136,9 +136,12 @@ class RouterService : Service() {
         val token = newSessionToken()
         val running = RouterServer(LoggingGateway(engine) { message -> Log.i(TAG, message) }, token)
         val port = running.start()
-
-        writeEndpoint(port, token)
+        // Published before the endpoint file is written. That write can fail - and now that a
+        // failure no longer kills the process, start()'s catch is the only thing that can stop this
+        // server. Assigning the field afterwards would leave a bound listener and its accept thread
+        // alive in a process that decided it failed and stopped itself.
         server = running
+        writeEndpoint(port, token)
         Log.i(TAG, "router listening on http://127.0.0.1:$port (endpoint written to ${endpointFile(this)})")
         // The notification is the only always-visible surface of a process holding the user's keys,
         // and it said "starting" for the whole life of the service.
@@ -247,21 +250,11 @@ class RouterService : Service() {
          * closed port and costs one loopback round trip when the router is healthy. Callers already
          * run this off the main thread, and the screen polls it, so the timeout is short.
          */
-        fun status(context: Context): RouterStatus {
-            val file = endpointFile(context)
-            if (!file.isFile) return RouterStatus.NotRunning
-            val values =
-                runCatching {
-                    file.readLines().mapNotNull { line ->
-                        val value = line.substringAfter('=', "")
-                        if (value.isBlank()) null else line.substringBefore('=') to value
-                    }.toMap()
-                }.getOrDefault(emptyMap())
-            val url = values["ANTHROPIC_BASE_URL"] ?: return RouterStatus.NotRunning
-            val port = url.substringAfterLast(':').trim().toIntOrNull() ?: return RouterStatus.NotRunning
-            if (port !in 1..65535) return RouterStatus.NotRunning
-            if (!isAccepting(port)) return RouterStatus.NotRunning
-            return RouterStatus.Running(port)
+        fun status(context: Context): RouterStatus = decideFor(endpointFile(context))
+
+        private fun decideFor(file: File): RouterStatus {
+            val port = AgentRouterEndpoint.portOf(file) ?: return RouterStatus.NotRunning
+            return AgentRouterEndpoint.decideStatus(port, isAccepting(port))
         }
 
         /** Whether something is accepting connections on [port]. */
@@ -276,17 +269,23 @@ class RouterService : Service() {
             }
 
         /**
-         * Removes an endpoint file whose server is gone.
+         * Removes an endpoint file whose server is gone - and only that one.
          *
-         * For the stop path specifically. A service killed without onDestroy leaves the file behind
-         * and nothing in its own process is left to delete it, so once [status] has established there
-         * is no server on that port, the file is a claim about nothing and the UI caller removes it.
-         * Without this the stop button polls, finds a stale file, and snaps back to "running".
+         * For the stop path. A service killed without onDestroy leaves the file behind and nothing in
+         * its own process is left to delete it, which is what made the switch snap back to "running"
+         * after the user had turned the router off.
+         *
+         * The liveness check is not an optimisation, it is the condition. [stopService] is
+         * asynchronous: the service may still be finishing its shutdown, and START_STICKY may already
+         * have brought up a replacement on a different port. Deleting unconditionally would delete
+         * *that* file - taking the address away from an agent that can still reach a live server, and
+         * leaving a foreground process holding the user's provider keys with nothing pointing at it.
+         * So the file is only removed when nothing is accepting on the port it names.
          */
         fun discardStaleEndpoint(context: Context) {
             runCatching {
                 val file = endpointFile(context)
-                if (file.isFile) file.delete()
+                if (file.isFile && decideFor(file) is RouterStatus.NotRunning) file.delete()
             }
         }
 

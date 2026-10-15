@@ -149,15 +149,19 @@ class RouterServer(
                 socket = null
                 acceptExecutor = null
                 port = 0
+                // Under the lock, against the add in accept(): closing is what unblocks a worker
+                // parked on a read or a write, and it cannot block, so it costs nothing here.
+                clients.forEach { client -> runCatching { client.close() } }
+                clients.clear()
             }
         }
         if (listener == null && executor == null) return
         runCatching { listener?.close() }
-        // Unblocks every worker currently in a read or a write.
-        clients.forEach { client -> runCatching { client.close() } }
-        clients.clear()
         executor?.let { pool ->
             pool.shutdownNow()
+            // Every connection is already closed, so this only waits for the workers to notice.
+            // It is short deliberately: stop() is reached from the service's onDestroy on the main
+            // thread, and blocking that thread is how stopping a service turns into an ANR.
             pool.awaitTermination(SHUTDOWN_GRACE_MILLIS, TimeUnit.MILLISECONDS)
         }
     }
@@ -181,13 +185,26 @@ class RouterServer(
                     consecutiveFailures++
                     if (consecutiveFailures > MAX_ACCEPT_FAILURES) {
                         gateway.onServerFailure(closed)
+                        // The listener is gone even though its socket still completes handshakes out
+                        // of the backlog, so nothing outside this object can notice: a liveness probe
+                        // would connect successfully and report the router as serving. Tearing down
+                        // here is the only way that stops being true, and it has to be the same
+                        // teardown stop() does - leaving `running` true and the port published is
+                        // exactly the state the status check cannot see through.
+                        stop()
                         return
                     }
                     if (!sleepBeforeRetry()) return
                     continue
                 }
             consecutiveFailures = 0
-            clients.add(client)
+            // Tracked under the same lock stop() takes, so a connection cannot be added to a set
+            // that has already been cleared and then served with nothing left to close it on.
+            val tracked = synchronized(lifecycleLock) { running.get() && clients.add(client) }
+            if (!tracked) {
+                runCatching { client.close() }
+                continue
+            }
             val handedOff =
                 runCatching {
                     executor.execute {
@@ -521,8 +538,14 @@ class RouterServer(
         const val MAX_BODY_BYTES = 8 * 1024 * 1024
         const val MAX_HEADER_LINE_BYTES = 8 * 1024
 
-        /** How long a worker gets to notice a closed socket before [stop] stops waiting for it. */
-        const val SHUTDOWN_GRACE_MILLIS = 1_000L
+        /**
+         * How long [stop] waits for workers to notice their closed sockets.
+         *
+         * Stopping is called from the service's `onDestroy`, so it runs on the main thread. This is a
+         * ceiling on the wait, not the wait itself: connections are closed first, so this normally
+         * returns immediately.
+         */
+        const val SHUTDOWN_GRACE_MILLIS = 250L
 
         /** Transient accept failures tolerated before the listener is declared dead. */
         const val MAX_ACCEPT_FAILURES = 5

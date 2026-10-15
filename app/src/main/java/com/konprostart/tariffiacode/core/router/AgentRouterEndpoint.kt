@@ -43,4 +43,41 @@ object AgentRouterEndpoint {
 
     /** Where [RouterService] writes it. Named here so the two cannot drift apart. */
     const val ENDPOINT_FILE_NAME = "router-endpoint.txt"
+
+    /**
+     * The loopback port [file] names, or null when it names nothing usable.
+     *
+     * Null covers every way the file can be unhelpful: absent, empty, not a file at all, a line
+     * without a value, no base URL, a base URL with no port, a port that is not a number, or a port
+     * outside the range a socket can bind. Anything that survives this is a port somebody once bound.
+     *
+     * On its own this is not evidence that the router is serving - the file outlives the process that
+     * wrote it - which is why [decideStatus] takes the second answer separately.
+     */
+    fun portOf(file: File): Int? {
+        if (!file.isFile) return null
+        val values =
+            runCatching {
+                file.readLines().mapNotNull { line ->
+                    val value = line.substringAfter('=', "")
+                    if (value.isBlank()) null else line.substringBefore('=') to value
+                }.toMap()
+            }.getOrDefault(emptyMap())
+        val url = values["ANTHROPIC_BASE_URL"] ?: return null
+        val port = url.substringAfterLast(':').trim().toIntOrNull() ?: return null
+        return port.takeIf { it in 1..65535 }
+    }
+
+    /**
+     * What the screen should show, given a parsed port and whether anything is really listening.
+     *
+     * Split out from [RouterService] because this is the whole honesty question and it needs to be
+     * testable without an Android context: the file says which port to check, and the probe says
+     * whether a server is on it. Reporting [RouterStatus.Running] for a port nothing accepts is the
+     * failure that lets a stopped router look alive, so the two inputs are never collapsed into one.
+     */
+    fun decideStatus(
+        port: Int?,
+        accepting: Boolean,
+    ): RouterStatus = if (port != null && accepting) RouterStatus.Running(port) else RouterStatus.NotRunning
 }

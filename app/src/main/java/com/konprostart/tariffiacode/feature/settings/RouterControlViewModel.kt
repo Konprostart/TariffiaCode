@@ -50,23 +50,26 @@ class RouterControlViewModel(
     fun start() {
         _state.update { it.copy(pending = true, failure = null) }
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { RouterService.start(context) }
-            // Give the service time to write its endpoint before reporting on it.
-            repeat(30) {
-                val status = withContext(Dispatchers.IO) { RouterService.status(context) }
-                if (status is RouterStatus.Running) {
-                    _state.update { it.copy(status = status, pending = false, failure = null) }
-                    return@launch
+            try {
+                withContext(Dispatchers.IO) { RouterService.start(context) }
+                // Give the service time to write its endpoint before reporting on it.
+                repeat(30) {
+                    val status = withContext(Dispatchers.IO) { RouterService.status(context) }
+                    if (status is RouterStatus.Running) {
+                        _state.update { it.copy(status = status, failure = null) }
+                        return@launch
+                    }
+                    delay(300)
                 }
-                delay(300)
-            }
-            val failure = withContext(Dispatchers.IO) { RouterService.lastFailure(context) }
-            _state.update {
-                it.copy(
-                    status = withContext(Dispatchers.IO) { RouterService.status(context) },
-                    failure = failure,
-                    pending = false,
-                )
+                val failure = withContext(Dispatchers.IO) { RouterService.lastFailure(context) }
+                val status = withContext(Dispatchers.IO) { RouterService.status(context) }
+                _state.update { it.copy(status = status, failure = failure) }
+            } finally {
+                // Nothing else clears this. refresh() deliberately does not, and the screen polls it
+                // every two seconds, so a throw here would leave the switch disabled for the life of
+                // the ViewModel - which is what startForegroundService from the background on API 31+
+                // can still do.
+                _state.update { it.copy(pending = false) }
             }
         }
     }
@@ -74,27 +77,33 @@ class RouterControlViewModel(
     fun stop() {
         _state.update { it.copy(pending = true) }
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                context.stopService(Intent(context, RouterService::class.java))
-            }
-            repeat(20) {
-                val status = withContext(Dispatchers.IO) { RouterService.status(context) }
-                if (status is RouterStatus.NotRunning) {
-                    _state.update { it.copy(status = status, pending = false) }
-                    return@launch
+            try {
+                withContext(Dispatchers.IO) {
+                    context.stopService(Intent(context, RouterService::class.java))
                 }
-                delay(200)
+                repeat(20) {
+                    val status = withContext(Dispatchers.IO) { RouterService.status(context) }
+                    if (status is RouterStatus.NotRunning) {
+                        _state.update { it.copy(status = status) }
+                        return@launch
+                    }
+                    delay(200)
+                }
+                // The poll ran out with the router still reported as running. That happens when the
+                // service process was killed rather than stopped - the normal way Android reclaims a
+                // backgrounded process - so nothing in it ever ran onDestroy and nothing there is
+                // left to remove the endpoint file it wrote.
+                //
+                // The deletion is conditional on that file's port having nothing listening on it,
+                // because stopService is asynchronous: a replacement server may already be up on a
+                // different port, and removing *its* file would take the router away from an agent
+                // that can still reach it.
+                withContext(Dispatchers.IO) { RouterService.discardStaleEndpoint(context) }
+                val status = withContext(Dispatchers.IO) { RouterService.status(context) }
+                _state.update { it.copy(status = status) }
+            } finally {
+                _state.update { it.copy(pending = false) }
             }
-            // The poll ran out with the router still reported as running. That happens when the
-            // service process was killed rather than stopped - the normal way Android reclaims a
-            // backgrounded process - so nothing in it ever ran onDestroy and nothing there is left to
-            // remove the endpoint file it wrote. status() has just established there is no server on
-            // that port, which is what makes the file safe to remove: it is a claim about nothing,
-            // and leaving it is what made the switch snap back to "running" after the user had
-            // turned the router off.
-            withContext(Dispatchers.IO) { RouterService.discardStaleEndpoint(context) }
-            val status = withContext(Dispatchers.IO) { RouterService.status(context) }
-            _state.update { it.copy(status = status, pending = false) }
         }
     }
 }
