@@ -81,7 +81,10 @@ class RouterControlViewModel(
                 withContext(Dispatchers.IO) {
                     context.stopService(Intent(context, RouterService::class.java))
                 }
-                repeat(20) {
+                // A while loop rather than `repeat`: breaking out of an inline lambda across a
+                // suspension point is not allowed, and the status read below is a suspension point.
+                var polls = STOP_STATUS_POLLS
+                while (polls-- > 0) {
                     val status = withContext(Dispatchers.IO) { RouterService.status(context) }
                     if (status is RouterStatus.NotRunning) break
                     delay(200)
@@ -119,3 +122,6 @@ data class RouterControlUiState(
     val isRunning: Boolean get() = status is RouterStatus.Running
     val port: Int? get() = (status as? RouterStatus.Running)?.port
 }
+
+/** How long stop() waits for the service to go quiet before it cleans up after it. */
+private const val STOP_STATUS_POLLS = 20
