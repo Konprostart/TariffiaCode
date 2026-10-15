@@ -26,6 +26,7 @@ class RouterStreamFlushTest {
         val glued = first + second
 
         val body = post(server, glued)
+        println("RAW-SPLIT-DEBUG>>>" + body.replace("\r", "<CR>").replace("\n", "<LF>") + "<<<")
 
         assertEquals(
             "two objects must not share one data line: $body",
