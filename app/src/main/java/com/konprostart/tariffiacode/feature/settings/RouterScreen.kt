@@ -113,6 +113,27 @@ fun RouterScreen(
                                 onCheckedChange = { on -> if (on) control.start() else control.stop() },
                             )
                         }
+                        Spacer(Modifier.height(16.dp))
+                        // A full-width button, below the status rather than beside it.
+                        //
+                        // The switch alone was a poor way to start a server on a phone: small target,
+                        // and it shares a row with a status line that can run to several lines. If the
+                        // two ever contend for that row, the one that disappears is the control, not
+                        // the text. The button cannot lose that argument - it has the whole card.
+                        Button(
+                            onClick = { if (routerState.isRunning) control.stop() else control.start() },
+                            enabled = !routerState.pending,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                when {
+                                    routerState.pending -> "Working..."
+                                    routerState.isRunning -> "Stop router"
+                                    else -> "Start router"
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                        }
                     }
                 }
             }
