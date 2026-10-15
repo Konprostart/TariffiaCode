@@ -12,7 +12,6 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -108,14 +107,7 @@ class RouterServer(
             // Nothing has been published and `running` is still false, so a bind failure needs no
             // undo - it propagates to the caller with the object exactly as it was.
             val server = ServerSocket(0, BACKLOG, InetAddress.getByName(LOOPBACK))
-            val executor =
-                Executors.newCachedThreadPool(
-                    ThreadFactory { runnable ->
-                        Thread(runnable, "router-conn-${connectionIds.incrementAndGet()}").apply {
-                            isDaemon = true
-                        }
-                    },
-                )
+            val executor = workerPool()
             // Everything a concurrent stop() needs is published before `running` flips. Publishing
             // the flag first is what let a stop() complete against a half-built server and strand
             // the listener.
@@ -200,7 +192,13 @@ class RouterServer(
             consecutiveFailures = 0
             // Tracked under the same lock stop() takes, so a connection cannot be added to a set
             // that has already been cleared and then served with nothing left to close it on.
-            val tracked = synchronized(lifecycleLock) { running.get() && clients.add(client) }
+            val tracked =
+                synchronized(lifecycleLock) {
+                    // The cap is on connections being served, not sockets being accepted: one over
+                    // the cap is closed without ever being read, so it costs a descriptor for the
+                    // length of a handshake rather than a worker for the length of a turn.
+                    running.get() && clients.size < MAX_CONCURRENT_CLIENTS && clients.add(client)
+                }
             if (!tracked) {
                 runCatching { client.close() }
                 continue
@@ -487,6 +485,38 @@ class RouterServer(
     }
 
     /**
+     * The pool connections are served on, and why it is not a cached pool.
+     *
+     * A cached pool grows a thread per connection with nothing above it, so the bound on what a
+     * caller can do to this process was set by the caller's own politeness. Each worker holds a
+     * socket and, once the request is read, up to [MAX_BODY_BYTES] of buffer - so a client that
+     * opens connections and sends a large body to each of them is a memory claim, not a request.
+     *
+     * Bounded, with a queue, because the accept loop is not allowed to block: a connection that
+     * cannot be handed to a worker is closed in [accept] the same way any other hand-off failure is,
+     * which costs that one caller nothing and leaves every established turn untouched.
+     */
+    private fun workerPool(): java.util.concurrent.ExecutorService =
+        java.util.concurrent.ThreadPoolExecutor(
+            WORKER_CORE_THREADS,
+            WORKER_MAX_THREADS,
+            WORKER_IDLE_SECONDS,
+            TimeUnit.SECONDS,
+            // A hand-off queue, not a waiting queue. With a deep queue the pool never grows past
+            // its core threads - the connections sit in the queue instead - so a handful of idle
+            // connections is enough to park every real request behind them until the read timeout
+            // expires. Handing off means "a thread now or not at all", which is also the truth here:
+            // work that is not being done right now should be refused while it is still cheap to
+            // refuse, not queued behind work that will never finish.
+            java.util.concurrent.SynchronousQueue(),
+            ThreadFactory { runnable ->
+                Thread(runnable, "router-conn-${connectionIds.incrementAndGet()}").apply {
+                    isDaemon = true
+                }
+            },
+        )
+
+    /**
      * A comment line on the stream while the provider is still thinking.
      *
      * The gap this covers is the whole reasoning phase: the router sends the status line, then waits
@@ -682,7 +712,38 @@ class RouterServer(
     private companion object {
         const val LOOPBACK = "127.0.0.1"
         const val BACKLOG = 16
-        const val READ_TIMEOUT_MILLIS = 300_000
+
+        /**
+         * The read timeout on an accepted socket.
+         *
+         * Back to thirty seconds, and deliberately not the several minutes an answer can take.
+         * This bounds the *request*, not the response: once the body is read the router only writes,
+         * and a streamed turn is never bounded by it. What it does bound is how long a connection
+         * that sends nothing keeps a worker alive - which is exactly what a large value here trades
+         * for, since a worker is a thread and a socket. The thinking phase is handled by the
+         * heartbeat, which is the mechanism for it, not by holding sockets open longer.
+         */
+        const val READ_TIMEOUT_MILLIS = 30_000
+
+        /** Workers started before any rejection is possible. */
+        const val WORKER_CORE_THREADS = 4
+
+        /** The ceiling on workers, whatever the caller does. */
+        const val WORKER_MAX_THREADS = 16
+
+        /** Idle seconds before an extra worker is returned. */
+        const val WORKER_IDLE_SECONDS = 30L
+
+        /**
+         * Connections served at once. Past this a new one is closed unread.
+         *
+         * Deliberately below [WORKER_MAX_THREADS]. A client that opens connections and says nothing
+         * occupies a worker for the whole read timeout, so a cap at or above the pool ceiling lets
+         * such a client fill the pool and leave a legitimate request queued behind it until the
+         * timeout expires - a working router refusing real work under a flood of nothing. Eight is
+         * several times what a serial agent needs and leaves the pool headroom by construction.
+         */
+        const val MAX_CONCURRENT_CLIENTS = 8
         const val BEARER = "bearer "
         const val MESSAGES_PATH = "/v1/messages"
         const val COUNT_TOKENS_PATH = "/v1/messages/count_tokens"

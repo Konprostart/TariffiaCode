@@ -50,6 +50,13 @@ data class ProviderEndpoint(
 class RouterEngine(
     private val keys: () -> Map<String, String>,
     private val config: () -> RouterConfig,
+    /**
+     * Base URLs for providers this build has never heard of, from [RouterEndpoints].
+     *
+     * Resolved per request rather than held, so a provider the user adds takes effect on the next
+     * turn without restarting the service - the same rule the key store already follows.
+     */
+    private val customEndpoints: () -> Map<String, String> = { emptyMap() },
     private val breakers: CircuitBreaker = CircuitBreaker(),
     private val endpointFor: (String) -> ProviderEndpoint? = { provider -> defaultEndpoint(provider, keys()[provider]) },
     private val client: OkHttpClient = defaultClient(),
@@ -103,7 +110,12 @@ class RouterEngine(
         }
 
         for (model in usableChain(request.tier)) {
-            val adapter = ProviderAdapters.forProvider(model.provider, keys()) ?: continue
+            // Resolved with the user's own endpoints, and identically in every place: an entry the
+            // chain walk accepted but this call cannot resolve is a turn that fails as "no adapter"
+            // on the provider the user just configured.
+            val adapter =
+                ProviderAdapters.forProvider(model.provider, keys(), customProviders = customEndpoints().keys)
+                    ?: continue
             val translated = runCatching { adapter.buildRequest(request, model) }.getOrNull() ?: continue
             try {
                 streamOnce(translated, model, adapter, relay)
@@ -123,7 +135,9 @@ class RouterEngine(
         model: RouterModel,
         rawBody: String,
     ): String {
-        val adapter = ProviderAdapters.forProvider(model.provider, keys()) ?: throw IOException("No adapter")
+        val adapter =
+            ProviderAdapters.forProvider(model.provider, keys(), customProviders = customEndpoints().keys)
+                ?: throw IOException("No adapter")
         val translated = adapter.buildRequest(request, model, rawBody)
         client.newCall(call(translated, model, adapter)).execute().use { response ->
             if (!response.isSuccessful) throw ProviderRefused(response.code)
@@ -195,7 +209,7 @@ class RouterEngine(
         model: RouterModel,
         adapter: ProviderAdapter,
     ): Request {
-        val endpoint = endpointFor(model.provider) ?: throw IOException("No endpoint for ${model.provider}")
+        val endpoint = resolveEndpoint(model.provider) ?: throw IOException("No endpoint for ${model.provider}")
         return Request.Builder()
             .url("${endpoint.baseUrl}${translated.path}")
             .post(translated.body.toRequestBody(JSON_MEDIA_TYPE))
@@ -224,8 +238,8 @@ class RouterEngine(
         val available = keys()
         return config().chainFor(tier).filter { model ->
             hasCredential(model.provider, available) &&
-                ProviderAdapters.forProvider(model.provider, available) != null &&
-                endpointFor(model.provider) != null &&
+                ProviderAdapters.forProvider(model.provider, available, customProviders = customEndpoints().keys) != null &&
+                resolveEndpoint(model.provider) != null &&
                 breakers.allows(model.provider)
         }
     }
@@ -242,6 +256,23 @@ class RouterEngine(
         provider: String,
         available: Map<String, String>,
     ): Boolean = RouterProviderKind.of(provider) == RouterProviderKind.LOCAL || available.containsKey(provider)
+
+    /**
+     * Where [provider] is reached, or null when it cannot be.
+     *
+     * A saved custom URL wins over the built-in table, because that is the reason it can be saved:
+     * the user pointed this name at that address. The API key comes from the key store under the
+     * same name, so a custom provider is entered in one place and authenticated in the other, which
+     * is what "endpoint and key" means everywhere else in this app.
+     *
+     * Reached by both the chain walk and the request builder deliberately. They were separate
+     * lookups once, which is the shape where a provider can be deemed usable and then found
+     * unaddressable on the turn that uses it.
+     */
+    private fun resolveEndpoint(provider: String): ProviderEndpoint? {
+        customEndpoints()[provider.trim().lowercase()]?.let { return ProviderEndpoint(it) }
+        return endpointFor(provider)
+    }
 
     private fun decode(rawRequest: String): AnthropicRequest? =
         runCatching { json.decodeFromString<AnthropicRequest>(rawRequest) }.getOrNull()
