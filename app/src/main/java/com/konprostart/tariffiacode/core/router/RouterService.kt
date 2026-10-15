@@ -39,8 +39,13 @@ class RouterService : Service() {
         // this app already guard this call the same way.
         runCatching { startForeground(NOTIFICATION_ID, notification("starting")) }
             .onSuccess { runningInForeground = true }
-            .onFailure {
-                Log.e(TAG, "foreground promotion refused; refusing to serve", it)
+            .onFailure { failure ->
+                val reason = "foreground promotion refused: ${failure.message ?: failure.javaClass.simpleName}"
+                Log.e(TAG, reason, failure)
+                // Surface why under the switch instead of a silent "stopped". The user otherwise
+                // sees ECONNREFUSED with no way to tell whether the router never started (binding,
+                // table, disk) or whether Android refused to keep it alive in the first place.
+                runCatching { recordFailure(reason) }
                 stopSelf()
             }
     }
@@ -57,7 +62,10 @@ class RouterService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
-        if (!runningInForeground) return START_NOT_STICKY
+        if (!runningInForeground) {
+            runCatching { recordFailure("foreground promotion was refused at start; refusing to serve") }
+            return START_NOT_STICKY
+        }
         if (server != null) return START_STICKY
         start()
         return START_STICKY
