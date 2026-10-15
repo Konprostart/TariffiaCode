@@ -124,7 +124,11 @@ class VpsOpenCodeAuthTest {
 
         override val remotePort: Int = 4096
 
-        override fun close() = Unit
+        override var isOpen: Boolean = true
+
+        override fun close() {
+            isOpen = false
+        }
     }
 
     private object ServerSocketHolder {

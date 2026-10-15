@@ -67,6 +67,7 @@ class VpsRuntimeTargetRemoteProjectTest {
         username = "tester",
         authType = SshAuthType.PASSWORD,
         credentialRef = "ref",
+        opencodePassword = TestOpenCodeAuth.PASSWORD,
         trustedHostKeyFingerprint = trusted,
     )
 
@@ -185,11 +186,17 @@ class VpsRuntimeTargetRemoteProjectTest {
                 val requestLine = reader.readLine() ?: return
                 // Drain headers (and remember Content-Length so any request body is consumed too).
                 var contentLength = 0
+                // The connector refuses an endpoint that answers without a credential, so this fake
+                // has to behave like a server started with OPENCODE_SERVER_PASSWORD.
+                var authorization: String? = null
                 while (true) {
                     val line = reader.readLine() ?: break
                     if (line.isEmpty()) break
                     if (line.startsWith("Content-Length:", ignoreCase = true)) {
                         contentLength = line.substringAfter(':').trim().toIntOrNull() ?: 0
+                    }
+                    if (line.startsWith("Authorization:", ignoreCase = true)) {
+                        authorization = line.substringAfter(':').trim()
                     }
                 }
                 if (contentLength > 0) {
@@ -197,7 +204,9 @@ class VpsRuntimeTargetRemoteProjectTest {
                 }
                 val (status, body) =
                     when {
-                        requestLine.contains("/global/health") -> 200 to """{"healthy":true,"version":"9.9.9"}"""
+                        requestLine.contains("/global/health") && TestOpenCodeAuth.authorized(authorization) ->
+                            200 to """{"healthy":true,"version":"9.9.9"}"""
+                        requestLine.contains("/global/health") -> 401 to ""
                         requestLine.startsWith("POST") && requestLine.contains("/session") -> {
                             createdSessionDirectories += directoryOf(requestLine)
                             200 to """{"id":"s1","title":"","time":{"created":1}}"""

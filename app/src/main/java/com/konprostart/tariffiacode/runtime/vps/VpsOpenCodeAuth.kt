@@ -1,5 +1,7 @@
 package com.konprostart.tariffiacode.runtime.vps
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -46,6 +48,53 @@ internal object VpsOpenCodeAuth {
     }
 
     /**
+     * Runs the check off the main thread.
+     *
+     * The caller reaches this from `VpsRuntimeConnector.connect`, which is invoked from
+     * `viewModelScope` - that is, from the main dispatcher. `OkHttpClient.execute` is a blocking
+     * call, so without this hop a probe would freeze the UI for up to the sum of both timeouts, which
+     * is the kind of stall the rest of this layer is careful never to produce.
+     */
+    suspend fun verify(
+        forward: SshPortForward,
+        username: String,
+        password: String?,
+    ): Outcome {
+        if (password.isNullOrBlank()) return Outcome.Unauthenticated
+        return withContext(Dispatchers.IO) { verifyBlocking(forward, username, password) }
+    }
+
+    private fun verifyBlocking(
+        forward: SshPortForward,
+        username: String,
+        password: String,
+    ): Outcome {
+        // One client for both probes, released at the end. Building one per request would leave a
+        // Dispatcher thread pool and up to five idle connections behind on every connect attempt,
+        // and the recovery loop retries connects five times before giving up.
+        val client = probeClient()
+        try {
+            val open = statusOf(client, request(forward, username = null, password = null))
+            if (open in SUCCESS_CODES) return Outcome.Unauthenticated
+            if (open != UNAVAILABLE && open !in AUTH_CHALLENGE_CODES) {
+                return Outcome.Failed("OpenCode on the VPS answered the auth check with HTTP $open")
+            }
+            if (open == UNAVAILABLE) return Outcome.Failed(UNREACHABLE_MESSAGE)
+
+            val authenticated = statusOf(client, request(forward, username, password))
+            return when {
+                authenticated in SUCCESS_CODES -> Outcome.Authenticated
+                authenticated == UNAVAILABLE -> Outcome.Failed(UNREACHABLE_MESSAGE)
+                authenticated in AUTH_CHALLENGE_CODES ->
+                    Outcome.Failed("OpenCode on the VPS rejected the stored OPENCODE_SERVER_PASSWORD")
+                else -> Outcome.Failed("OpenCode on the VPS answered the authenticated check with HTTP $authenticated")
+            }
+        } finally {
+            release(client)
+        }
+    }
+
+    /**
      * A short-lived client for a single loopback probe.
      *
      * Deliberately not the app's shared OkHttp instance: this runs inside a connection attempt that
@@ -54,49 +103,16 @@ internal object VpsOpenCodeAuth {
      */
     private fun probeClient(): OkHttpClient =
         OkHttpClient.Builder()
-            .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .writeTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .writeTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .build()
 
-    fun verify(
-        forward: SshPortForward,
-        username: String,
-        password: String?,
-    ): Outcome {
-        if (password.isNullOrBlank()) return Outcome.Unauthenticated
-        val client = probeClient()
-        return try {
-            val open = statusOf(client, request(forward, username = null, password = null))
-            when {
-                open in SUCCESS_CODES -> Outcome.Unauthenticated
-                open !in SUCCESS_CODES && open !in AUTH_CHALLENGE_CODES ->
-                    Outcome.Failed("OpenCode on the VPS answered the auth check with HTTP $open")
-                else -> {
-                    val authenticated = statusOf(client, request(forward, username, password))
-                    when {
-                        authenticated in SUCCESS_CODES -> Outcome.Authenticated
-                        authenticated in AUTH_CHALLENGE_CODES ->
-                            Outcome.Failed(
-                                "OpenCode on the VPS rejected the stored OPENCODE_SERVER_PASSWORD",
-                            )
-                        else ->
-                            Outcome.Failed(
-                                "OpenCode on the VPS answered the authenticated check with HTTP $authenticated",
-                            )
-                    }
-                }
-            }
-        } catch (interrupted: InterruptedIOException) {
-            // Must come before IOException, which is its supertype, and the interrupt flag has to be
-            // restored or nothing upstream sees that the coroutine was cancelled.
-            Thread.currentThread().interrupt()
-            Outcome.Failed("The OpenCode auth check on the VPS was interrupted")
-        } catch (unreachable: IOException) {
-            // The forward is open; nothing is listening behind it. That is a configuration or
-            // reachability problem, and the caller already has a state for it.
-            Outcome.Failed("OpenCode on the VPS is unreachable through the tunnel")
-        }
+    private fun release(client: OkHttpClient) {
+        runCatching { client.dispatcher.executorService.shutdown() }
+        runCatching { client.connectionPool.evictAll() }
+        runCatching { client.cache?.close() }
     }
 
     private fun request(
@@ -106,24 +122,43 @@ internal object VpsOpenCodeAuth {
     ): Request {
         val builder =
             Request.Builder()
-                .url("http://${forward.localHost}:${forward.localPort}/global/health")
+                .url("http://${forward.localHost}:${forward.localPort}$HEALTH_PATH")
                 .header("Accept", "application/json")
         if (password != null) builder.header("Authorization", Credentials.basic(username, password))
         return builder.get().build()
     }
 
-    /** The status code, or [IO_ERROR] when the response could not be read at all. */
+    /**
+     * The status code, or [UNAVAILABLE] when the exchange never completed.
+     *
+     * Deliberately not `runCatching(...).getOrDefault(...)`: that swallows the difference between
+     * "the server said 401" and "the socket died", and it swallows `InterruptedIOException` along
+     * with it, which is how a cancelled coroutine ends up with a meaningless "HTTP -1" instead of
+     * being told the tunnel is unreachable.
+     */
     private fun statusOf(
         client: OkHttpClient,
         request: Request,
     ): Int =
-        runCatching { client.newCall(request).execute().use { response -> response.code } }
-            .getOrDefault(IO_ERROR)
+        try {
+            client.newCall(request).execute().use { it.code }
+        } catch (interrupted: InterruptedIOException) {
+            // Subtype of IOException, so it has to be caught first. The flag is restored so the
+            // coroutine machinery upstream still sees the cancellation.
+            if (interrupted !is java.net.SocketTimeoutException) Thread.currentThread().interrupt()
+            UNAVAILABLE
+        } catch (unreachable: IOException) {
+            UNAVAILABLE
+        }
 
+    private const val HEALTH_PATH = "/global/health"
     private val SUCCESS_CODES = 200..299
     private val AUTH_CHALLENGE_CODES = setOf(401, 403)
 
-    private const val IO_ERROR = -1
-    private const val CONNECT_TIMEOUT_SECONDS = 5L
-    private const val READ_TIMEOUT_SECONDS = 5L
+    /** Not a status code: the request never produced one. */
+    private const val UNAVAILABLE = -1
+
+    private const val UNREACHABLE_MESSAGE = "OpenCode on the VPS is unreachable through the tunnel"
+    private const val TIMEOUT_SECONDS = 5L
+    private const val CALL_TIMEOUT_SECONDS = 12L
 }

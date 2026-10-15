@@ -31,13 +31,25 @@ data class SshProfileForm(
     val password: String = "",
     val privateKeyPem: String = "",
     val passphrase: String = "",
+    val opencodePassword: String = "",
     val trustedHostKeyFingerprint: String? = null,
     val storedCredentialAuthType: SshAuthType? = null,
+    /** True when this profile already has a saved OpenCode password, so the field can stay blank. */
+    val storedOpencodePassword: Boolean = false,
     val errors: Map<String, String> = emptyMap(),
     val isNew: Boolean = true,
 ) {
     val portOrNull: Int? get() = port.trim().toIntOrNull()
     val credentialAlreadyStored: Boolean get() = storedCredentialAuthType == authType
+
+    /**
+     * Whether a usable OpenCode password is available for this profile.
+     *
+     * Either the user typed one, or one is already stored. Blank means neither, which is what makes
+     * the VPS connection fail its auth check - so the editor has to be able to tell that apart from
+     * "the user is editing and does not want to retype the secret".
+     */
+    fun hasOpencodePassword(): Boolean = opencodePassword.isNotBlank() || storedOpencodePassword
 
     /** True when the current auth type has neither newly entered nor matching stored credentials. */
     fun isCredentialMissing(): Boolean {
@@ -129,6 +141,9 @@ class SshSettingsViewModel(
                             credentials.credential(profile.credentialRef)
                                 ?.takeIf { it.isUsable }
                                 ?.let(::authTypeOf),
+                        // Reported, never pre-filled: the field stays blank so an existing secret is
+                        // not shown on screen, and a blank field means "keep what is stored".
+                        storedOpencodePassword = !profile.opencodePassword.isNullOrBlank(),
                         isNew = false,
                     ),
                 message = null,
@@ -162,11 +177,13 @@ class SshSettingsViewModel(
                 authType = form.authType,
                 credentialRef = existing?.credentialRef ?: SshProfile.newCredentialRef(),
                 trustedHostKeyFingerprint = form.trustedHostKeyFingerprint,
-                // Carried over rather than edited. The editor has no field for it yet, so rebuilding
-                // the profile from the form would silently drop the password the VPS tunnel is
-                // authenticated with - and the symptom would be a connection that stops working the
-                // first time the user renames the VPS.
-                opencodePassword = existing?.opencodePassword,
+                // A typed value replaces the stored one; a blank field keeps it. Losing it here
+                // would break every existing VPS connection the first time the user renames it,
+                // and the editor is the only place a stored secret can be replaced.
+                opencodePassword =
+                    form.opencodePassword
+                        .takeIf { it.isNotBlank() }
+                        ?: existing?.opencodePassword,
             )
         val errors = SshProfileValidator.validate(profile)
         if (errors.isNotEmpty()) {

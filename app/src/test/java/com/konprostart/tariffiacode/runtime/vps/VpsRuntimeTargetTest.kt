@@ -77,6 +77,7 @@ class VpsRuntimeTargetTest {
         username = "tester",
         authType = SshAuthType.PASSWORD,
         credentialRef = "ref",
+        opencodePassword = TestOpenCodeAuth.PASSWORD,
         trustedHostKeyFingerprint = trusted,
     )
 
@@ -206,24 +207,26 @@ class VpsRuntimeTargetTest {
             client.use { socket ->
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
                 val requestLine = reader.readLine() ?: return
-                // Drain headers up to the blank line.
-                while (true) {
-                    val line = reader.readLine() ?: break
-                    if (line.isEmpty()) break
-                }
+                // The connector refuses an endpoint that answers without a credential, so this fake
+                // has to behave like a server started with OPENCODE_SERVER_PASSWORD.
+                val authorization = TestOpenCodeAuth.drain(reader)
+                val isHealth = requestLine.contains("/global/health")
+                val allowed = isHealth && TestOpenCodeAuth.authorized(authorization)
                 val body = """{"healthy":true,"version":"$version"}""".toByteArray()
                 val response =
-                    if (requestLine.contains("/global/health")) {
+                    if (allowed) {
                         "HTTP/1.1 200 OK\r\n" +
                             "Content-Type: application/json\r\n" +
                             "Content-Length: ${body.size}\r\n" +
                             "Connection: close\r\n\r\n"
+                    } else if (isHealth) {
+                        "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
                     } else {
                         "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
                     }
                 socket.getOutputStream().apply {
                     write(response.toByteArray())
-                    if (requestLine.contains("/global/health")) write(body)
+                    if (allowed) write(body)
                     flush()
                 }
             }

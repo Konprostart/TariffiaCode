@@ -55,6 +55,7 @@ internal fun SshProfileEditorDialog(
                 SshIdentityFields(form = form, onChange = onChange)
                 SshAuthTypeSelector(form = form, onChange = onChange)
                 SshCredentialFields(form = form, onChange = onChange)
+                SshOpenCodePasswordField(form = form, onChange = onChange)
             }
         },
         confirmButton = { TextButton(onClick = onSave) { Text(stringResource(R.string.save)) } },
@@ -132,6 +133,43 @@ private fun SshAuthTypeSelector(
             label = { Text(stringResource(R.string.ssh_auth_private_key)) },
         )
     }
+}
+
+@Composable
+private fun SshOpenCodePasswordField(
+    form: SshProfileForm,
+    onChange: ((SshProfileForm) -> SshProfileForm) -> Unit,
+) {
+    // Not part of SshCredentialFields, because it is not an SSH credential: it is the password the
+    // VPS's own `opencode serve` was started with, which the app replays over the tunnel.
+    var visible by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value = form.opencodePassword,
+        onValueChange = { value -> onChange { it.copy(opencodePassword = value) } },
+        label = { Text(stringResource(R.string.ssh_opencode_password)) },
+        leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
+        singleLine = true,
+        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+        trailingIcon = {
+            IconButton(onClick = { visible = !visible }) {
+                Icon(
+                    imageVector = if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = if (visible) R.string.ssh_hide_password else R.string.ssh_show_password,
+                )
+            }
+        },
+        supportingText = {
+            Text(
+                if (form.storedOpencodePassword && form.opencodePassword.isBlank()) {
+                    stringResource(R.string.ssh_opencode_password_kept)
+                } else {
+                    stringResource(R.string.ssh_opencode_password_help)
+                },
+            )
+        },
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
