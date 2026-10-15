@@ -455,7 +455,10 @@ class RouterServer(
     private fun splitTopLevelObjects(payload: String): List<String> {
         val trimmed = payload.trim()
         if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return emptyList()
-        if (eventNameOf(trimmed) != null) return emptyList()
+        // Deliberately not "does this parse as one object". It does: the lenient parser reads the
+        // first object and silently ignores whatever follows it, which is precisely how two glued
+        // events used to get a name from the first and a payload containing both. The decision is
+        // made by counting, not by asking a parser that is happy to stop early.
         val objects = mutableListOf<String>()
         val current = StringBuilder()
         var depth = 0
