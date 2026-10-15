@@ -139,7 +139,7 @@ class GeminiAdapter(
             }
         return TranslatedRequest(
             // The model and the key travel in the path here, not in the body.
-            path = "/v1beta/models/${model.model}:generateContent?key=$apiKey",
+            path = "/v1beta/models/${model.model}:streamGenerateContent?alt=sse&key=$apiKey",
             body = body.toString(),
             stream = request.stream,
         )
