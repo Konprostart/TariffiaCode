@@ -2,6 +2,8 @@ package com.konprostart.tariffiacode.data.schedule
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
+import android.security.KeyStoreException
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.konprostart.tariffiacode.R
@@ -9,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import javax.crypto.AEADBadTagException
 
 /**
  * Persists schedules and their run history.
@@ -19,14 +22,7 @@ import kotlinx.coroutines.flow.update
 class ScheduleRepository(context: Context) {
     private val interruptedRunMessage = context.getString(R.string.schedule_run_interrupted)
     private val legacyPreferences = context.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE)
-    private val preferences: SharedPreferences =
-        EncryptedSharedPreferences.create(
-            context,
-            PREFS_NAME,
-            MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
+    private val preferences: SharedPreferences = createPreferences(context)
 
     private val mutableSchedules = MutableStateFlow(loadSchedules())
     val schedules: StateFlow<List<Schedule>> = mutableSchedules.asStateFlow()
@@ -213,5 +209,68 @@ class ScheduleRepository(context: Context) {
         const val KEY_SCHEDULES = "schedules"
         const val KEY_RUNS = "runs"
         const val MAX_RUNS = 200
+
+        /**
+         * Opens the encrypted store, recovering from an undecryptable keyset.
+         *
+         * A schedule prompt is user-authored code or configuration, so this file is encrypted. That
+         * makes it hostage to a Keystore key that the OS can invalidate on its own: after a system
+         * update, or a restore onto a new device, every read can throw
+         * [android.security.KeyStoreException] wrapped in [javax.crypto.AEADBadTagException] because
+         * the file no longer matches the key.
+         *
+         * This constructor runs from Application.onCreate. An exception here took the whole app down
+         * before any recovery code got a chance to run, so the app was bricked on every launch -
+         * while [SecureSettingsRepository], four lines of startup earlier, has handled exactly this
+         * since it was written. The ciphertext cannot be recovered, so the file is dropped and
+         * recreated empty, which is what a first run looks like.
+         *
+         * Only that failure triggers it. Wiping a user's schedules because of an unrelated transient
+         * error - an I/O hiccup, an OEM Keystore bug, a full disk - would be worse than the bug it
+         * fixes, so everything else is rethrown.
+         */
+        private fun createPreferences(context: Context): SharedPreferences {
+            val masterKey = MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
+            return try {
+                buildPreferences(context, masterKey)
+            } catch (undecryptable: Exception) {
+                if (!isUndecryptableKeyset(undecryptable)) throw undecryptable
+                context.deleteSharedPreferences(PREFS_NAME)
+                buildPreferences(context, masterKey)
+            }
+        }
+
+        private fun buildPreferences(
+            context: Context,
+            masterKey: MasterKey,
+        ): SharedPreferences =
+            EncryptedSharedPreferences.create(
+                context,
+                PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+            )
+
+        /**
+         * True only for "this file was encrypted under a key this device no longer has".
+         *
+         * Bounded on purpose: this runs from `Application.onCreate`, and an unbounded walk of a
+         * cause chain that loops would hang the launch instead of failing it. Sixteen links is far
+         * more than the wrapping AndroidX actually produces.
+         */
+        @Suppress("NewApi")
+        private fun isUndecryptableKeyset(failure: Throwable): Boolean =
+            generateSequence(failure) { it.cause }
+                .take(MAX_CAUSE_DEPTH)
+                .any {
+                    it is AEADBadTagException ||
+                        (
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                it is KeyStoreException
+                        )
+                }
+
+        private const val MAX_CAUSE_DEPTH = 16
     }
 }

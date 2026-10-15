@@ -82,6 +82,7 @@ class VpsNetworkRecoveryTest {
             username = "tester",
             authType = SshAuthType.PASSWORD,
             credentialRef = "ref",
+            opencodePassword = TestOpenCodeAuth.PASSWORD,
         )
 
     /** Connects and trusts the test server's key, which the first connect always requires. */
@@ -236,21 +237,25 @@ class VpsNetworkRecoveryTest {
             client.use { socket ->
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
                 val requestLine = reader.readLine() ?: return
-                while (true) {
-                    val line = reader.readLine() ?: break
-                    if (line.isEmpty()) break
-                }
+                // The connector refuses an endpoint that answers without a credential, so this fake
+                // has to behave like a server started with OPENCODE_SERVER_PASSWORD.
+                val authorization = TestOpenCodeAuth.drain(reader)
                 // Anything that is not the health route is a 404, so a probe aimed at the wrong
                 // endpoint shows up as a failure instead of a false positive.
                 val isHealth = requestLine.contains("/global/health")
                 if (isHealth) healthRequests.incrementAndGet()
                 val payload =
-                    if (isHealth) {
+                    if (isHealth && TestOpenCodeAuth.authorized(authorization)) {
                         """{"healthy":true,"version":"9.9.9"}"""
                     } else {
                         ""
                     }
-                val status = if (isHealth) "200 OK" else "404 Not Found"
+                val status =
+                    when {
+                        !isHealth -> "404 Not Found"
+                        TestOpenCodeAuth.authorized(authorization) -> "200 OK"
+                        else -> "401 Unauthorized"
+                    }
                 val response =
                     "HTTP/1.1 $status\r\nContent-Type: application/json\r\n" +
                         "Content-Length: ${payload.length}\r\nConnection: close\r\n\r\n"

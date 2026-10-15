@@ -9,6 +9,7 @@ import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.data.ssh.SshProfileHostKeyVerifier
 import com.konprostart.tariffiacode.data.ssh.resolveAuth
+import com.konprostart.tariffiacode.runtime.local.LocalRuntimeServerSecret
 
 /** Outcome of establishing the SSH forward that exposes a VPS's loopback OpenCode server. */
 sealed interface VpsConnectOutcome {
@@ -35,6 +36,16 @@ sealed interface VpsConnectOutcome {
     /** The profile has no usable stored credential, or it does not match the profile's auth type. */
     data object MissingCredential : VpsConnectOutcome
 
+    /**
+     * The tunnel is up and the OpenCode server answered, but it did not require the password.
+     *
+     * Distinct from [Failed] because the remedy is specific and actionable: the server has to be
+     * started with `OPENCODE_SERVER_PASSWORD` set. It is also the outcome that stops this endpoint
+     * from ever being handed out in the first place - see [VpsRuntimeConnector] for why an
+     * unauthenticated VPS OpenCode API is not something the app should route a user's agent through.
+     */
+    data object OpenCodeUnauthenticated : VpsConnectOutcome
+
     /** The forward could not be established. */
     data class Failed(
         val message: String,
@@ -50,6 +61,22 @@ sealed interface VpsConnectOutcome {
  * because that is where `opencode serve` listens. The resulting loopback [ConnectionProfile] is consumed by
  * the existing remote OpenCode backend unchanged. The SSH session behind it is shared with any other
  * tunnel to the same profile (the live preview), so this costs a handshake only when none is open.
+ *
+ * **The tunneled endpoint is authenticated before it is handed out.**
+ *
+ * Android apps share `127.0.0.1`, so the local end of this forward - a loopback port with an ephemeral
+ * number and no password - is reachable by every other app on the phone for as long as the tunnel is
+ * up. An unauthenticated OpenCode server behind it is not just the user's own quota: it is a remote
+ * shell, a remote filesystem and the user's provider keys, reachable by anything else installed. The
+ * project already knows this; it is why the local runtime is protected by
+ * [LocalRuntimeServerSecret]. The VPS path never got the same treatment and used to accept a server
+ * with no password at all.
+ *
+ * So the profile's `OPENCODE_SERVER_PASSWORD` is required, sent as HTTP Basic auth on every request,
+ * and - the part that actually closes the hole - checked: if the server answers a request that
+ * carries no credentials, the endpoint is refused rather than returned. Refusing is the only
+ * behaviour that helps, because forwarding to it would mean the app is knowingly handing an
+ * unauthenticated endpoint to the user's agent.
  */
 class VpsRuntimeConnector(
     private val pool: SshTunnelPool,
@@ -69,6 +96,7 @@ class VpsRuntimeConnector(
         val credential = credentials.credential(profile.credentialRef)
         if (credential == null || !credential.isUsable) return VpsConnectOutcome.MissingCredential
         val auth = profile.resolveAuth(credential) ?: return VpsConnectOutcome.MissingCredential
+        val serverPassword = profile.opencodePassword?.takeIf { it.isNotBlank() }
 
         val verifier = SshProfileHostKeyVerifier(profile)
         return when (
@@ -89,17 +117,29 @@ class VpsRuntimeConnector(
         ) {
             is SshPortForwardResult.Listening -> {
                 val forward = result.forward
-                VpsConnectOutcome.Connected(
-                    profile =
-                        ConnectionProfile(
-                            id = vpsProfileId(profile),
-                            name = profile.name,
-                            baseUrl = "http://${forward.localHost}:${forward.localPort}/",
-                            username = opencodeUsername,
-                            allowInsecureLan = true,
-                        ),
-                    forward = forward,
-                )
+                val target =
+                    ConnectionProfile(
+                        id = vpsProfileId(profile),
+                        name = profile.name,
+                        baseUrl = "http://${forward.localHost}:${forward.localPort}/",
+                        username = opencodeUsername,
+                        password = serverPassword,
+                        allowInsecureLan = true,
+                    )
+                when (val authCheck = VpsOpenCodeAuth.verify(forward, opencodeUsername, serverPassword)) {
+                    VpsOpenCodeAuth.Outcome.Authenticated ->
+                        VpsConnectOutcome.Connected(target, forward)
+                    // Both refusals close the forward. Returning it would leak the loopback listener
+                    // for a runtime that is not going to use it.
+                    VpsOpenCodeAuth.Outcome.Unauthenticated -> {
+                        forward.close()
+                        VpsConnectOutcome.OpenCodeUnauthenticated
+                    }
+                    is VpsOpenCodeAuth.Outcome.Failed -> {
+                        forward.close()
+                        VpsConnectOutcome.Failed(authCheck.message)
+                    }
+                }
             }
             is SshPortForwardResult.HostKeyUntrusted -> {
                 val presented = verifier.presentedKey
@@ -122,8 +162,8 @@ class VpsRuntimeConnector(
         /** Default VPS OpenCode port, matching the documented `opencode serve` port. */
         const val DEFAULT_REMOTE_PORT = 4096
 
-        /** OpenCode's default basic-auth username. No password is used on the VPS in this step. */
-        const val DEFAULT_OPENCODE_USERNAME = "opencode"
+        /** OpenCode's default basic-auth username. The password is the profile's own, required. */
+        const val DEFAULT_OPENCODE_USERNAME = LocalRuntimeServerSecret.USERNAME
 
         const val DEFAULT_CONNECT_TIMEOUT_MILLIS = 15_000L
 

@@ -323,6 +323,18 @@ class VpsRuntimeTarget(
                 mutablePendingHostKey.value = null
                 fail(RuntimeState.Failed("No stored SSH credential"), "No stored SSH credential")
             }
+            VpsConnectOutcome.OpenCodeUnauthenticated -> {
+                // The forward is already closed by the connector. Refusing here is deliberate: the
+                // alternative is handing the user's agent an endpoint that every other app on the
+                // phone can drive, so the VPS feature stays unavailable until the server is started
+                // with a password.
+                mutablePendingHostKey.value = null
+                fail(
+                    RuntimeState.Failed("OpenCode on the VPS is not authenticated"),
+                    "OpenCode on the VPS is not authenticated. Start it with OPENCODE_SERVER_PASSWORD " +
+                        "set, and save the same password on this connection.",
+                )
+            }
             is VpsConnectOutcome.Failed -> {
                 mutablePendingHostKey.value = null
                 fail(RuntimeState.Failed(outcome.message), outcome.message)

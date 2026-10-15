@@ -1210,6 +1210,12 @@
     <string name="ssh_password">Password</string>
     <string name="ssh_private_key_pem">Private key (PEM)</string>
     <string name="ssh_passphrase">Key passphrase (optional)</string>
+    <string name="ssh_opencode_password">Senha do servidor OpenCode (opcional)</string>
+    <string name="ssh_opencode_password_help">A OPENCODE_SERVER_PASSWORD com que o opencode serve foi iniciado na VPS. Sem ela, a conexão é recusada.</string>
+    <string name="ssh_opencode_password_kept">Já há uma senha salva. Deixe em branco para mantê-la.</string>
+    <string name="ssh_opencode_password_missing">Sem ela, uma conexão VPS é recusada.</string>
+    <string name="ssh_show_password">Mostrar senha</string>
+    <string name="ssh_hide_password">Ocultar senha</string>
     <string name="ssh_credential_stored">A credential is already stored. Leave blank to keep it.</string>
     <string name="ssh_credential_required">Enter a credential before saving.</string>
     <string name="ssh_field_required">This field is required.</string>

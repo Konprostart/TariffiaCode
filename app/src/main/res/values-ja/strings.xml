@@ -1226,6 +1226,12 @@
     <string name="ssh_password">Password</string>
     <string name="ssh_private_key_pem">Private key (PEM)</string>
     <string name="ssh_passphrase">Key passphrase (optional)</string>
+    <string name="ssh_opencode_password">OpenCode サーバーパスワード（任意）</string>
+    <string name="ssh_opencode_password_help">VPS 上で opencode serve を起動したときの OPENCODE_SERVER_PASSWORD です。未設定の場合接続は拒否されます。</string>
+    <string name="ssh_opencode_password_kept">パスワードは保存済みです。空欄のままで保持されます。</string>
+    <string name="ssh_opencode_password_missing">未設定の場合、VPS への接続は拒否されます。</string>
+    <string name="ssh_show_password">パスワードを表示</string>
+    <string name="ssh_hide_password">パスワードを隠す</string>
     <string name="ssh_credential_stored">A credential is already stored. Leave blank to keep it.</string>
     <string name="ssh_credential_required">Enter a credential before saving.</string>
     <string name="ssh_field_required">This field is required.</string>

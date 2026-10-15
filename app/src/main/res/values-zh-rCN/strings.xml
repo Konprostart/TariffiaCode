@@ -1206,6 +1206,12 @@
     <string name="ssh_password">Password</string>
     <string name="ssh_private_key_pem">Private key (PEM)</string>
     <string name="ssh_passphrase">Key passphrase (optional)</string>
+    <string name="ssh_opencode_password">OpenCode 服务器密码（可选）</string>
+    <string name="ssh_opencode_password_help">VPS 上启动 opencode serve 时使用的 OPENCODE_SERVER_PASSWORD。未设置时连接会被拒绝。</string>
+    <string name="ssh_opencode_password_kept">已保存密码。留空则保持不变。</string>
+    <string name="ssh_opencode_password_missing">未设置时会拒绝 VPS 连接。</string>
+    <string name="ssh_show_password">显示密码</string>
+    <string name="ssh_hide_password">隐藏密码</string>
     <string name="ssh_credential_stored">A credential is already stored. Leave blank to keep it.</string>
     <string name="ssh_credential_required">Enter a credential before saving.</string>
     <string name="ssh_field_required">This field is required.</string>

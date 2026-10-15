@@ -17,10 +17,19 @@ enum class SshAuthType {
 }
 
 /**
- * A saved SSH connection profile. Secrets are never part of this model: the profile only references a
- * credential by [credentialRef], and the password / private key / passphrase for that reference live
- * in the encrypted credential store ([SshCredentialStore]). This keeps non-secret metadata serializable
- * and log-safe while the secret stays in the Keystore-backed preference file.
+ * A saved SSH connection profile.
+ *
+ * The SSH secrets are never part of this model: the profile only references a credential by
+ * [credentialRef], and the password / private key / passphrase for that reference live in the
+ * encrypted credential store ([SshCredentialStore]). This keeps the model log-safe while the SSH
+ * secret stays in the Keystore-backed preference file.
+ *
+ * @param opencodePassword is the one exception, and it is here for a specific reason. It is not an
+ * SSH secret at all: it is the `OPENCODE_SERVER_PASSWORD` that the VPS's own `opencode serve` is
+ * started with, which the app has to replay over the tunnel. It has to travel with the profile
+ * because the tunnel it protects is created from the profile, and there is nowhere else in this
+ * model that a per-VPS secret belongs. It is stored in the same encrypted file as everything else
+ * here and is redacted from [toString].
  *
  * @param id stable identity, also used to derive the credential reference.
  * @param name user-facing label.
@@ -41,6 +50,7 @@ data class SshProfile(
     @SerialName("authType") val authType: SshAuthType = SshAuthType.PASSWORD,
     @SerialName("credentialRef") val credentialRef: String = newCredentialRef(),
     @SerialName("trustedHostKeyFingerprint") val trustedHostKeyFingerprint: String? = null,
+    @SerialName("opencodePassword") val opencodePassword: String? = null,
 ) {
     /** A copy of this profile with [fingerprint] recorded as trusted, replacing any previous one. */
     fun trusting(fingerprint: String): SshProfile = copy(trustedHostKeyFingerprint = fingerprint)
@@ -49,12 +59,15 @@ data class SshProfile(
     fun forgettingHostKey(): SshProfile = copy(trustedHostKeyFingerprint = null)
 
     /**
-     * Deliberately excludes nothing secret because the model holds no secret, but keeps the shape
-     * consistent with the other redacting models in the app.
+     * Redacts [opencodePassword]. Everything else here is non-secret by construction, so the shape
+     * matches the other redacting models in the app - an accidental log of a profile cannot leak it.
      */
-    override fun toString(): String =
-        "SshProfile(id=$id, name=$name, host=$host, port=$port, username=$username, " +
-            "authType=$authType, credentialRef=$credentialRef, trustedHostKeyFingerprint=$trustedHostKeyFingerprint)"
+    override fun toString(): String {
+        val shownPassword = if (opencodePassword.isNullOrBlank()) "<none>" else "<redacted>"
+        return "SshProfile(id=$id, name=$name, host=$host, port=$port, username=$username, " +
+            "authType=$authType, credentialRef=$credentialRef, " +
+            "trustedHostKeyFingerprint=$trustedHostKeyFingerprint, opencodePassword=$shownPassword)"
+    }
 
     companion object {
         const val DEFAULT_PORT = 22

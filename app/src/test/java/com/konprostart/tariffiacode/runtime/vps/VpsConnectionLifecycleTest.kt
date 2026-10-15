@@ -68,6 +68,7 @@ class VpsConnectionLifecycleTest {
         username = "tester",
         authType = SshAuthType.PASSWORD,
         credentialRef = "ref",
+        opencodePassword = TestOpenCodeAuth.PASSWORD,
         trustedHostKeyFingerprint = trusted,
     )
 
@@ -240,17 +241,25 @@ class VpsConnectionLifecycleTest {
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
                 val requestLine = reader.readLine() ?: return
                 var contentLength = 0
+                // The connector refuses an endpoint that answers without a credential, so this fake
+                // has to behave like a server started with OPENCODE_SERVER_PASSWORD.
+                var authorization: String? = null
                 while (true) {
                     val line = reader.readLine() ?: break
                     if (line.isEmpty()) break
                     if (line.startsWith("Content-Length:", ignoreCase = true)) {
                         contentLength = line.substringAfter(':').trim().toIntOrNull() ?: 0
                     }
+                    if (line.startsWith("Authorization:", ignoreCase = true)) {
+                        authorization = line.substringAfter(':').trim()
+                    }
                 }
                 if (contentLength > 0) reader.read(CharArray(contentLength))
                 val (status, body) =
                     when {
-                        requestLine.contains("/global/health") -> 200 to """{"healthy":true,"version":"9.9.9"}"""
+                        requestLine.contains("/global/health") && TestOpenCodeAuth.authorized(authorization) ->
+                            200 to """{"healthy":true,"version":"9.9.9"}"""
+                        requestLine.contains("/global/health") -> 401 to ""
                         requestLine.startsWith("POST") && requestLine.contains("/session") -> {
                             createdSessionDirectories += directoryOf(requestLine)
                             200 to """{"id":"s1","title":"","time":{"created":1}}"""
@@ -259,7 +268,8 @@ class VpsConnectionLifecycleTest {
                     }
                 val payload = body.toByteArray()
                 val response =
-                    "HTTP/1.1 $status OK\r\nContent-Type: application/json\r\n" +
+                    "HTTP/1.1 $status ${if (status == 401) "Unauthorized" else "OK"}\r\n" +
+                        "Content-Type: application/json\r\n" +
                         "Content-Length: ${payload.size}\r\nConnection: close\r\n\r\n"
                 socket.getOutputStream().apply {
                     write(response.toByteArray())
