@@ -124,7 +124,15 @@ class RouterService : Service() {
             Log.e(TAG, "encrypted key store could not be opened; no provider can be called")
         }
         val keys: KeyStore = store
-        val engine = RouterEngine(keys = { keys.snapshot() }, config = { loaded.table.config })
+        // Provider addresses the user supplied themselves. Read per request inside the engine, so a
+        // provider added while the router is running is usable on the next turn.
+        val endpoints = RouterEndpoints(applicationContext)
+        val engine =
+            RouterEngine(
+                keys = { keys.snapshot() },
+                config = { loaded.table.config },
+                customEndpoints = { endpoints.all() },
+            )
 
         // Fresh per run, 32 random bytes. It was a fixed string, which meant one captured token
         // opened every router that would ever run. The guest finds it in the endpoint file, and that

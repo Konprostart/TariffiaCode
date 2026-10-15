@@ -73,6 +73,19 @@ class GeminiAdapter(
             isLenient = true
         }
 
+    /**
+     * The key travels as a header, never as a query parameter.
+     *
+     * Google accepts both, and the query parameter is the older spelling that every URL in the path
+     * was carrying: it ended up in the request line, and therefore in anything that ever printed,
+     * parsed or re-serialised the URL - a redirect target, a retry, an exception message surfaced to
+     * the client as an error event. A key in a header has no path to travel.
+     *
+     * This is the whole of the redaction question for this provider, and it is settled by not
+     * putting the key where a URL can reach.
+     */
+    override fun extraHeaders(): Map<String, String> = mapOf("x-goog-api-key" to apiKey)
+
     override fun buildRequest(
         request: AnthropicRequest,
         model: RouterModel,
@@ -139,7 +152,7 @@ class GeminiAdapter(
             }
         return TranslatedRequest(
             // The model and the key travel in the path here, not in the body.
-            path = "/v1beta/models/${model.model}:streamGenerateContent?alt=sse&key=$apiKey",
+            path = "/v1beta/models/${model.model}:streamGenerateContent?alt=sse",
             body = body.toString(),
             stream = request.stream,
         )
@@ -235,12 +248,25 @@ object ProviderAdapters {
         provider: String,
         keys: Map<String, String>,
         ollamaPort: Int = OllamaAdapter.DEFAULT_GUEST_PORT,
-    ): ProviderAdapter? =
-        when {
+        /**
+         * Provider names this user has given an endpoint of their own.
+         *
+         * The last branch of the `when`, and the reason adding a provider is not a release: a name
+         * the user addressed themselves is spoken to with the OpenAI Chat Completions shape, which
+         * is the shape that gateways of every kind actually implement. A name that is neither
+         * built in nor configured still yields null, so an unaddressable entry in a hand-edited
+         * table is skipped and reported rather than guessed at.
+         */
+        customProviders: Set<String> = emptySet(),
+    ): ProviderAdapter? {
+        val key = keys[provider]
+        return when {
             provider.equals("ollama", true) || provider.equals("lmstudio", true) -> OllamaAdapter(ollamaPort)
-            provider.equals("gemini", true) || provider.equals("google", true) -> keys[provider]?.let { GeminiAdapter(it) }
-            provider.equals("anthropic", true) -> keys[provider]?.let { AnthropicAdapter(it) }
+            provider.equals("gemini", true) || provider.equals("google", true) -> key?.let { GeminiAdapter(it) }
+            provider.equals("anthropic", true) -> key?.let { AnthropicAdapter(it) }
             RouterProviderKind.of(provider) != null -> OpenAiCompatibleAdapter()
+            provider.trim().lowercase() in customProviders -> OpenAiCompatibleAdapter()
             else -> null
         }
+    }
 }
