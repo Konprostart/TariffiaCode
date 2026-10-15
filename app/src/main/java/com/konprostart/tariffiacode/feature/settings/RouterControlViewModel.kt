@@ -39,30 +39,37 @@ class RouterControlViewModel(
         viewModelScope.launch {
             val status = withContext(Dispatchers.IO) { RouterService.status(context) }
             val failure = withContext(Dispatchers.IO) { RouterService.lastFailure(context) }
-            _state.update { it.copy(status = status, failure = failure, pending = false) }
+            // `pending` is deliberately not touched here. The screen polls every two seconds, so a
+            // poll landing in the middle of a start or a stop used to clear the flag and hand the
+            // switch back while the operation it was waiting for was still running. Only the start
+            // and stop paths below own that field now.
+            _state.update { it.copy(status = status, failure = failure) }
         }
     }
 
     fun start() {
         _state.update { it.copy(pending = true, failure = null) }
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { RouterService.start(context) }
-            // Give the service time to write its endpoint before reporting on it.
-            repeat(30) {
-                val status = withContext(Dispatchers.IO) { RouterService.status(context) }
-                if (status is RouterStatus.Running) {
-                    _state.update { it.copy(status = status, pending = false, failure = null) }
-                    return@launch
+            try {
+                withContext(Dispatchers.IO) { RouterService.start(context) }
+                // Give the service time to write its endpoint before reporting on it.
+                repeat(30) {
+                    val status = withContext(Dispatchers.IO) { RouterService.status(context) }
+                    if (status is RouterStatus.Running) {
+                        _state.update { it.copy(status = status, failure = null) }
+                        return@launch
+                    }
+                    delay(300)
                 }
-                delay(300)
-            }
-            val failure = withContext(Dispatchers.IO) { RouterService.lastFailure(context) }
-            _state.update {
-                it.copy(
-                    status = withContext(Dispatchers.IO) { RouterService.status(context) },
-                    failure = failure,
-                    pending = false,
-                )
+                val failure = withContext(Dispatchers.IO) { RouterService.lastFailure(context) }
+                val status = withContext(Dispatchers.IO) { RouterService.status(context) }
+                _state.update { it.copy(status = status, failure = failure) }
+            } finally {
+                // Nothing else clears this. refresh() deliberately does not, and the screen polls it
+                // every two seconds, so a throw here would leave the switch disabled for the life of
+                // the ViewModel - which is what startForegroundService from the background on API 31+
+                // can still do.
+                _state.update { it.copy(pending = false) }
             }
         }
     }
@@ -70,19 +77,35 @@ class RouterControlViewModel(
     fun stop() {
         _state.update { it.copy(pending = true) }
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                context.stopService(Intent(context, RouterService::class.java))
-            }
-            repeat(20) {
-                val status = withContext(Dispatchers.IO) { RouterService.status(context) }
-                if (status is RouterStatus.NotRunning) {
-                    _state.update { it.copy(status = status, pending = false) }
-                    return@launch
+            try {
+                withContext(Dispatchers.IO) {
+                    context.stopService(Intent(context, RouterService::class.java))
                 }
-                delay(200)
-            }
-            _state.update {
-                it.copy(status = withContext(Dispatchers.IO) { RouterService.status(context) }, pending = false)
+                // A while loop rather than `repeat`: breaking out of an inline lambda across a
+                // suspension point is not allowed, and the status read below is a suspension point.
+                var polls = STOP_STATUS_POLLS
+                while (polls-- > 0) {
+                    val status = withContext(Dispatchers.IO) { RouterService.status(context) }
+                    if (status is RouterStatus.NotRunning) break
+                    delay(200)
+                }
+                // Whether or not the poll saw it stop - and running it *only* on timeout would be the
+                // wrong way round. A process Android killed reports NotRunning on the very first
+                // poll, and that is exactly the case where nothing in the service process is left to
+                // clean up after itself, so an early exit here would skip the one step that needs
+                // doing. The file then survives holding a dead port and a live bearer token, and
+                // every agent started before the next router start is handed a base URL that answers
+                // nothing - which is the contract AgentRouterEndpoint says must never happen.
+                //
+                // The deletion is conditional on that file's port having nothing listening on it,
+                // because stopService is asynchronous: a replacement server may already be up on a
+                // different port, and removing *its* file would take the router away from an agent
+                // that can still reach it.
+                withContext(Dispatchers.IO) { RouterService.discardStaleEndpoint(context) }
+                val status = withContext(Dispatchers.IO) { RouterService.status(context) }
+                _state.update { it.copy(status = status) }
+            } finally {
+                _state.update { it.copy(pending = false) }
             }
         }
     }
@@ -99,3 +122,6 @@ data class RouterControlUiState(
     val isRunning: Boolean get() = status is RouterStatus.Running
     val port: Int? get() = (status as? RouterStatus.Running)?.port
 }
+
+/** How long stop() waits for the service to go quiet before it cleans up after it. */
+private const val STOP_STATUS_POLLS = 20
