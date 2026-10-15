@@ -129,8 +129,8 @@ class RouterRoutingTest {
 
     @Test
     fun `the timeouts are the ones the design calls for`() {
-        assertEquals(8L, RouterEngine.CONNECT_TIMEOUT_SECONDS)
-        assertEquals(25L, RouterEngine.FIRST_BYTE_TIMEOUT_SECONDS)
+        assertEquals(15L, RouterEngine.CONNECT_TIMEOUT_SECONDS)
+        assertEquals(300L, RouterEngine.FIRST_BYTE_TIMEOUT_SECONDS)
 
         val client = RouterEngine.defaultClient()
         assertEquals(

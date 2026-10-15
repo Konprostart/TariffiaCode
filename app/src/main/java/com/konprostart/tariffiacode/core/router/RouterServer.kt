@@ -534,7 +534,7 @@ class RouterServer(
     private companion object {
         const val LOOPBACK = "127.0.0.1"
         const val BACKLOG = 16
-        const val READ_TIMEOUT_MILLIS = 30_000
+        const val READ_TIMEOUT_MILLIS = 300_000
         const val BEARER = "bearer "
         const val MESSAGES_PATH = "/v1/messages"
         const val COUNT_TOKENS_PATH = "/v1/messages/count_tokens"
