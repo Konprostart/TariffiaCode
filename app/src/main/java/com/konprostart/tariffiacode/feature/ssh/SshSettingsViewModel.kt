@@ -151,6 +151,7 @@ class SshSettingsViewModel(
     fun saveProfile() {
         val form = _state.value.form ?: return
         val port = form.portOrNull ?: SshProfile.DEFAULT_PORT
+        val existing = profiles.profile(form.id)
         val profile =
             SshProfile(
                 id = form.id.ifBlank { java.util.UUID.randomUUID().toString() },
@@ -159,10 +160,13 @@ class SshSettingsViewModel(
                 port = port,
                 username = form.username.trim(),
                 authType = form.authType,
-                credentialRef =
-                    profiles.profile(form.id)?.credentialRef
-                        ?: SshProfile.newCredentialRef(),
+                credentialRef = existing?.credentialRef ?: SshProfile.newCredentialRef(),
                 trustedHostKeyFingerprint = form.trustedHostKeyFingerprint,
+                // Carried over rather than edited. The editor has no field for it yet, so rebuilding
+                // the profile from the form would silently drop the password the VPS tunnel is
+                // authenticated with - and the symptom would be a connection that stops working the
+                // first time the user renames the VPS.
+                opencodePassword = existing?.opencodePassword,
             )
         val errors = SshProfileValidator.validate(profile)
         if (errors.isNotEmpty()) {

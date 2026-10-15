@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.konprostart.tariffiacode.BuildConfig
 import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.core.diagnostics.CrashLog
+import com.konprostart.tariffiacode.core.security.SecretRedaction
 import com.konprostart.tariffiacode.ui.components.LabelValueRow
 import com.konprostart.tariffiacode.ui.components.SectionCard
 
@@ -78,7 +79,12 @@ fun DiagnosticsSheet(
                 appendLine()
                 appendLine("## Last crash")
                 appendLine("```")
-                appendLine(lastCrash)
+                // Redacted again on the way to the clipboard, even though CrashLog already scrubs
+                // what it writes. This is the copy that leaves the app: the clipboard is readable by
+                // any installed app with a clipboard listener, and whatever lands there tends to end
+                // up pasted into an issue tracker. A crash recorded before this redaction existed is
+                // still on disk, so the file being clean is not a reason to trust this copy.
+                appendLine(SecretRedaction.redact(lastCrash))
                 appendLine("```")
             }
         }

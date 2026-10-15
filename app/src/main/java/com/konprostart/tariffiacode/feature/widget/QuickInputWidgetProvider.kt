@@ -9,6 +9,15 @@ import android.widget.RemoteViews
 import com.konprostart.tariffiacode.R
 
 class QuickInputWidgetProvider : AppWidgetProvider() {
+    /**
+     * Both pending intents are fully specified - component, action, and no fill-in extras - so nothing
+     * needs to be written into them by whoever fires them.
+     *
+     * They were built with FLAG_MUTABLE, which was the only such flag in the app and bought nothing:
+     * a mutable PendingIntent whose holder can replace its extras lets whoever holds it inject text
+     * that QuickInputActivity forwards straight into a live agent session as if the user had typed
+     * it. The intent here already carries everything the activity needs, so it is immutable.
+     */
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -41,7 +50,7 @@ class QuickInputWidgetProvider : AppWidgetProvider() {
                     context,
                     appWidgetId,
                     sendIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
             val micIntent =
@@ -54,7 +63,7 @@ class QuickInputWidgetProvider : AppWidgetProvider() {
                     context,
                     appWidgetId + 1000,
                     micIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
             views.setOnClickPendingIntent(R.id.widget_send_button, sendPendingIntent)

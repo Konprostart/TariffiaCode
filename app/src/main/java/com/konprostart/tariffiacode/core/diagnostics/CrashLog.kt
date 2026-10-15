@@ -2,6 +2,7 @@ package com.konprostart.tariffiacode.core.diagnostics
 
 import android.content.Context
 import android.os.Build
+import com.konprostart.tariffiacode.core.security.SecretRedaction
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -55,7 +56,15 @@ object CrashLog {
                 appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
                 appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
                 appendLine()
-                append(stackTrace.take(MAX_TRACE_CHARS))
+                // Redacted before it is written, not on the way out. This file is not only read
+                // back on the next launch - the diagnostics sheet pastes it into the system
+                // clipboard, which every installed app with a clipboard listener can read, and a
+                // screenshot or a paste into a bug report carries it further still.
+                //
+                // An exception message can carry a credential: a malformed URL reaching OkHttp is
+                // reported back with the whole URL in the message, and one of the URLs this app
+                // builds has a provider key in its query string.
+                append(SecretRedaction.redact(stackTrace).take(MAX_TRACE_CHARS))
             }
         val target = file(context)
         target.parentFile?.mkdirs()
