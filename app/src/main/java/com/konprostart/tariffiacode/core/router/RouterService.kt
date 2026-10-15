@@ -11,9 +11,6 @@ import android.os.IBinder
 import android.util.Log
 import com.konprostart.tariffiacode.MainActivity
 import java.io.File
-import java.io.IOException
-import java.net.InetSocketAddress
-import java.net.Socket
 
 /**
  * Runs the router inside the app process, so an agent on this device can reach it on loopback.
@@ -152,7 +149,7 @@ class RouterService : Service() {
         port: Int,
         token: String,
     ) {
-        val file = File(filesDir, "$ENDPOINT_DIRECTORY/$ENDPOINT_FILE")
+        val file = endpointFile(this)
         file.parentFile?.mkdirs()
         // Owner-only, before a byte is written. The file carries a live bearer token, and the guest
         // reads it as root - so anything wider than the owner is a window someone else could use.
@@ -226,11 +223,6 @@ class RouterService : Service() {
          */
         private const val NOTIFICATION_ID = 4202
 
-        private const val LOOPBACK = "127.0.0.1"
-
-        /** Long enough to not trip on a loaded device, short enough that the screen's poll stays cheap. */
-        private const val LIVENESS_TIMEOUT_MILLIS = 250
-
         /** Inside the app's private storage, which is where the guest looks for runtime state. */
         private const val ENDPOINT_DIRECTORY = "runtime"
         private const val ENDPOINT_FILE = AgentRouterEndpoint.ENDPOINT_FILE_NAME
@@ -252,21 +244,12 @@ class RouterService : Service() {
          */
         fun status(context: Context): RouterStatus = decideFor(endpointFile(context))
 
+        /** The production decision: the file names a port, the probe says whether a server is on it. */
         private fun decideFor(file: File): RouterStatus {
-            val port = AgentRouterEndpoint.portOf(file) ?: return RouterStatus.NotRunning
-            return AgentRouterEndpoint.decideStatus(port, isAccepting(port))
+            val port = AgentRouterEndpoint.portOf(file)
+            val accepting = port != null && AgentRouterEndpoint.isAccepting(port)
+            return AgentRouterEndpoint.decideStatus(port, accepting)
         }
-
-        /** Whether something is accepting connections on [port]. */
-        private fun isAccepting(port: Int): Boolean =
-            try {
-                Socket().use { probe ->
-                    probe.connect(InetSocketAddress(LOOPBACK, port), LIVENESS_TIMEOUT_MILLIS)
-                    true
-                }
-            } catch (unreachable: IOException) {
-                false
-            }
 
         /**
          * Removes an endpoint file whose server is gone - and only that one.

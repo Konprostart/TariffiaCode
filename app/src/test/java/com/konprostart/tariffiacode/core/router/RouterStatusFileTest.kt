@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
-import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.nio.file.Files
 
@@ -32,18 +31,10 @@ class RouterStatusFileTest {
 
     /** The production path: parse the file, then prove the port the same way the service does. */
     private fun read(dir: File): RouterStatus {
-        val file = File(dir, AgentRouterEndpoint.ENDPOINT_FILE_NAME)
-        val port = AgentRouterEndpoint.portOf(file)
-        return AgentRouterEndpoint.decideStatus(port, port != null && isAccepting(port))
+        val port = AgentRouterEndpoint.portOf(File(dir, AgentRouterEndpoint.ENDPOINT_FILE_NAME))
+        val accepting = port != null && AgentRouterEndpoint.isAccepting(port)
+        return AgentRouterEndpoint.decideStatus(port, accepting)
     }
-
-    private fun isAccepting(port: Int): Boolean =
-        try {
-            java.net.Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), PROBE_TIMEOUT_MILLIS) }
-            true
-        } catch (unreachable: java.io.IOException) {
-            false
-        }
 
     private fun endpoint(port: Int): String =
         """
@@ -108,9 +99,5 @@ class RouterStatusFileTest {
         val second = AgentRouterEndpoint.portOf(File(dirWith(endpoint(2222)), AgentRouterEndpoint.ENDPOINT_FILE_NAME))
 
         assertTrue("the kernel assigns it, so two runs differ", first != second)
-    }
-
-    private companion object {
-        const val PROBE_TIMEOUT_MILLIS = 250
     }
 }

@@ -1,6 +1,9 @@
 package com.konprostart.tariffiacode.core.router
 
 import java.io.File
+import java.io.IOException
+import java.net.InetSocketAddress
+import java.net.Socket
 
 /**
  * How an agent on this device is told where the router is.
@@ -80,4 +83,34 @@ object AgentRouterEndpoint {
         port: Int?,
         accepting: Boolean,
     ): RouterStatus = if (port != null && accepting) RouterStatus.Running(port) else RouterStatus.NotRunning
+
+    /**
+     * Whether something is really accepting connections on [port] right now.
+     *
+     * Lives next to the parsing rather than in the service so the test that claims a dead port reads
+     * as stopped drives the same probe the product does. A copy of it in the test would let the two
+     * drift, which is how a green suite ends up describing a contract the app no longer has.
+     *
+     * A connect to a closed loopback port fails immediately, and one to a healthy server costs a
+     * single round trip, so this is cheap enough to sit behind the screen's two-second poll. It is a
+     * connect and nothing more: no request is sent, so no provider call can be triggered by asking
+     * whether the router is there.
+     */
+    fun isAccepting(
+        port: Int,
+        timeoutMillis: Int = LIVENESS_TIMEOUT_MILLIS,
+    ): Boolean =
+        try {
+            Socket().use { probe ->
+                probe.connect(InetSocketAddress(LOOPBACK, port), timeoutMillis)
+                true
+            }
+        } catch (unreachable: IOException) {
+            false
+        }
+
+    private const val LOOPBACK = "127.0.0.1"
+
+    /** Long enough not to trip on a loaded device, short enough that the screen's poll stays cheap. */
+    private const val LIVENESS_TIMEOUT_MILLIS = 250
 }

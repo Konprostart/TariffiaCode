@@ -83,16 +83,16 @@ class RouterControlViewModel(
                 }
                 repeat(20) {
                     val status = withContext(Dispatchers.IO) { RouterService.status(context) }
-                    if (status is RouterStatus.NotRunning) {
-                        _state.update { it.copy(status = status) }
-                        return@launch
-                    }
+                    if (status is RouterStatus.NotRunning) break
                     delay(200)
                 }
-                // The poll ran out with the router still reported as running. That happens when the
-                // service process was killed rather than stopped - the normal way Android reclaims a
-                // backgrounded process - so nothing in it ever ran onDestroy and nothing there is
-                // left to remove the endpoint file it wrote.
+                // Whether or not the poll saw it stop - and running it *only* on timeout would be the
+                // wrong way round. A process Android killed reports NotRunning on the very first
+                // poll, and that is exactly the case where nothing in the service process is left to
+                // clean up after itself, so an early exit here would skip the one step that needs
+                // doing. The file then survives holding a dead port and a live bearer token, and
+                // every agent started before the next router start is handed a base URL that answers
+                // nothing - which is the contract AgentRouterEndpoint says must never happen.
                 //
                 // The deletion is conditional on that file's port having nothing listening on it,
                 // because stopService is asynchronous: a replacement server may already be up on a
