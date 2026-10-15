@@ -249,8 +249,8 @@ class RouterEngine(
         private const val OLLAMA_PORT = 11434
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
-        const val CONNECT_TIMEOUT_SECONDS = 8L
-        const val FIRST_BYTE_TIMEOUT_SECONDS = 25L
+        const val CONNECT_TIMEOUT_SECONDS = 15L
+        const val FIRST_BYTE_TIMEOUT_SECONDS = 300L
 
         /**
          * Where each vendor lives.
