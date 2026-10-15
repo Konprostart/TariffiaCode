@@ -425,7 +425,9 @@ class RouterServer(
     private fun sseFrames(payload: String): ByteArray {
         val objects = splitTopLevelObjects(payload)
         if (objects.isEmpty()) return frame(payload, eventName = null)
-        return objects.joinToByteArray { frame(it, eventName = eventNameOf(it)) }
+        val out = java.io.ByteArrayOutputStream()
+        objects.forEach { object_ -> out.write(frame(object_, eventName = eventNameOf(object_))) }
+        return out.toByteArray()
     }
 
     /** A single event, with the name read out of its own `type`. */
