@@ -154,7 +154,7 @@ private fun SshOpenCodePasswordField(
             IconButton(onClick = { visible = !visible }) {
                 Icon(
                     imageVector = if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                    contentDescription = if (visible) R.string.ssh_hide_password else R.string.ssh_show_password,
+                    contentDescription = stringResource(if (visible) R.string.ssh_hide_password else R.string.ssh_show_password),
                 )
             }
         },
