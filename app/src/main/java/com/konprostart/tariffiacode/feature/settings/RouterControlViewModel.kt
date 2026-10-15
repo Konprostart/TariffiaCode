@@ -97,8 +97,11 @@ class RouterControlViewModel(
                 // every agent started before the next router start is handed a base URL that answers
                 // nothing - which is the contract AgentRouterEndpoint says must never happen.
                 //
-                // The older service cleans its own endpoint file in stop(); there is nothing more
-                // to reconcile from the screen.
+                // The deletion is conditional on that file's port having nothing listening on it,
+                // because stopService is asynchronous: a replacement server may already be up on a
+                // different port, and removing *its* file would take the router away from an agent
+                // that can still reach it.
+                withContext(Dispatchers.IO) { RouterService.discardStaleEndpoint(context) }
                 val status = withContext(Dispatchers.IO) { RouterService.status(context) }
                 _state.update { it.copy(status = status) }
             } finally {
