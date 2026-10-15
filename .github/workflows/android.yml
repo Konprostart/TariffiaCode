@@ -248,7 +248,11 @@ jobs:
           # OPENCODE_SERVER_PASSWORD: 401 without the header, 200 with it. A fixture that answered
           # 200 to anything would be testing the refusal path instead of the happy one.
           OPENCODE_FIXTURE_PASSWORD="android-art-opencode"
-          echo "OPENCODE_FIXTURE_PASSWORD=$OPENCODE_FIXTURE_PASSWORD" > "$fixture_dir/opencode.env"
+          # Each `run:` block is its own process, so a plain shell variable set here is invisible to
+          # the emulator step further down that has to hand the same value to the instrumentation
+          # arguments. GITHUB_ENV is what carries it between steps in the same job.
+          echo "::add-mask::$OPENCODE_FIXTURE_PASSWORD"
+          echo "OPENCODE_FIXTURE_PASSWORD=$OPENCODE_FIXTURE_PASSWORD" >> "$GITHUB_ENV"
           python3 -u - <<'PY' > "$fixture_dir/opencode.log" 2>&1 &
           import base64
           from http.server import BaseHTTPRequestHandler, HTTPServer

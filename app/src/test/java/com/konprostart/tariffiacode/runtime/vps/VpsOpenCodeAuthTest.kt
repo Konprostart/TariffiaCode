@@ -110,12 +110,16 @@ class VpsOpenCodeAuthTest {
         // message must say "unreachable" - it used to report "HTTP -1", which tells nobody anything.
         val deadPort = ServerSocketHolder.freePort()
 
+        // Bound to a val rather than asserted in place: `assertTrue` is not a control-flow construct,
+        // so an `is` check inside it does not smart-cast, and reading `.message` off the sealed
+        // interface afterwards does not resolve.
         val outcome = verify(password = PASSWORD, onForward = FakePortForward("127.0.0.1", deadPort))
 
         assertTrue("expected Failed, got $outcome", outcome is VpsOpenCodeAuth.Outcome.Failed)
+        val failure = outcome as VpsOpenCodeAuth.Outcome.Failed
         assertTrue(
-            "expected an unreachable message, got ${(outcome as VpsOpenCodeAuth.Outcome.Failed).message}",
-            outcome.message.contains("unreachable"),
+            "expected an unreachable message, got ${failure.message}",
+            failure.message.contains("unreachable"),
         )
     }
 
