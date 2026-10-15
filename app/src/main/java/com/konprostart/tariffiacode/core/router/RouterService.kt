@@ -11,6 +11,9 @@ import android.os.IBinder
 import android.util.Log
 import com.konprostart.tariffiacode.MainActivity
 import java.io.File
+import java.io.IOException
+import java.net.InetSocketAddress
+import java.net.Socket
 
 /**
  * Runs the router inside the app process, so an agent on this device can reach it on loopback.
@@ -26,12 +29,23 @@ import java.io.File
  */
 class RouterService : Service() {
     private var server: RouterServer? = null
-    private var endpointFile: File? = null
+
+    /** False when the system refused foreground promotion; the service must not keep starting. */
+    private var runningInForeground = false
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        startForeground(NOTIFICATION_ID, notification("starting"))
+        // Promotion can be refused - Android 12+ refuses a sticky restart that lands while the app is
+        // in the background - and uncaught it kills :routerproc, which START_STICKY then restarts:
+        // a crash loop the user never sees and no failure file records. The other three services in
+        // this app already guard this call the same way.
+        runCatching { startForeground(NOTIFICATION_ID, notification("starting")) }
+            .onSuccess { runningInForeground = true }
+            .onFailure {
+                Log.e(TAG, "foreground promotion refused; refusing to serve", it)
+                stopSelf()
+            }
     }
 
     private fun createChannel() {
@@ -46,6 +60,7 @@ class RouterService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
+        if (!runningInForeground) return START_NOT_STICKY
         if (server != null) return START_STICKY
         start()
         return START_STICKY
@@ -58,7 +73,30 @@ class RouterService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /**
+     * Starts the server, or records why it could not.
+     *
+     * Every failure here used to escape [onStartCommand]: a ServerSocket that could not bind, a key
+     * store that would not open, a disk that was full writing the endpoint file. Any of them killed
+     * :routerproc, START_STICKY restarted it, and the retry died the same way - a crash loop with no
+     * failure file, so the screen showed a neutral "stopped" for a router that had never come up.
+     */
     private fun start() {
+        try {
+            startLocked()
+        } catch (failure: Throwable) {
+            val reason = failure.message?.takeIf { it.isNotBlank() } ?: failure.javaClass.simpleName
+            Log.e(TAG, "router failed to start: $reason", failure)
+            runCatching { server?.stop() }
+            server = null
+            // Whatever a previous run left behind now describes a server that is not going to exist.
+            discardEndpoint()
+            recordFailure("router failed to start: $reason")
+            stopSelf()
+        }
+    }
+
+    private fun startLocked() {
         val loaded = RouterConfigLoader(applicationContext).load()
         if (!loaded.isUsable) {
             val reason = "routing table unusable: ${loaded.table.rejected}"
@@ -73,6 +111,13 @@ class RouterService : Service() {
         // Someone editing a file that is not being read has no other way to find out.
         Log.i(TAG, "routing table from ${loaded.origin} (${RouterConfigLoader(applicationContext).userTableFile()})")
         loaded.rejected?.let { Log.w(TAG, "falling back to the bundled table: $it") }
+
+        // Removed before the new server is bound, not after. Between binding and writing, the file
+        // left by a previous run still names the *old* port - and a run that dies in that window
+        // leaves it naming a port nothing ever listened on, which is the stale claim the status
+        // check has to survive.
+        discardEndpoint()
+        runCatching { File(filesDir, "runtime/router-failure.txt").delete() }
 
         // The real store, re-read on every routing pass so a key the user just saved takes effect
         // without restarting the service. The placeholder that used to be here proved the loopback
@@ -92,17 +137,18 @@ class RouterService : Service() {
         val running = RouterServer(LoggingGateway(engine) { message -> Log.i(TAG, message) }, token)
         val port = running.start()
 
-        runCatching { File(filesDir, "runtime/router-failure.txt").delete() }
-        val file = writeEndpoint(port, token)
-        endpointFile = file
+        writeEndpoint(port, token)
         server = running
-        Log.i(TAG, "router listening on http://127.0.0.1:$port (endpoint written to $file)")
+        Log.i(TAG, "router listening on http://127.0.0.1:$port (endpoint written to ${endpointFile(this)})")
+        // The notification is the only always-visible surface of a process holding the user's keys,
+        // and it said "starting" for the whole life of the service.
+        runCatching { startForeground(NOTIFICATION_ID, notification("listening on 127.0.0.1:$port")) }
     }
 
     private fun writeEndpoint(
         port: Int,
         token: String,
-    ): File {
+    ) {
         val file = File(filesDir, "$ENDPOINT_DIRECTORY/$ENDPOINT_FILE")
         file.parentFile?.mkdirs()
         // Owner-only, before a byte is written. The file carries a live bearer token, and the guest
@@ -122,7 +168,6 @@ class RouterService : Service() {
             file.setWritable(false, false)
             file.setWritable(true, true)
         }
-        return file
     }
 
     /** Why the last attempt did not work, so the screen can say it rather than showing nothing. */
@@ -133,8 +178,19 @@ class RouterService : Service() {
     private fun stop() {
         server?.stop()
         server = null
-        endpointFile?.delete()
-        endpointFile = null
+        // By path, every time - not through a field cached at start time.
+        //
+        // This is the stop button. The field this replaced was only assigned by a start() that got
+        // all the way to writing the endpoint file, so whenever the service's own process had been
+        // killed and restarted - which is what Android does to a backgrounded process, and what
+        // onDestroy never runs for - there was nothing left holding that file. The server was gone,
+        // the file survived, and status() went on reading it: the switch stayed on, the port stayed
+        // on screen, and pressing Stop appeared to do nothing at all.
+        discardEndpoint()
+    }
+
+    private fun discardEndpoint() {
+        runCatching { endpointFile(this).delete() }
     }
 
     private fun notification(state: String): Notification =
@@ -156,7 +212,21 @@ class RouterService : Service() {
     companion object {
         private const val TAG = "RouterService"
         private const val CHANNEL_ID = "router"
-        private const val NOTIFICATION_ID = 4201
+
+        /**
+         * Unique across the app, not unique within this file.
+         *
+         * It shared 4201 with ScheduleExecutionService. Notification identity is per package, not per
+         * process, and that is fine while the two use different channels - but when a schedule run
+         * finished it called stopForeground(STOP_FOREGROUND_REMOVE), which deleted id 4201 and took
+         * the router's own foreground notification with it while the router was still serving.
+         */
+        private const val NOTIFICATION_ID = 4202
+
+        private const val LOOPBACK = "127.0.0.1"
+
+        /** Long enough to not trip on a loaded device, short enough that the screen's poll stays cheap. */
+        private const val LIVENESS_TIMEOUT_MILLIS = 250
 
         /** Inside the app's private storage, which is where the guest looks for runtime state. */
         private const val ENDPOINT_DIRECTORY = "runtime"
@@ -166,9 +236,16 @@ class RouterService : Service() {
         /**
          * Where the router actually got to.
          *
-         * Read from the file the service writes rather than guessed at, so a screen cannot show
-         * "running" over a service that failed two lines after starting - which is the one thing a
-         * status indicator must never do.
+         * The endpoint file is read, but it is a *claim*, not evidence: it is written once at start
+         * and outlives the process that wrote it, so a router killed by the system kept advertising a
+         * port nothing was listening on and the screen kept saying "running" over it. File presence
+         * alone can only ever answer "did the service get as far as writing this", which is the
+         * question that made a stale file look like a live server.
+         *
+         * So the file says which port to check, and a loopback connect says whether anything is
+         * actually there. The connect is the cheapest proof that exists: it fails instantly on a
+         * closed port and costs one loopback round trip when the router is healthy. Callers already
+         * run this off the main thread, and the screen polls it, so the timeout is short.
          */
         fun status(context: Context): RouterStatus {
             val file = endpointFile(context)
@@ -182,7 +259,35 @@ class RouterService : Service() {
                 }.getOrDefault(emptyMap())
             val url = values["ANTHROPIC_BASE_URL"] ?: return RouterStatus.NotRunning
             val port = url.substringAfterLast(':').trim().toIntOrNull() ?: return RouterStatus.NotRunning
+            if (port !in 1..65535) return RouterStatus.NotRunning
+            if (!isAccepting(port)) return RouterStatus.NotRunning
             return RouterStatus.Running(port)
+        }
+
+        /** Whether something is accepting connections on [port]. */
+        private fun isAccepting(port: Int): Boolean =
+            try {
+                Socket().use { probe ->
+                    probe.connect(InetSocketAddress(LOOPBACK, port), LIVENESS_TIMEOUT_MILLIS)
+                    true
+                }
+            } catch (unreachable: IOException) {
+                false
+            }
+
+        /**
+         * Removes an endpoint file whose server is gone.
+         *
+         * For the stop path specifically. A service killed without onDestroy leaves the file behind
+         * and nothing in its own process is left to delete it, so once [status] has established there
+         * is no server on that port, the file is a claim about nothing and the UI caller removes it.
+         * Without this the stop button polls, finds a stale file, and snaps back to "running".
+         */
+        fun discardStaleEndpoint(context: Context) {
+            runCatching {
+                val file = endpointFile(context)
+                if (file.isFile) file.delete()
+            }
         }
 
         /** A table that could not be loaded: the service refused to start, and the screen must say so. */

@@ -11,8 +11,10 @@ import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -36,7 +38,9 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * It serves on a daemon pool so the accept loop is never the thing that blocks, and every connection
  * gets a read timeout: an agent that opens a socket and says nothing must not be able to hold a
- * thread forever.
+ * thread forever. Writes have no such deadline, because a slow model must not look like a hang - so
+ * stopping the router closes the connections instead of waiting on them, which is the only way a
+ * worker parked mid-stream is guaranteed to come back.
  */
 class RouterServer(
     private val gateway: RouterGateway,
@@ -47,10 +51,30 @@ class RouterServer(
     /** Only used to read the event name back out of a frame the gateway has already built. */
     private val json = Json { isLenient = true }
 
+    /**
+     * Serialises [start] and [stop] against each other.
+     *
+     * They used to race: start() flipped `running` before it published `socket`, so a stop() landing
+     * in that window completed against null fields and left a listening ServerSocket that reported
+     * itself as stopped and that no later stop() could close. Everything both methods publish is now
+     * written under one lock, in the order a reader needs it.
+     */
+    private val lifecycleLock = Any()
+
     @Volatile
     private var socket: ServerSocket? = null
 
     private var acceptExecutor: java.util.concurrent.ExecutorService? = null
+
+    /**
+     * Every connection currently being served.
+     *
+     * Tracked so [stop] can close them. A worker blocked writing a streamed answer to a client that
+     * stopped reading is not interrupted by shutdown alone, so without this the sockets - and the
+     * threads parked on them - outlive the router.
+     */
+    private val clients = ConcurrentHashMap.newKeySet<Socket>()
+
     private val connectionIds = AtomicLong()
 
     /** The port the server actually bound. Meaningful only while [isRunning]. */
@@ -79,59 +103,122 @@ class RouterServer(
      * no router.
      */
     fun start(): Int {
-        check(running.compareAndSet(false, true)) { "Router is already running" }
-        val server =
-            try {
-                ServerSocket(0, BACKLOG, InetAddress.getByName(LOOPBACK))
-            } catch (error: IOException) {
-                running.set(false)
-                throw error
+        synchronized(lifecycleLock) {
+            check(!running.get()) { "Router is already running" }
+            // Nothing has been published and `running` is still false, so a bind failure needs no
+            // undo - it propagates to the caller with the object exactly as it was.
+            val server = ServerSocket(0, BACKLOG, InetAddress.getByName(LOOPBACK))
+            val executor =
+                Executors.newCachedThreadPool(
+                    ThreadFactory { runnable ->
+                        Thread(runnable, "router-conn-${connectionIds.incrementAndGet()}").apply {
+                            isDaemon = true
+                        }
+                    },
+                )
+            // Everything a concurrent stop() needs is published before `running` flips. Publishing
+            // the flag first is what let a stop() complete against a half-built server and strand
+            // the listener.
+            socket = server
+            port = server.localPort
+            acceptExecutor = executor
+            running.set(true)
+            Thread({ accept(server, executor) }, "router-accept").apply {
+                isDaemon = true
+                start()
             }
-        socket = server
-        port = server.localPort
-        val executor =
-            Executors.newCachedThreadPool(
-                ThreadFactory { runnable ->
-                    Thread(runnable, "router-conn-${connectionIds.incrementAndGet()}").apply {
-                        isDaemon = true
-                    }
-                },
-            )
-        acceptExecutor = executor
-        Thread({ accept(server, executor) }, "router-accept").apply {
-            isDaemon = true
-            start()
+            return port
         }
-        return port
     }
 
-    /** Stops accepting and closes the listener. Connections already in flight finish on their own. */
+    /**
+     * Stops accepting, closes the listener and closes every connection still being served.
+     *
+     * Connections are closed rather than left to finish. A streamed turn can be sitting in a write
+     * with no deadline on it, and a worker that has already relayed a frame cannot be failed over
+     * anyway, so waiting for it only keeps a socket and a thread alive on a router the user has
+     * switched off. [stop] returns when nothing of this server is left running.
+     */
     fun stop() {
-        if (!running.compareAndSet(true, false)) return
-        runCatching { socket?.close() }
-        socket = null
-        acceptExecutor?.shutdownNow()
-        acceptExecutor = null
-        port = 0
+        var listener: ServerSocket? = null
+        var executor: java.util.concurrent.ExecutorService? = null
+        synchronized(lifecycleLock) {
+            if (running.compareAndSet(true, false)) {
+                listener = socket
+                executor = acceptExecutor
+                socket = null
+                acceptExecutor = null
+                port = 0
+            }
+        }
+        if (listener == null && executor == null) return
+        runCatching { listener?.close() }
+        // Unblocks every worker currently in a read or a write.
+        clients.forEach { client -> runCatching { client.close() } }
+        clients.clear()
+        executor?.let { pool ->
+            pool.shutdownNow()
+            pool.awaitTermination(SHUTDOWN_GRACE_MILLIS, TimeUnit.MILLISECONDS)
+        }
     }
 
     private fun accept(
         server: ServerSocket,
         executor: java.util.concurrent.ExecutorService,
     ) {
+        var consecutiveFailures = 0
         while (running.get() && !server.isClosed) {
             val client =
                 try {
                     server.accept()
                 } catch (closed: IOException) {
-                    // Expected on stop(); anything else means the listener is unusable.
-                    if (running.get()) gateway.onServerFailure(closed)
-                    return
+                    if (!running.get() || server.isClosed) return
+                    // A transient accept failure - descriptors exhausted, a peer that vanished
+                    // between SYN and accept - must not take the listener down for good. It used to
+                    // end this loop and leave `running` true, so the status check - which reads a
+                    // file the service wrote and never rewrites - kept reporting "running" over a
+                    // socket nobody was accepting on.
+                    consecutiveFailures++
+                    if (consecutiveFailures > MAX_ACCEPT_FAILURES) {
+                        gateway.onServerFailure(closed)
+                        return
+                    }
+                    if (!sleepBeforeRetry()) return
+                    continue
                 }
-            executor.execute {
-                client.use { serve(client) }
+            consecutiveFailures = 0
+            clients.add(client)
+            val handedOff =
+                runCatching {
+                    executor.execute {
+                        try {
+                            client.use { serve(it) }
+                        } finally {
+                            clients.remove(client)
+                        }
+                    }
+                }
+            if (handedOff.isFailure) {
+                // The pool could not take the connection. Closing it here is what stops the accept
+                // loop from dying with the socket still open and the client waiting on it.
+                clients.remove(client)
+                runCatching { client.close() }
             }
         }
+    }
+
+    /** Returns false when the server was stopped while waiting to retry. */
+    private fun sleepBeforeRetry(): Boolean {
+        val deadline = System.nanoTime() + ACCEPT_RETRY_MILLIS * 1_000_000L
+        while (running.get() && System.nanoTime() < deadline) {
+            try {
+                Thread.sleep(ACCEPT_RETRY_MILLIS)
+            } catch (interrupted: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            }
+        }
+        return running.get()
     }
 
     private fun serve(client: Socket) {
@@ -433,6 +520,15 @@ class RouterServer(
         const val STOP_EVENT = "message_stop"
         const val MAX_BODY_BYTES = 8 * 1024 * 1024
         const val MAX_HEADER_LINE_BYTES = 8 * 1024
+
+        /** How long a worker gets to notice a closed socket before [stop] stops waiting for it. */
+        const val SHUTDOWN_GRACE_MILLIS = 1_000L
+
+        /** Transient accept failures tolerated before the listener is declared dead. */
+        const val MAX_ACCEPT_FAILURES = 5
+
+        /** Pause between accept retries. Short: these failures are descriptor exhaustion, not backoff-worthy. */
+        const val ACCEPT_RETRY_MILLIS = 200L
 
         val CHARSET = Charsets.UTF_8
         val DONE_EVENT = """{"type":"message_stop"}"""

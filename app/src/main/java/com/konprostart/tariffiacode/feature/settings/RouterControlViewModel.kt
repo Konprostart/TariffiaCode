@@ -39,7 +39,11 @@ class RouterControlViewModel(
         viewModelScope.launch {
             val status = withContext(Dispatchers.IO) { RouterService.status(context) }
             val failure = withContext(Dispatchers.IO) { RouterService.lastFailure(context) }
-            _state.update { it.copy(status = status, failure = failure, pending = false) }
+            // `pending` is deliberately not touched here. The screen polls every two seconds, so a
+            // poll landing in the middle of a start or a stop used to clear the flag and hand the
+            // switch back while the operation it was waiting for was still running. Only the start
+            // and stop paths below own that field now.
+            _state.update { it.copy(status = status, failure = failure) }
         }
     }
 
@@ -81,9 +85,16 @@ class RouterControlViewModel(
                 }
                 delay(200)
             }
-            _state.update {
-                it.copy(status = withContext(Dispatchers.IO) { RouterService.status(context) }, pending = false)
-            }
+            // The poll ran out with the router still reported as running. That happens when the
+            // service process was killed rather than stopped - the normal way Android reclaims a
+            // backgrounded process - so nothing in it ever ran onDestroy and nothing there is left to
+            // remove the endpoint file it wrote. status() has just established there is no server on
+            // that port, which is what makes the file safe to remove: it is a claim about nothing,
+            // and leaving it is what made the switch snap back to "running" after the user had
+            // turned the router off.
+            withContext(Dispatchers.IO) { RouterService.discardStaleEndpoint(context) }
+            val status = withContext(Dispatchers.IO) { RouterService.status(context) }
+            _state.update { it.copy(status = status, pending = false) }
         }
     }
 }
