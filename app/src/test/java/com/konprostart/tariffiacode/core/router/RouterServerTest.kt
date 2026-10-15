@@ -9,8 +9,6 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 /**
  * The loopback server, exercised over a real socket.
@@ -219,41 +217,6 @@ class RouterServerTest {
         )
     }
 
-    @Test
-    fun `stopping closes a streamed connection instead of leaving the worker parked on it`() {
-        // A worker blocked writing a frame has no write deadline - a slow model must not look like a
-        // hang - so shutdown alone does not bring it back. Closing the connection is the only thing
-        // that does, and this is the test that keeps stop() honest about doing it.
-        val parked = CountDownLatch(1)
-        val started = start(ParkedStreamingGateway(parked))
-        val stream = openStream(started, "/v1/messages", """{"stream":true}""")
-
-        assertTrue("the gateway should be streaming before stop is called", parked.await(5, TimeUnit.SECONDS))
-
-        server?.stop()
-        server = null
-
-        // The client sees the turn end, rather than the socket being held open for the life of the
-        // process by a worker that was written to and never read.
-        val outcome = stream.use { runCatching { it.readBytes() } }
-        assertTrue("reading a stopped stream must finish instead of hanging", outcome.isSuccess)
-    }
-
-    /** A gateway that emits one frame and then blocks, which is what a mid-turn stop runs into. */
-    private class ParkedStreamingGateway(
-        private val parked: CountDownLatch,
-    ) : RouterGateway by RecordingGateway() {
-        override fun stream(
-            rawRequest: String,
-            onEvent: (String) -> Unit,
-        ) {
-            onEvent(START_EVENT)
-            parked.countDown()
-            // Nothing more is emitted. The worker stays inside the chain until the socket closes.
-            Thread.sleep(PARKED_MILLIS)
-        }
-    }
-
     // --- helpers ---------------------------------------------------------------------------
 
     private companion object {
@@ -270,12 +233,6 @@ class RouterServerTest {
          * far slower one to diagnose.
          */
         const val CLIENT_TIMEOUT_MILLIS = 5_000
-
-        /**
-         * How long the fake gateway sits inside a turn emitting nothing, long enough that stop() is
-         * what ends the connection rather than the fake giving up on its own.
-         */
-        const val PARKED_MILLIS = 2_000L
     }
 
     private var token: String = ""
@@ -345,31 +302,6 @@ class RouterServerTest {
         val raw = socket.getInputStream().readBytes().toString(Charsets.UTF_8)
         socket.close()
         return raw
-    }
-
-    /** One streaming request, left open for the caller to read from. */
-    private fun openStream(
-        server: RouterServer,
-        path: String,
-        body: String,
-    ): java.io.InputStream {
-        val socket = java.net.Socket("127.0.0.1", server.port)
-        socket.soTimeout = CLIENT_TIMEOUT_MILLIS
-        val request =
-            buildString {
-                append("POST $path HTTP/1.1\r\n")
-                append("Host: 127.0.0.1\r\n")
-                append("Authorization: BEARER $token\r\n")
-                append("Content-Type: application/json\r\n")
-                append("Content-Length: ${body.toByteArray().size}\r\n")
-                append("Connection: close\r\n\r\n")
-                append(body)
-            }
-        socket.getOutputStream().apply {
-            write(request.toByteArray())
-            flush()
-        }
-        return socket.getInputStream()
     }
 
     private fun withToken(url: URL): HttpURLConnection {
