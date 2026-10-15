@@ -102,6 +102,8 @@ class RouterStreamFlushTest {
 
         override fun listModels(): String = "{\"data\":[]}"
 
+        override fun errorEvent(failure: Exception): String = """{"type":"error","error":{"type":"router_error","message":"test"}}"""
+
         override fun stream(
             rawRequest: String,
             onEvent: (String) -> Unit,
@@ -120,6 +122,8 @@ class RouterStreamFlushTest {
         override fun handle(rawRequest: String): String? = null
 
         override fun listModels(): String = "{\"data\":[]}"
+
+        override fun errorEvent(failure: Exception): String = """{"type":"error","error":{"type":"router_error","message":"test"}}"""
 
         override fun stream(
             rawRequest: String,
