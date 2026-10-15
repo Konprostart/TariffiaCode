@@ -268,7 +268,8 @@ class VpsConnectionLifecycleTest {
                     }
                 val payload = body.toByteArray()
                 val response =
-                    "HTTP/1.1 $status OK\r\nContent-Type: application/json\r\n" +
+                    "HTTP/1.1 $status ${if (status == 401) "Unauthorized" else "OK"}\r\n" +
+                        "Content-Type: application/json\r\n" +
                         "Content-Length: ${payload.size}\r\nConnection: close\r\n\r\n"
                 socket.getOutputStream().apply {
                     write(response.toByteArray())

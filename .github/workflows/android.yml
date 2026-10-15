@@ -243,13 +243,28 @@ jobs:
           sudo /usr/sbin/sshd -D -e -f "$fixture_dir/sshd_config" > "$fixture_dir/sshd.log" 2>&1 &
           echo "$!" > "$fixture_dir/sshd.pid"
 
+          # The fixture stands in for `opencode serve`, and the app now refuses a VPS endpoint that
+          # answers without a credential - so this one behaves like a server started with
+          # OPENCODE_SERVER_PASSWORD: 401 without the header, 200 with it. A fixture that answered
+          # 200 to anything would be testing the refusal path instead of the happy one.
+          OPENCODE_FIXTURE_PASSWORD="android-art-opencode"
+          echo "OPENCODE_FIXTURE_PASSWORD=$OPENCODE_FIXTURE_PASSWORD" > "$fixture_dir/opencode.env"
           python3 -u - <<'PY' > "$fixture_dir/opencode.log" 2>&1 &
+          import base64
           from http.server import BaseHTTPRequestHandler, HTTPServer
+
+          EXPECTED = "Basic " + base64.b64encode(b"opencode:android-art-opencode").decode()
 
           class HealthHandler(BaseHTTPRequestHandler):
               def do_GET(self):
                   if self.path != "/global/health":
                       self.send_error(404)
+                      return
+                  if self.headers.get("Authorization") != EXPECTED:
+                      self.send_response(401)
+                      self.send_header("Content-Length", "0")
+                      self.send_header("Connection", "close")
+                      self.end_headers()
                       return
                   body = b'{"healthy":true,"version":"android-art-test"}'
                   self.send_response(200)
@@ -290,6 +305,7 @@ jobs:
             -Pandroid.testInstrumentationRunnerArguments.sshTestPort=2222
             -Pandroid.testInstrumentationRunnerArguments.sshTestUsername=$SSH_TEST_USERNAME
             -Pandroid.testInstrumentationRunnerArguments.sshTestPassword=$SSH_TEST_PASSWORD
+            -Pandroid.testInstrumentationRunnerArguments.sshTestOpencodePassword=$OPENCODE_FIXTURE_PASSWORD
 
       # Runs on the same emulator that is already booted above. The question it answers - can a
       # process that is not the app reach a loopback port the app opened - is the one nothing else

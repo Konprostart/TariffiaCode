@@ -1,10 +1,12 @@
 package com.konprostart.tariffiacode.runtime.vps
 
 import com.konprostart.tariffiacode.core.ssh.SshPortForward
+import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -13,10 +15,10 @@ import java.util.concurrent.TimeUnit
 /**
  * The check that decides whether a VPS OpenCode endpoint may be handed to a user's agent.
  *
- * Everything runs over a loopback [MockWebServer] standing in for the far end of the SSH forward,
- * so this is the product's own decision logic against real HTTP, with no VPS and no emulator. The
- * fork it guards is the one that matters: Android shares `127.0.0.1` between apps, so an
- * unauthenticated endpoint here is reachable by anything else installed.
+ * Everything runs over a loopback [MockWebServer] standing in for the far end of the SSH forward, so
+ * this is the product's own decision logic against real HTTP, with no VPS and no emulator. The fork
+ * it guards is the one that matters: Android shares `127.0.0.1` between apps, so an unauthenticated
+ * endpoint here is reachable by anything else installed.
  */
 class VpsOpenCodeAuthTest {
     private lateinit var server: MockWebServer
@@ -34,6 +36,12 @@ class VpsOpenCodeAuthTest {
 
     private fun forward(): SshPortForward = FakePortForward(server.hostName, server.port)
 
+    /** The check is suspend; a JUnit4 body is not, so every call is driven through runBlocking. */
+    private fun verify(
+        password: String? = PASSWORD,
+        onForward: SshPortForward = forward(),
+    ): VpsOpenCodeAuth.Outcome = runBlocking { VpsOpenCodeAuth.verify(onForward, "opencode", password) }
+
     @Test
     fun `a server that accepts an unauthenticated request is refused`() {
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"healthy":true}"""))
@@ -45,13 +53,13 @@ class VpsOpenCodeAuthTest {
     fun `no stored password is refused without a single request`() {
         // Nothing is sent at all: there is no credential to send, and probing an open endpoint
         // without one is how the unverified case used to look like a working one.
-        assertEquals(VpsOpenCodeAuth.Outcome.Unauthenticated, VpsOpenCodeAuth.verify(forward(), "opencode", null))
+        assertEquals(VpsOpenCodeAuth.Outcome.Unauthenticated, verify(password = null))
         assertEquals(0, server.requestCount)
     }
 
     @Test
     fun `a blank password is treated as no password`() {
-        assertEquals(VpsOpenCodeAuth.Outcome.Unauthenticated, VpsOpenCodeAuth.verify(forward(), "opencode", "   "))
+        assertEquals(VpsOpenCodeAuth.Outcome.Unauthenticated, verify(password = "   "))
         assertEquals(0, server.requestCount)
     }
 
@@ -71,11 +79,13 @@ class VpsOpenCodeAuthTest {
         verify()
 
         val anonymous = server.takeRequest(2, TimeUnit.SECONDS)
-        assertEquals("GET", anonymous.method)
-        assertEquals(null, anonymous.getHeader("Authorization"))
+        assertNotNull("the first probe never arrived", anonymous)
+        assertEquals("GET", anonymous?.method)
+        assertEquals(null, anonymous?.getHeader("Authorization"))
 
         val authenticated = server.takeRequest(2, TimeUnit.SECONDS)
-        val header = authenticated.getHeader("Authorization")
+        assertNotNull("the second probe never arrived", authenticated)
+        val header = authenticated?.getHeader("Authorization")
         assertTrue("expected Basic auth, got $header", header?.startsWith("Basic ") == true)
     }
 
@@ -96,12 +106,17 @@ class VpsOpenCodeAuthTest {
     @Test
     fun `an unreachable server is a failure rather than an accusation`() {
         // The forward is up but nothing listens. Refusing to route because the VPS is down would be a
-        // worse failure mode than the one being fixed, and the app has its own state for it.
+        // worse failure mode than the one being fixed, and the app has its own state for it. The
+        // message must say "unreachable" - it used to report "HTTP -1", which tells nobody anything.
         val deadPort = ServerSocketHolder.freePort()
 
-        val outcome = VpsOpenCodeAuth.verify(FakePortForward("127.0.0.1", deadPort), "opencode", "secret")
+        val outcome = verify(password = PASSWORD, onForward = FakePortForward("127.0.0.1", deadPort))
 
         assertTrue("expected Failed, got $outcome", outcome is VpsOpenCodeAuth.Outcome.Failed)
+        assertTrue(
+            "expected an unreachable message, got ${(outcome as VpsOpenCodeAuth.Outcome.Failed).message}",
+            outcome.message.contains("unreachable"),
+        )
     }
 
     @Test
@@ -113,7 +128,9 @@ class VpsOpenCodeAuthTest {
         assertTrue("expected Failed, got $outcome", outcome is VpsOpenCodeAuth.Outcome.Failed)
     }
 
-    private fun verify(): VpsOpenCodeAuth.Outcome = VpsOpenCodeAuth.verify(forward(), "opencode", "correct-horse")
+    private companion object {
+        const val PASSWORD = "correct-horse"
+    }
 
     /** The only thing the check needs from a forward is the loopback address it landed on. */
     private class FakePortForward(

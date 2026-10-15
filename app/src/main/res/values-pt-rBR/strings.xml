@@ -1213,6 +1213,7 @@
     <string name="ssh_opencode_password">Senha do servidor OpenCode (opcional)</string>
     <string name="ssh_opencode_password_help">A OPENCODE_SERVER_PASSWORD com que o opencode serve foi iniciado na VPS. Sem ela, a conexão é recusada.</string>
     <string name="ssh_opencode_password_kept">Já há uma senha salva. Deixe em branco para mantê-la.</string>
+    <string name="ssh_opencode_password_missing">Sem ela, uma conexão VPS é recusada.</string>
     <string name="ssh_show_password">Mostrar senha</string>
     <string name="ssh_hide_password">Ocultar senha</string>
     <string name="ssh_credential_stored">A credential is already stored. Leave blank to keep it.</string>

@@ -1215,6 +1215,7 @@
     <string name="ssh_opencode_password">Пароль сервера OpenCode (необязательно)</string>
     <string name="ssh_opencode_password_help">Значение OPENCODE_SERVER_PASSWORD, с которым запущен opencode serve на VPS. Без него подключение отклоняется.</string>
     <string name="ssh_opencode_password_kept">Пароль уже сохранён. Оставьте поле пустым, чтобы сохранить его.</string>
+    <string name="ssh_opencode_password_missing">Без него подключение к VPS отклоняется.</string>
     <string name="ssh_show_password">Показать пароль</string>
     <string name="ssh_hide_password">Скрыть пароль</string>
     <string name="ssh_credential_stored">A credential is already stored. Leave blank to keep it.</string>

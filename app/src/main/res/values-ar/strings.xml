@@ -1219,6 +1219,7 @@
     <string name="ssh_opencode_password">كلمة مرور خادم OpenCode (اختياري)</string>
     <string name="ssh_opencode_password_help">قيمة OPENCODE_SERVER_PASSWORD التي بُدئ بها opencode serve على الخادم. بدونها يُرفض الاتصال.</string>
     <string name="ssh_opencode_password_kept">كلمة المرور محفوظة بالفعل. اتركه فارغًا للإبقاء عليها.</string>
+    <string name="ssh_opencode_password_missing">بدونها يُرفض اتصال VPS.</string>
     <string name="ssh_show_password">إظهار كلمة المرور</string>
     <string name="ssh_hide_password">إخفاء كلمة المرور</string>
     <string name="ssh_credential_stored">A credential is already stored. Leave blank to keep it.</string>

@@ -18,6 +18,11 @@ object SecretRedaction {
             Regex("(?i)authorization\\s*[:=]\\s*\\S+") to "authorization=<redacted>",
             Regex("(?i)cookie\\s*[:=]\\s*\\S+") to "cookie=<redacted>",
             Regex("sk-ant-[A-Za-z0-9_-]{10,}") to "sk-ant-<redacted>",
+            // Google API keys, which are what a Gemini key looks like. Shape is `AIza` followed by
+            // 35 URL-safe base64 characters. Without this the Gemini key is one of the few provider
+            // secrets in the app that no pattern here would catch, and it is the one that turns up in
+            // a stack trace whenever a malformed request URL is echoed back by the HTTP client.
+            Regex("AIza[0-9A-Za-z_-]{35}") to "AIza<redacted>",
             // Covers plain OpenAI-style keys (sk-<random>) as well as the newer, hyphenated
             // sk-proj-/sk-svcacct-/sk-admin- project-scoped key formats, which a body limited to
             // [A-Za-z0-9] would otherwise leave almost entirely unredacted.

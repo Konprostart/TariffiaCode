@@ -159,13 +159,13 @@ private fun SshOpenCodePasswordField(
             }
         },
         supportingText = {
-            Text(
-                if (form.storedOpencodePassword && form.opencodePassword.isBlank()) {
-                    stringResource(R.string.ssh_opencode_password_kept)
-                } else {
-                    stringResource(R.string.ssh_opencode_password_help)
-                },
-            )
+            val help =
+                when {
+                    form.storedOpencodePassword && form.opencodePassword.isBlank() ->
+                        stringResource(R.string.ssh_opencode_password_kept)
+                    else -> stringResource(R.string.ssh_opencode_password_help)
+                }
+            Text(help + if (form.hasOpencodePassword()) "" else " " + stringResource(R.string.ssh_opencode_password_missing))
         },
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth(),

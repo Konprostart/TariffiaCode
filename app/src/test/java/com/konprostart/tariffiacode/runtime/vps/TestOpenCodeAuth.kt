@@ -34,7 +34,4 @@ internal object TestOpenCodeAuth {
         }
         return authorization
     }
-
-    /** The status line a health request should get for the credential it carried. */
-    fun healthStatus(header: String?): String = if (authorized(header)) "HTTP/1.1 200 OK\r\n" else "HTTP/1.1 401 Unauthorized\r\n"
 }

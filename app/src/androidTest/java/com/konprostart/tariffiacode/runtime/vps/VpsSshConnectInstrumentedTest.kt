@@ -58,6 +58,11 @@ class VpsSshConnectInstrumentedTest {
                     username = username,
                     authType = SshAuthType.PASSWORD,
                     credentialRef = credentialRef,
+                    // The tunneled OpenCode endpoint is refused unless it is authenticated, so the
+                    // profile has to carry the password the CI's opencode stand-in was started with.
+                    // Without it the connect under test stops at the auth check and never reaches
+                    // the health assertion this test exists for.
+                    opencodePassword = arguments.getString(ARG_OPENCODE_PASSWORD),
                 )
             var target: VpsRuntimeTarget? = null
 
@@ -223,6 +228,9 @@ class VpsSshConnectInstrumentedTest {
         const val ARG_PORT = "sshTestPort"
         const val ARG_USERNAME = "sshTestUsername"
         const val ARG_PASSWORD = "sshTestPassword"
+
+        /** The password the CI's OpenCode stand-in fixture was started with. */
+        const val ARG_OPENCODE_PASSWORD = "sshTestOpencodePassword"
         const val TEST_OPENCODE_PORT = 4096
         const val TEST_OPENCODE_VERSION = "android-art-test"
         const val CONNECT_TIMEOUT_MILLIS = 30_000L

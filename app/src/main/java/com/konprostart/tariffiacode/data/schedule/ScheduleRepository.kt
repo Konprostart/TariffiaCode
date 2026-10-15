@@ -251,8 +251,18 @@ class ScheduleRepository(context: Context) {
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
             )
 
-        /** True only for "this file was encrypted under a key this device no longer has". */
+        /**
+         * True only for "this file was encrypted under a key this device no longer has".
+         *
+         * Bounded on purpose: this runs from `Application.onCreate`, and an unbounded walk of a
+         * cause chain that loops would hang the launch instead of failing it. Sixteen links is far
+         * more than the wrapping AndroidX actually produces.
+         */
         private fun isUndecryptableKeyset(failure: Throwable): Boolean =
-            generateSequence(failure) { it.cause }.any { it is AEADBadTagException || it is KeyStoreException }
+            generateSequence(failure) { it.cause }
+                .take(MAX_CAUSE_DEPTH)
+                .any { it is AEADBadTagException || it is KeyStoreException }
+
+        private const val MAX_CAUSE_DEPTH = 16
     }
 }
