@@ -172,9 +172,9 @@ class RouterEngine(
         val line = java.io.ByteArrayOutputStream()
         while (true) {
             val byte = source.read()
-            if (byte < 0) return if (line.size() == 0) null else line.toString(Charsets.UTF_8)
+            if (byte < 0) return if (line.size() == 0) null else String(line.toByteArray(), Charsets.UTF_8)
             when (byte.toChar()) {
-                '\n' -> return line.toString(Charsets.UTF_8)
+                '\n' -> return String(line.toByteArray(), Charsets.UTF_8)
                 '\r' -> {
                     // CR ends the line. In CRLF the LF is consumed with it; after a lone CR the
                     // byte that follows is already the next line's, so it is pushed back rather
@@ -182,11 +182,11 @@ class RouterEngine(
                     source.mark(1)
                     val next = source.read()
                     if (next >= 0 && next.toChar() != '\n') source.reset()
-                    return line.toString(Charsets.UTF_8)
+                    return String(line.toByteArray(), Charsets.UTF_8)
                 }
                 else -> line.write(byte)
             }
-            if (line.size() > MAX_UPSTREAM_LINE_BYTES) return line.toString(Charsets.UTF_8)
+            if (line.size() > MAX_UPSTREAM_LINE_BYTES) return String(line.toByteArray(), Charsets.UTF_8)
         }
     }
 
