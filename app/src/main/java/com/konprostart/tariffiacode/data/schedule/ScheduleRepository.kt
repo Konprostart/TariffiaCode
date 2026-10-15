@@ -1,6 +1,7 @@
 package com.konprostart.tariffiacode.data.schedule
 
 import android.content.Context
+import android.os.Build
 import android.content.SharedPreferences
 import android.security.KeyStoreException
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -258,10 +259,15 @@ class ScheduleRepository(context: Context) {
          * cause chain that loops would hang the launch instead of failing it. Sixteen links is far
          * more than the wrapping AndroidX actually produces.
          */
+        @Suppress("NewApi")
         private fun isUndecryptableKeyset(failure: Throwable): Boolean =
             generateSequence(failure) { it.cause }
                 .take(MAX_CAUSE_DEPTH)
-                .any { it is AEADBadTagException || it is KeyStoreException }
+                .any {
+                    it is AEADBadTagException ||
+                        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            it is KeyStoreException)
+                }
 
         private const val MAX_CAUSE_DEPTH = 16
     }
