@@ -376,31 +376,36 @@ class RouterServer(
         // Chunked is the alternative that still lets the client tell where events begin and end.
         writeStatus(out, 200, "text/event-stream", chunked = true)
         val stream = ChunkedStream(out)
+        val heartbeat = Heartbeat(stream)
+        heartbeat.start()
         try {
             var sawStop = false
             gateway.stream(raw) { event ->
                 if (event.contains(STOP_EVENT)) sawStop = true
-                stream.write(sseFrame(event))
+                stream.write(sseFrames(event))
             }
             // Only if the chain did not already close its own stream: two message_stop events make a
             // client that is counting events, or keying off the terminal one, behave oddly.
             if (!sawStop) {
-                stream.write(sseFrame(DONE_EVENT))
+                stream.write(sseFrames(DONE_EVENT))
             }
+            heartbeat.stop()
             stream.finish()
         } catch (failure: IOException) {
             // The agent closed the connection mid-turn. Nothing to report to a caller that left.
+            heartbeat.stop()
         } catch (failure: Exception) {
             // Report it in the shape the client parses rather than dropping the stream silently.
             runCatching {
-                stream.write(sseFrame(gateway.errorEvent(failure)))
+                heartbeat.stop()
+                stream.write(sseFrames(gateway.errorEvent(failure)))
                 stream.finish()
             }
         }
     }
 
     /**
-     * One SSE frame: the event name, and the event itself.
+     * One or more SSE frames: the event name, and the event itself.
      *
      * Both lines matter. The gateway hands over a complete Anthropic event object, and sending it as
      * the event *name* - which is what this used to do - left the client with a name and no payload,
@@ -409,11 +414,115 @@ class RouterServer(
      * The name is taken from the payload rather than asked for separately, so the two cannot drift.
      * A payload with no recognisable type still goes out as data, because losing the payload is worse
      * than losing the name: a client that keys off `type` can recover, one left with no data cannot.
+     *
+     * A payload can legitimately hold *several* events: an OpenAI-shaped chunk that carries text and
+     * a tool call together reaches here as two adjacent JSON objects. They used to be written as one
+     * `data:` line, which is not a JSON document at all - the parse above failed, the name went
+     * missing, and the client was handed `data: {..}{..}`. A strict client drops the stream there,
+     * which is a connection lost partway through an answer that was being produced correctly.
+     * So a payload that is not a single object is split and each object becomes its own frame.
      */
-    private fun sseFrame(payload: String): ByteArray {
-        val name = runCatching { json.parseToJsonElement(payload).jsonObject["type"]?.jsonPrimitive?.content }.getOrNull()
-        val head = if (name.isNullOrBlank()) "" else "event: $name\n"
+    private fun sseFrames(payload: String): ByteArray {
+        val objects = splitTopLevelObjects(payload)
+        if (objects.isEmpty()) return frame(payload, eventName = null)
+        return objects.joinToByteArray { frame(it, eventName = eventNameOf(it)) }
+    }
+
+    /** A single event, with the name read out of its own `type`. */
+    private fun frame(
+        payload: String,
+        eventName: String?,
+    ): ByteArray {
+        val head = if (eventName.isNullOrBlank()) "" else "event: $eventName\n"
         return "${head}data: $payload\n\n".toByteArray(CHARSET)
+    }
+
+    private fun eventNameOf(payload: String): String? =
+        runCatching { json.parseToJsonElement(payload).jsonObject["type"]?.jsonPrimitive?.content }.getOrNull()
+
+    /**
+     * The adjacent top-level JSON objects in [payload], or an empty list if it is not several.
+     *
+     * Brace counting with string and escape awareness, so a `}` inside a string value - which a
+     * model's own prose produces routinely - does not end an object early. Falls back to "not a
+     * list" for anything that is a single object, which is the overwhelmingly common case and must
+     * keep its exact bytes.
+     */
+    private fun splitTopLevelObjects(payload: String): List<String> {
+        val trimmed = payload.trim()
+        if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return emptyList()
+        if (eventNameOf(trimmed) != null) return emptyList()
+        val objects = mutableListOf<String>()
+        val current = StringBuilder()
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (character in trimmed) {
+            current.append(character)
+            when {
+                escaped -> escaped = false
+                character == '\\' && inString -> escaped = true
+                character == '"' -> inString = !inString
+                inString -> Unit
+                character == '{' -> depth++
+                character == '}' -> {
+                    depth--
+                    if (depth == 0) {
+                        objects += current.toString()
+                        current.setLength(0)
+                    }
+                }
+            }
+        }
+        // Only a clean split counts. A truncated tail means the payload is one broken object, and
+        // handing the client fragments of it is worse than handing it the whole thing.
+        return if (objects.size > 1 && current.isEmpty()) objects else emptyList()
+    }
+
+    /**
+     * A comment line on the stream while the provider is still thinking.
+     *
+     * The gap this covers is the whole reasoning phase: the router sends the status line, then waits
+     * for the first real event, and for a model that thinks for a while that wait is silent. A client
+     * watching a stream has its own idea of how long silence is acceptable, and closing the turn
+     * mid-thought is indistinguishable to it from a dropped connection - the symptom is a stream
+     * that dies just as the answer is about to start, which is exactly where it is observed.
+     *
+     * `:` is the SSE comment. It is defined to be ignored by a conforming parser, so this costs the
+     * client nothing, and it is written through the same lock as a real frame so it cannot land in
+     * the middle of a chunk's bytes.
+     *
+     * Only fires when the stream has been quiet, so a chatty provider is never interleaved with.
+     */
+    private class Heartbeat(
+        private val stream: ChunkedStream,
+    ) {
+        private val finished = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        fun start() {
+            val thread =
+                Thread(
+                    {
+                        while (!finished.get()) {
+                            try {
+                                Thread.sleep(HEARTBEAT_INTERVAL_MILLIS)
+                            } catch (_: InterruptedException) {
+                                return@Thread
+                            }
+                            // runCatching: a client that has already gone away makes this a write to
+                            // a closed socket, which is not a reason to touch the caller's thread.
+                            runCatching { stream.comment() }
+                        }
+                    },
+                    "router-heartbeat",
+                )
+            thread.isDaemon = true
+            thread.start()
+        }
+
+        fun stop() {
+            finished.set(true)
+        }
     }
 
     /**
@@ -427,24 +536,56 @@ class RouterServer(
     private class ChunkedStream(
         private val out: OutputStream,
     ) {
+        /**
+         * Serialises every write to the socket.
+         *
+         * The heartbeat writes from its own thread while a turn is in flight, and two threads
+         * interleaving on one socket is not a rare race but a certainty: a chunk's length prefix
+         * arriving after its payload turns the stream into garbage that the client drops mid-answer.
+         */
+        private val lock = Any()
+
         fun write(bytes: ByteArray) {
             if (bytes.isEmpty()) return
+            synchronized(lock) { frame(bytes) }
+        }
+
+        /** An SSE comment, skipped when the stream has moved recently. */
+        fun comment() {
+            val bytes = COMMENT.toByteArray(CHARSET)
+            synchronized(lock) {
+                if (System.nanoTime() - lastWriteNanos < QUIET_BEFORE_COMMENT_NANOS) return
+                lastWriteNanos = System.nanoTime()
+                frame(bytes)
+            }
+        }
+
+        fun finish() {
+            synchronized(lock) {
+                out.write("0".toByteArray(CHARSET))
+                out.write(CRLF)
+                out.write(CRLF)
+                out.flush()
+            }
+        }
+
+        private var lastWriteNanos = System.nanoTime()
+
+        private fun frame(bytes: ByteArray) {
             out.write(bytes.size.toString(16).toByteArray(CHARSET))
             out.write(CRLF)
             out.write(bytes)
             out.write(CRLF)
+            // Flushed per frame, always. This is the whole point: a token that is written but not
+            // flushed sits in the socket buffer, and a client watching a stream sees nothing until
+            // the buffer happens to fill or the turn ends.
             out.flush()
-        }
-
-        fun finish() {
-            out.write("0".toByteArray(CHARSET))
-            out.write(CRLF)
-            out.write(CRLF)
-            out.flush()
+            lastWriteNanos = System.nanoTime()
         }
 
         private companion object {
             val CRLF = "\r\n".toByteArray(CHARSET)
+            val COMMENT = ": keep-alive\n\n"
         }
     }
 
@@ -543,6 +684,12 @@ class RouterServer(
         const val STOP_EVENT = "message_stop"
         const val MAX_BODY_BYTES = 8 * 1024 * 1024
         const val MAX_HEADER_LINE_BYTES = 8 * 1024
+
+        /** How often the stream is checked for silence while a provider is thinking. */
+        const val HEARTBEAT_INTERVAL_MILLIS = 10_000L
+
+        /** How long the stream must be quiet before a keep-alive comment is worth writing. */
+        const val QUIET_BEFORE_COMMENT_NANOS = 5_000L * 1_000_000L
 
         /**
          * How long [stop] waits for workers to notice their closed sockets.
