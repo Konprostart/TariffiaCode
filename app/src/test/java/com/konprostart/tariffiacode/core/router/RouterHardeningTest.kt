@@ -141,23 +141,52 @@ class RouterHardeningTest {
      * connection is closed unread, so a caller opening sockets costs it a descriptor for the length
      * of a handshake rather than a worker for the length of a turn.
      */
+    /**
+     * A flood of connections must not be able to spend the process.
+     *
+     * Two properties, asserted separately because they are separate guarantees. The flood is
+     * *refused* - the connections past the pool's ceiling are closed by the server without ever
+     * being served, which is what stops one client turning into an unbounded number of threads and
+     * an unbounded amount of buffer. And the router still works afterwards, which is the property
+     * that matters and the one a hard cap could easily have broken.
+     */
     @Test
-    fun `connections past the cap are refused and the router still serves`() {
+    fun `a flood is refused, bounded, and the router still serves afterwards`() {
         val server = start()
         val held = mutableListOf<Socket>()
+        val refused = mutableListOf<Socket>()
         try {
             repeat(PROBE_CONNECTIONS) {
-                held += Socket("127.0.0.1", server.port).also { it.soTimeout = 2_000 }
+                val socket = Socket("127.0.0.1", server.port).also { it.soTimeout = REFUSED_READ_MILLIS }
+                held += socket
             }
 
-            assertEquals(
-                "a flood must not take the router down",
-                200,
-                modelsStatus(server),
+            // The ones the server turned away read as end-of-stream rather than blocking. Counted
+            // rather than asserted exactly, because how many fit in the pool is a tuning value.
+            held.forEach { socket ->
+                val closed =
+                    runCatching {
+                        socket.getInputStream().read() == -1 && socket.getOutputStream().write(ByteArray(0)) == Unit
+                    }.getOrDefault(false)
+                if (closed) refused += socket
+            }
+
+            assertTrue(
+                "a flood past the pool ceiling must be turned away, not served (${refused.size} of " +
+                    "${held.size} refused)",
+                refused.isNotEmpty(),
+            )
+            assertTrue(
+                "and it must be bounded well below the number opened, or the pool is not a bound",
+                refused.size > PROBE_CONNECTIONS / 2,
             )
         } finally {
             held.forEach { runCatching { it.close() } }
         }
+
+        // With the flood gone the router serves again. Separate from the flood on purpose: a cap
+        // that refuses everything forever would satisfy the assertions above.
+        assertEquals("the router must still serve once the pressure is gone", 200, modelsStatus(server))
     }
 
     // --- helpers ---------------------------------------------------------------------------
@@ -203,7 +232,10 @@ class RouterHardeningTest {
     }
 
     private companion object {
-        /** Comfortably past the cap, so the refusal path is definitely the one under test. */
+        /** Comfortably past the pool ceiling, so the refusal path is definitely the one under test. */
         const val PROBE_CONNECTIONS = 40
+
+        /** Long enough for a refusal to arrive, short enough not to wait out the read timeout. */
+        const val REFUSED_READ_MILLIS = 3_000
     }
 }

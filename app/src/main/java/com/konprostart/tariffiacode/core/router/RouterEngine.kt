@@ -110,7 +110,12 @@ class RouterEngine(
         }
 
         for (model in usableChain(request.tier)) {
-            val adapter = ProviderAdapters.forProvider(model.provider, keys()) ?: continue
+            // Resolved with the user's own endpoints, and identically in every place: an entry the
+            // chain walk accepted but this call cannot resolve is a turn that fails as "no adapter"
+            // on the provider the user just configured.
+            val adapter =
+                ProviderAdapters.forProvider(model.provider, keys(), customProviders = customEndpoints().keys)
+                    ?: continue
             val translated = runCatching { adapter.buildRequest(request, model) }.getOrNull() ?: continue
             try {
                 streamOnce(translated, model, adapter, relay)
@@ -130,7 +135,9 @@ class RouterEngine(
         model: RouterModel,
         rawBody: String,
     ): String {
-        val adapter = ProviderAdapters.forProvider(model.provider, keys()) ?: throw IOException("No adapter")
+        val adapter =
+            ProviderAdapters.forProvider(model.provider, keys(), customProviders = customEndpoints().keys)
+                ?: throw IOException("No adapter")
         val translated = adapter.buildRequest(request, model, rawBody)
         client.newCall(call(translated, model, adapter)).execute().use { response ->
             if (!response.isSuccessful) throw ProviderRefused(response.code)
