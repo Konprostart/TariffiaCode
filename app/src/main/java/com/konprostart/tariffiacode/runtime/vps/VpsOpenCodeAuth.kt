@@ -75,7 +75,7 @@ internal object VpsOpenCodeAuth {
         // and the recovery loop retries connects five times before giving up.
         val client = probeClient()
         try {
-            val open = statusOf(client, request(forward, username = null, password = null))
+            val open = statusOf(client, request(forward, username, password = null))
             if (open in SUCCESS_CODES) return Outcome.Unauthenticated
             if (open != UNAVAILABLE && open !in AUTH_CHALLENGE_CODES) {
                 return Outcome.Failed("OpenCode on the VPS answered the auth check with HTTP $open")
@@ -118,7 +118,7 @@ internal object VpsOpenCodeAuth {
 
     private fun request(
         forward: SshPortForward,
-        username: String?,
+        username: String,
         password: String?,
     ): Request {
         val builder =
