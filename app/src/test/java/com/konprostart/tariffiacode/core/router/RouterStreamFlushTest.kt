@@ -19,14 +19,12 @@ class RouterStreamFlushTest {
     /** A chunk plus a tool call in one upstream frame: two events, which used to be glued together. */
     @Test
     fun `two events in one payload become two frames rather than invalid JSON`() {
-        val server = start(HoldingGateway())
         val first = """{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"}}"""
         val second = """{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{"}}"""
         // Exactly what OpenAiCompatibleAdapter returns for a chunk holding both: no separator.
         val glued = first + second
 
-        val body = post(server, glued)
-        println("RAW-SPLIT-DEBUG>>>" + body.replace("\r", "<CR>").replace("\n", "<LF>") + "<<<")
+        val body = post(start(HoldingGateway(payload = glued, quietMillis = 100L)), glued)
 
         assertEquals(
             "two objects must not share one data line: $body",
@@ -93,8 +91,17 @@ class RouterStreamFlushTest {
 
     // --- helpers ---------------------------------------------------------------------------
 
-    /** Emits one event, then blocks, so the turn can be observed mid-flight. */
-    private class HoldingGateway : RouterGateway {
+    /**
+     * Stays silent for [quietMillis], then emits [payload] and ends the turn.
+     *
+     * The silence is the point for one test and an inconvenience for another, so it is a parameter:
+     * the heartbeat test needs a provider that is quiet for longer than a client would tolerate, and
+     * the frame-splitting test only cares what comes out once it finally speaks.
+     */
+    private class HoldingGateway(
+        private val payload: String = """{"type":"message_stop"}""",
+        private val quietMillis: Long = 30_000L,
+    ) : RouterGateway {
         val entered = CountDownLatch(1)
 
         override fun isStreaming(rawRequest: String) = true
@@ -112,8 +119,8 @@ class RouterStreamFlushTest {
             onEvent: (String) -> Unit,
         ) {
             entered.countDown()
-            Thread.sleep(TimeUnit.SECONDS.toMillis(30))
-            onEvent("""{"type":"message_stop"}""")
+            Thread.sleep(quietMillis)
+            onEvent(payload)
         }
     }
 
