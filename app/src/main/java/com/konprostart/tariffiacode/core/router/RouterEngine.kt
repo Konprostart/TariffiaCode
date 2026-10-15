@@ -142,13 +142,51 @@ class RouterEngine(
     ) {
         client.newCall(call(translated, model, adapter)).execute().use { response ->
             if (!response.isSuccessful) throw ProviderRefused(response.code)
-            val reader = response.body?.charStream()?.buffered() ?: throw IOException("Empty stream")
+            // Buffered so the byte-at-a-time line reader costs one array read per line, not per
+            // byte: this is a socket, and an unbuffered read here is a syscall per character.
+            val source = response.body?.byteStream()?.buffered() ?: throw IOException("Empty stream")
             while (true) {
-                val line = reader.readLine() ?: break
+                val line = readSseLine(source) ?: break
                 if (line.startsWith(SSE_DATA)) {
                     adapter.parseStreamEvent(line.removePrefix(SSE_DATA).trim())?.let(relay)
                 }
             }
+        }
+    }
+
+    /**
+     * One upstream SSE line, or null at end of stream.
+     *
+     * Byte at a time over a buffered source, rather than `BufferedReader.readLine()`. The reader
+     * version holds a line back until it sees its terminator, and a provider that writes a frame in
+     * pieces - or without the trailing newline a well-behaved stream always sends - leaves that line
+     * sitting in the reader's 8 KB buffer. Nothing reaches the client until the buffer fills or the
+     * turn ends, which is a stream that looks stalled exactly while it is being written. Reading
+     * bytes as they arrive hands each completed line on immediately, and costs one array read per
+     * line rather than per byte.
+     *
+     * Both terminators are accepted, because SSE permits `\n`, `\r\n` and a lone `\r`, and a
+     * provider that uses the last one would otherwise yield one enormous line per stream.
+     */
+    private fun readSseLine(source: java.io.InputStream): String? {
+        val line = java.io.ByteArrayOutputStream()
+        while (true) {
+            val byte = source.read()
+            if (byte < 0) return if (line.size() == 0) null else String(line.toByteArray(), Charsets.UTF_8)
+            when (byte.toChar()) {
+                '\n' -> return String(line.toByteArray(), Charsets.UTF_8)
+                '\r' -> {
+                    // CR ends the line. In CRLF the LF is consumed with it; after a lone CR the
+                    // byte that follows is already the next line's, so it is pushed back rather
+                    // than swallowed - dropping it would silently corrupt the next frame.
+                    source.mark(1)
+                    val next = source.read()
+                    if (next >= 0 && next.toChar() != '\n') source.reset()
+                    return String(line.toByteArray(), Charsets.UTF_8)
+                }
+                else -> line.write(byte)
+            }
+            if (line.size() > MAX_UPSTREAM_LINE_BYTES) return String(line.toByteArray(), Charsets.UTF_8)
         }
     }
 
@@ -246,6 +284,9 @@ class RouterEngine(
 
     companion object {
         private const val SSE_DATA = "data:"
+
+        /** An upstream frame larger than this is a provider problem, not a reason to hold the turn. */
+        private const val MAX_UPSTREAM_LINE_BYTES = 16 * 1024 * 1024
         private const val OLLAMA_PORT = 11434
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
