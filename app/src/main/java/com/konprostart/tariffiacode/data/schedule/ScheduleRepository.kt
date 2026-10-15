@@ -1,8 +1,8 @@
 package com.konprostart.tariffiacode.data.schedule
 
 import android.content.Context
-import android.os.Build
 import android.content.SharedPreferences
+import android.os.Build
 import android.security.KeyStoreException
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -265,8 +265,10 @@ class ScheduleRepository(context: Context) {
                 .take(MAX_CAUSE_DEPTH)
                 .any {
                     it is AEADBadTagException ||
-                        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                            it is KeyStoreException)
+                        (
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                it is KeyStoreException
+                        )
                 }
 
         private const val MAX_CAUSE_DEPTH = 16
