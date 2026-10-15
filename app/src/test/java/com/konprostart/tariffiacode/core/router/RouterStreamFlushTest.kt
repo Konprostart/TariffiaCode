@@ -55,7 +55,7 @@ class RouterStreamFlushTest {
         // Read past the status line and into the body. The first body byte is either the keep-alive
         // comment or a real event; either proves the turn is still being kept alive.
         var sawBody = false
-        val deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(40)
+        val deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(40).toLong()
         while (!sawBody && System.currentTimeMillis() < deadline) {
             val line = reader.readLine() ?: break
             if (line.isEmpty()) sawBody = true
@@ -76,7 +76,7 @@ class RouterStreamFlushTest {
 
         val reader = socket.getInputStream().bufferedReader()
         var payload: String? = null
-        val deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(20)
+        val deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(20).toLong()
         while (payload == null && System.currentTimeMillis() < deadline) {
             val line = reader.readLine() ?: break
             if (line.startsWith("data: ")) payload = line
@@ -100,6 +100,8 @@ class RouterStreamFlushTest {
 
         override fun handle(rawRequest: String): String? = null
 
+        override fun listModels(): String = "{\"data\":[]}"
+
         override fun stream(
             rawRequest: String,
             onEvent: (String) -> Unit,
@@ -116,6 +118,8 @@ class RouterStreamFlushTest {
         override fun isStreaming(rawRequest: String) = true
 
         override fun handle(rawRequest: String): String? = null
+
+        override fun listModels(): String = "{\"data\":[]}"
 
         override fun stream(
             rawRequest: String,
@@ -148,7 +152,7 @@ class RouterStreamFlushTest {
         body: String,
     ): Socket {
         val socket = Socket("127.0.0.1", server.port)
-        socket.soTimeout = TimeUnit.SECONDS.toMillis(45)
+        socket.soTimeout = TimeUnit.SECONDS.toMillis(45).toInt()
         socket.getOutputStream().apply {
             write(request(body).toByteArray())
             flush()
