@@ -2,6 +2,7 @@ package com.konprostart.tariffiacode.core.router
 
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.Socket
@@ -26,13 +27,15 @@ class RouterStreamFlushTest {
 
         val body = post(start(HoldingGateway(payload = glued, quietMillis = 100L)), glued)
 
-        assertEquals(
-            "two objects must not share one data line: $body",
-            2,
-            body.split("data: ").count { it.startsWith("{") },
-        )
+        // Counted by type, not by "every data line": the server legitimately appends a
+        // message_stop of its own once the chain is done, and that frame is not part of this.
+        val deltas = body.split("data: ").count { it.startsWith("""{"type":"content_block_delta"""") }
+        assertEquals("both objects must reach the client as their own frame: $body", 2, deltas)
         assertTrue("both payloads must survive: $body", body.contains(""""text":"Hi""""))
         assertTrue("and so must the tool delta: $body", body.contains("partial_json"))
+        // The failure this guards: one data line holding two adjacent objects, which is not a JSON
+        // document and ends the client's stream at the first real token.
+        assertFalse("no data line may carry two adjacent objects: $body", body.contains("}{"))
     }
 
     /**
