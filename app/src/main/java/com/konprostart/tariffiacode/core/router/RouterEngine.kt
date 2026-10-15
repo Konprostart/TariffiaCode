@@ -231,7 +231,7 @@ class RouterEngine(
         val available = keys()
         return config().chainFor(tier).filter { model ->
             hasCredential(model.provider, available) &&
-                ProviderAdapters.forProvider(model.provider, available, customProviders = customEndpoints()) != null &&
+                ProviderAdapters.forProvider(model.provider, available, customProviders = customEndpoints().keys) != null &&
                 resolveEndpoint(model.provider) != null &&
                 breakers.allows(model.provider)
         }
