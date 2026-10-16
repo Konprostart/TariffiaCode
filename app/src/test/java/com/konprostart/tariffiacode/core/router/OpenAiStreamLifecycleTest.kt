@@ -90,7 +90,8 @@ class OpenAiStreamLifecycleTest {
         assertEquals("tool_use", block!!["type"]?.jsonPrimitive?.content)
         assertEquals("without the name the client cannot run the tool", "Bash", block["name"]?.jsonPrimitive?.content)
         assertEquals("or the id it has to report the result under", "call_1", block["id"]?.jsonPrimitive?.content)
-        assertEquals("and then the arguments stream inside it", "input_json_delta", types[2])
+        val inner = frames[2]["delta"]?.jsonObject
+        assertEquals("and then the arguments stream inside it", "input_json_delta", inner!!["type"]?.jsonPrimitive?.content)
     }
 
     @Test
