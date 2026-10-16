@@ -1,7 +1,6 @@
 package com.konprostart.tariffiacode.core.router
 
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
@@ -150,7 +149,7 @@ class OpenAiStreamLifecycleTest {
                 """data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_2","function":{"name":"Read","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}""",
             )
 
-        val indices = tool.mapNotNull { it["index"]?.jsonPrimitive?.intOrNull() }
+        val indices = tool.mapNotNull { it["index"]?.jsonPrimitive?.content?.toIntOrNull() }
         assertTrue("the tool block must not reuse the text block's index: $indices", indices.all { it >= 1 })
     }
 
