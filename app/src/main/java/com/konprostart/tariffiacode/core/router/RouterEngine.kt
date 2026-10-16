@@ -60,6 +60,14 @@ class RouterEngine(
     private val breakers: CircuitBreaker = CircuitBreaker(),
     private val endpointFor: (String) -> ProviderEndpoint? = { provider -> defaultEndpoint(provider, keys()[provider]) },
     private val client: OkHttpClient = defaultClient(),
+    /**
+     * Where the turn's own story goes, one line per decision.
+     *
+     * A turn that has died has to leave a trace naming the hop: the provider, the attempt, and the
+     * reason, or diagnosing "empty" stays a guessing game for as long as the server lives. Default
+     * silent so the engine stays neutral in tests; the service wires in both logcat and a file.
+     */
+    private val log: (String) -> Unit = {},
 ) : RouterGateway {
     private val json =
         Json {
@@ -80,14 +88,19 @@ class RouterEngine(
      */
     override fun handle(rawRequest: String): String? {
         val request = decode(rawRequest) ?: return null
-        for (model in usableChain(request.tier)) {
-            val answer = runCatching { answerOnce(request, model, rawRequest) }.getOrNull()
-            if (answer != null) {
+        val chain = usableChain(request.tier)
+        log("turn start: tier=${request.tier} stream=false chain=${chain.joinToString(",") { it.model }}")
+        for ((index, model) in chain.withIndex()) {
+            val attempt = "${index + 1}/${chain.size}"
+            val result = runCatching { answerOnce(request, model, rawRequest) }
+            if (result.isSuccess) {
                 breakers.recordSuccess(model.provider)
-                return answer
+                return result.getOrNull()
             }
+            log("attempt $attempt provider=${model.provider}: failed: ${result.exceptionOrNull()?.message}")
             breakers.recordFailure(model.provider)
         }
+        log("turn failed: every provider in the chain failed")
         return null
     }
 
@@ -109,24 +122,36 @@ class RouterEngine(
             onEvent(event)
         }
 
-        for (model in usableChain(request.tier)) {
+        val chainModels = usableChain(request.tier)
+        log("turn start: tier=${request.tier} stream=true chain=${chainModels.joinToString(",") { it.model }}")
+        for ((index, model) in chainModels.withIndex()) {
+            val attempt = "${index + 1}/${chainModels.size}"
             // Resolved with the user's own endpoints, and identically in every place: an entry the
             // chain walk accepted but this call cannot resolve is a turn that fails as "no adapter"
             // on the provider the user just configured.
             val adapter =
                 ProviderAdapters.forProvider(model.provider, keys(), customProviders = customEndpoints().keys)
-                    ?: continue
-            val translated = runCatching { adapter.buildRequest(request, model) }.getOrNull() ?: continue
+                    ?: run { log("attempt $attempt provider=${model.provider}: no adapter, skipping"); continue }
+            val translated =
+                runCatching { adapter.buildRequest(request, model) }.getOrNull()
+                    ?: run { log("attempt $attempt provider=${model.provider}: untranslatable, skipping"); continue }
+            log("attempt $attempt provider=${model.provider} url=${call(translated, model, adapter).url}")
             try {
                 streamOnce(translated, model, adapter, relay)
+                log("attempt $attempt provider=${model.provider}: stream ended normally")
                 breakers.recordSuccess(model.provider)
                 return
             } catch (io: IOException) {
-                if (committed.get()) throw io
+                if (committed.get()) {
+                    log("attempt $attempt provider=${model.provider}: committed stream failed: ${io.message}")
+                    throw io
+                }
                 failure = io
+                log("attempt $attempt provider=${model.provider}: failed before first event: ${io.message}")
                 breakers.recordFailure(model.provider)
             }
         }
+        log("turn failed: ${failure.message}")
         throw failure
     }
 
@@ -156,11 +181,22 @@ class RouterEngine(
     ) {
         client.newCall(call(translated, model, adapter)).execute().use { response ->
             if (!response.isSuccessful) throw ProviderRefused(response.code)
-            // Buffered so the byte-at-a-time line reader costs one array read per line, not per
-            // byte: this is a socket, and an unbuffered read here is a syscall per character.
-            val source = response.body?.byteStream()?.buffered() ?: throw IOException("Empty stream")
+            val body = response.body ?: throw IOException("Empty stream")
+            // The idle timeout is not fixed for the life of the stream: a provider that accepts and
+            // then says nothing gets sixty seconds, and once a byte has arrived the quiet budget
+            // widens, because a model that thinks before speaking may legitimately be silent for
+            // minutes. Under the old single 300-second idle timeout one silent provider stalled the
+            // whole turn for five minutes, and a failing chain looked indistinguishable from slow.
+            val source = body.source()
+            source.timeout().timeout(FIRST_BYTE_DEADLINE_SECONDS, TimeUnit.SECONDS)
+            val input = java.io.PushbackInputStream(source.inputStream(), 1)
+            var firstByteSeen = false
             while (true) {
-                val line = readSseLine(source) ?: break
+                val line = readSseLine(input) ?: break
+                if (!firstByteSeen) {
+                    firstByteSeen = true
+                    source.timeout().timeout(STEADY_IDLE_SECONDS, TimeUnit.SECONDS)
+                }
                 if (line.startsWith(SSE_DATA)) {
                     adapter.parseStreamEvent(line.removePrefix(SSE_DATA).trim())?.let(relay)
                 }
@@ -182,7 +218,7 @@ class RouterEngine(
      * Both terminators are accepted, because SSE permits `\n`, `\r\n` and a lone `\r`, and a
      * provider that uses the last one would otherwise yield one enormous line per stream.
      */
-    private fun readSseLine(source: java.io.InputStream): String? {
+    private fun readSseLine(source: java.io.PushbackInputStream): String? {
         val line = java.io.ByteArrayOutputStream()
         while (true) {
             val byte = source.read()
@@ -193,9 +229,8 @@ class RouterEngine(
                     // CR ends the line. In CRLF the LF is consumed with it; after a lone CR the
                     // byte that follows is already the next line's, so it is pushed back rather
                     // than swallowed - dropping it would silently corrupt the next frame.
-                    source.mark(1)
                     val next = source.read()
-                    if (next >= 0 && next.toChar() != '\n') source.reset()
+                    if (next >= 0 && next.toChar() != '\n') source.unread(next)
                     return String(line.toByteArray(), Charsets.UTF_8)
                 }
                 else -> line.write(byte)
@@ -322,7 +357,17 @@ class RouterEngine(
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         const val CONNECT_TIMEOUT_SECONDS = 15L
-        const val FIRST_BYTE_TIMEOUT_SECONDS = 300L
+        /**
+         * Two separate quiet budgets rather than one.
+         *
+         * [FIRST_BYTE_DEADLINE_SECONDS] bounds the silence before the first byte: a provider that
+         * has accepted the request and gone quiet means a broken turn, because almost every
+         * streaming provider emits something (a role frame, a usage object) far sooner than this.
+         * Once a byte has arrived, [STEADY_IDLE_SECONDS] takes over as the gap between bytes, wide
+         * enough for a model that thinks for minutes before it speaks again.
+         */
+        const val FIRST_BYTE_DEADLINE_SECONDS = 60L
+        const val STEADY_IDLE_SECONDS = 300L
 
         /**
          * Where each vendor lives.
@@ -346,7 +391,7 @@ class RouterEngine(
         fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()
                 .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                .readTimeout(FIRST_BYTE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .readTimeout(STEADY_IDLE_SECONDS, TimeUnit.SECONDS)
                 .writeTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .build()
     }

@@ -132,6 +132,20 @@ class RouterService : Service() {
                 keys = { keys.snapshot() },
                 config = { loaded.table.config },
                 customEndpoints = { endpoints.all() },
+                log = { message ->
+                    Log.i(TAG, message)
+                    // The freshest turn is the only evidence the user needs, so a new turn starts
+                    // the file over. One failed greeting later the file holds the whole chain walk:
+                    // every provider attempted, at which step it died, and why.
+                    runCatching {
+                        val file = File(filesDir, "runtime/router-failure.txt")
+                        if (message.startsWith("turn start:")) {
+                            file.writeText(message + "\n")
+                        } else {
+                            file.appendText(message + "\n")
+                        }
+                    }
+                },
             )
 
         // Fresh per run, 32 random bytes. It was a fixed string, which meant one captured token
