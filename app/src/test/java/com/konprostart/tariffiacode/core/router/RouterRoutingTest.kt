@@ -130,7 +130,8 @@ class RouterRoutingTest {
     @Test
     fun `the timeouts are the ones the design calls for`() {
         assertEquals(15L, RouterEngine.CONNECT_TIMEOUT_SECONDS)
-        assertEquals(300L, RouterEngine.FIRST_BYTE_TIMEOUT_SECONDS)
+        assertEquals(60L, RouterEngine.FIRST_BYTE_DEADLINE_SECONDS)
+        assertEquals(300L, RouterEngine.STEADY_IDLE_SECONDS)
 
         val client = RouterEngine.defaultClient()
         assertEquals(
@@ -138,8 +139,8 @@ class RouterRoutingTest {
             client.connectTimeoutMillis.toLong(),
         )
         assertEquals(
-            "the read timeout is what bounds the wait for the first chunk",
-            TimeUnit.SECONDS.toMillis(RouterEngine.FIRST_BYTE_TIMEOUT_SECONDS),
+            "the client's own read timeout is the steady-stream budget",
+            TimeUnit.SECONDS.toMillis(RouterEngine.STEADY_IDLE_SECONDS),
             client.readTimeoutMillis.toLong(),
         )
     }
