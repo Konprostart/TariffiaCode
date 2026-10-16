@@ -35,6 +35,11 @@ object RouterConfigTable {
      * Both checks exist because the failure they prevent looks like something else: a model with too
      * small a context fails mid-turn, and an empty chain turns into a rate-limit symptom that sends
      * the circuit breaker chasing a provider that was never in the running.
+     *
+     * A claude model id is also checked against the provider it claims, because the two fail in
+     * different places: a claude name sent to a non-anthropic vendor is refused before any prompt is
+     * sent, and the refusal repeats for every chain entry in turn - which used to be hidden by long
+     * timeouts and now ends the turn almost instantly with "model not found".
      */
     fun validate(config: RouterConfig): Result {
         val rejected = mutableListOf<String>()
@@ -42,9 +47,11 @@ object RouterConfigTable {
             config.chains.map { chain ->
                 val models =
                     chain.models.filter { model ->
-                        val usable = model.contextWindow == 0 || model.canCarryClaudePrompt
-                        if (!usable) rejected += "${chain.tier}:${model.id} context ${model.contextWindow}"
-                        usable
+                        val usableContext = model.contextWindow == 0 || model.canCarryClaudePrompt
+                        if (!usableContext) rejected += "${chain.tier}:${model.id} context ${model.contextWindow}"
+                        val wrongProvider = belongsOnOtherVendor(model)
+                        if (wrongProvider != null) rejected += "${chain.tier}:${model.id} $wrongProvider"
+                        usableContext && wrongProvider == null
                     }
                 chain.copy(models = models)
             }.filter { chain ->
@@ -53,6 +60,23 @@ object RouterConfigTable {
                 kept
             }
         return Result(RouterConfig(chains), rejected)
+    }
+
+    /**
+     * Why an entry's model id cannot run on its provider, or null if it can.
+     *
+     * A claude id belongs on anthropic. OpenRouter hosts claude models too, but only under their
+     * namespaced form, so a bare `claude-...` is equally refused everywhere else. Names like these
+     * get into user-edited tables by being copied from the tier they serve, and no amount of context
+     * makes the vendor accept them.
+     */
+    private fun belongsOnOtherVendor(model: RouterModel): String? {
+        val id = model.model.lowercase()
+        val provider = model.provider.trim().lowercase()
+        if ("claude" !in id) return null
+        if (provider == "anthropic") return null
+        if (provider == "openrouter" && model.model.startsWith("anthropic/")) return null
+        return "claude model id cannot run on provider \"$provider\""
     }
 
     /** A validated table, and what validation dropped. */
