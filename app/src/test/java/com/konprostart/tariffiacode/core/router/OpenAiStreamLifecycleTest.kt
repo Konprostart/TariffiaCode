@@ -86,7 +86,9 @@ class OpenAiStreamLifecycleTest {
             )
 
         val types = last.map { it["type"]?.jsonPrimitive?.content }
-        assertEquals("the block closes even when the turn ended on a tool call", "content_block_stop", types.first())
+        // The arguments are relayed inside the block, and only then does the block close.
+        assertEquals("arguments flow through the open block", "content_block_delta", types.first())
+        assertEquals("because `tool_use` follows, the block must close", "content_block_stop", types[1])
         val messageDelta = last.last()["delta"]?.jsonObject
         assertEquals("tool_use", messageDelta!!["stop_reason"]?.jsonPrimitive?.content)
     }
