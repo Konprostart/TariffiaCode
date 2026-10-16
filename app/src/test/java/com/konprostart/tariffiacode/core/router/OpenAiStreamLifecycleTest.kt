@@ -85,12 +85,12 @@ class OpenAiStreamLifecycleTest {
             )
 
         val types = frames.map { it["type"]?.jsonPrimitive?.content }
-        assertEquals("a tool call needs a block of its own: $types", "content_block_start", types.first())
-        val block = frames.first()["content_block"]?.jsonObject
+        assertEquals("a tool call needs a block of its own: $types", "content_block_start", types[1])
+        val block = frames[1]["content_block"]?.jsonObject
         assertEquals("tool_use", block!!["type"]?.jsonPrimitive?.content)
         assertEquals("without the name the client cannot run the tool", "Bash", block["name"]?.jsonPrimitive?.content)
         assertEquals("or the id it has to report the result under", "call_1", block["id"]?.jsonPrimitive?.content)
-        assertEquals("and then the arguments stream inside it", "input_json_delta", types[1])
+        assertEquals("and then the arguments stream inside it", "input_json_delta", types[2])
     }
 
     @Test
@@ -149,8 +149,10 @@ class OpenAiStreamLifecycleTest {
                 """data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_2","function":{"name":"Read","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}""",
             )
 
-        val indices = tool.mapNotNull { it["index"]?.jsonPrimitive?.content?.toIntOrNull() }
-        assertTrue("the tool block must not reuse the text block's index: $indices", indices.all { it >= 1 })
+        val opened =
+            tool.filter { it["type"]?.jsonPrimitive?.content == "content_block_start" }
+                .mapNotNull { it["index"]?.jsonPrimitive?.content?.toIntOrNull() }
+        assertTrue("the tool block must not reuse the text block's index: $opened", opened.isNotEmpty() && opened.all { it >= 1 })
     }
 
     @Test
