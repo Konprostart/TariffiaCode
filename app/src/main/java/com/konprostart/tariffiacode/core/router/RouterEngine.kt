@@ -131,16 +131,15 @@ class RouterEngine(
             // on the provider the user just configured.
             val adapter =
                 ProviderAdapters.forProvider(model.provider, keys(), customProviders = customEndpoints().keys)
-                    ?: run {
-                        log("attempt $attempt provider=${model.provider}: no adapter, skipping")
-                        continue
-                    }
-            val translated =
-                runCatching { adapter.buildRequest(request, model) }.getOrNull()
-                    ?: run {
-                        log("attempt $attempt provider=${model.provider}: untranslatable, skipping")
-                        continue
-                    }
+            if (adapter == null) {
+                log("attempt $attempt provider=${model.provider}: no adapter, skipping")
+                continue
+            }
+            val translated = runCatching { adapter.buildRequest(request, model) }.getOrNull()
+            if (translated == null) {
+                log("attempt $attempt provider=${model.provider}: untranslatable, skipping")
+                continue
+            }
             log("attempt $attempt provider=${model.provider} url=${call(translated, model, adapter).url}")
             try {
                 streamOnce(translated, model, adapter, relay)
