@@ -131,8 +131,10 @@ class GeminiAdapterEndpointTest {
                             """{"candidates":[{"content":{"parts":[{"text":"Zdravo"}]},"finishReason":"STOP"}]}"""
                         socket.getOutputStream().apply {
                             write(
-                                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n" +
-                                    "Content-Length: ${answer.length}\r\n\r\n".toByteArray(),
+                                (
+                                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n" +
+                                        "Content-Length: ${answer.length}\r\n\r\n"
+                                ).toByteArray(),
                             )
                             write(answer.toByteArray())
                             flush()
@@ -185,8 +187,10 @@ class GeminiAdapterEndpointTest {
                         served.countDown()
                         socket.getOutputStream().apply {
                             write(
-                                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n" +
-                                    "Transfer-Encoding: chunked\r\n\r\n".toByteArray(),
+                                (
+                                    "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n" +
+                                        "Transfer-Encoding: chunked\r\n\r\n"
+                                ).toByteArray(),
                             )
                             val frame = """data: {"candidates":[{"content":{"parts":[{"text":"Zdravo"}]}}]}"""
                             val chunk = frame.length.toString(16)
