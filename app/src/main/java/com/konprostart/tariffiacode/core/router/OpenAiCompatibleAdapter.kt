@@ -131,6 +131,22 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
             isLenient = true
         }
 
+    /**
+     * Per-turn stream state.
+     *
+     * One adapter is built per attempt, so these describe exactly one turn and nothing has to be
+     * reset between them. They exist because the Anthropic event sequence is a sequence: a client
+     * needs `message_start` before a delta has somewhere to go and `content_block_stop` before the
+     * turn is properly ended, and neither can be reconstructed from the deltas alone.
+     */
+    private var turnOpened = false
+
+    /** Whether an output block is open. */
+    private var blockOpen = false
+
+    /** The model name the client asked for, reported by `message_start`. */
+    private var requestedModel: String = "router"
+
     override fun buildRequest(
         request: AnthropicRequest,
         model: RouterModel,
@@ -166,6 +182,10 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
                 if (request.tools.isNotEmpty()) put("tools", request.tools.toOpenAiTools())
                 put("stream", request.stream)
             }
+        // The adapter instance is created per turn, so this is the only place the model name is
+        // known and it is what message_start has to report: the client asked for a name, and the
+        // provider's own name is a property of the chain entry rather than of the request.
+        requestedModel = request.model
         return TranslatedRequest(path = CHAT_COMPLETIONS_PATH, body = body.toString(), stream = request.stream)
     }
 
@@ -219,37 +239,104 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
         val payload = raw.removePrefix("data:").trim()
         if (payload.isEmpty() || payload == "[DONE]") return null
         val root = runCatching { json.parseToJsonElement(payload).jsonObject }.getOrNull() ?: return null
-        val delta = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.get("delta")?.jsonObject ?: return null
+        val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject ?: return null
+        val delta = choice.get("delta")?.jsonObject
+        val finish = choice["finish_reason"]?.jsonPrimitive?.contentOrNullSafe()
+
+        // The turn opens here, on the provider's first frame, and not before: a provider that turns
+        // out to answer with nothing gets no frames at all rather than an empty turn.
+        //
+        // These two frames are the whole reason this method is not a pure function. A Claude client
+        // creates its turn on `message_start` and its output block on `content_block_start`, and a
+        // delta arriving with neither is a delta with nowhere to land - the text arrives, the client
+        // has no turn to hold it, and the answer renders as nothing. Emitting only deltas was not a
+        // shortcut but a broken sequence, and it broke every provider that speaks this shape:
+        // DeepSeek, OpenRouter, Groq and Ollama. Anthropic-as-provider is untouched because its own
+        // frames already carry the full sequence and are passed straight through.
         val builder = StringBuilder()
-        delta["content"]?.jsonPrimitive?.contentOrNullSafe()?.takeIf {
-            it.isNotBlank()
-        }?.let {
+        if (!turnOpened) {
+            turnOpened = true
+            builder.append(messageStart(requestedModel))
+            builder.append(contentBlockStart())
+        }
+
+        delta?.get("content")?.jsonPrimitive?.contentOrNullSafe()?.takeIf { it.isNotBlank() }?.let { text ->
             builder.append(
                 event(
                     "content_block_delta",
                     buildJsonObject {
                         put("type", "text_delta")
-                        put("text", it)
+                        put("text", text)
                     },
                 ),
             )
         }
-        delta["tool_calls"]?.jsonArray?.forEach { call ->
+        delta?.get("tool_calls")?.jsonArray?.forEach { call ->
             val fn = call.jsonObject["function"]?.jsonObject
-            fn?.get("arguments")?.jsonPrimitive?.contentOrNullSafe()?.takeIf { it.isNotBlank() }?.let {
+            fn?.get("arguments")?.jsonPrimitive?.contentOrNullSafe()?.takeIf { it.isNotBlank() }?.let { args ->
                 builder.append(
                     event(
                         "content_block_delta",
                         buildJsonObject {
                             put("type", "input_json_delta")
-                            put("partial_json", it)
+                            put("partial_json", args)
                         },
                     ),
                 )
             }
         }
+
+        // `finish_reason` was parsed for the non-streaming answer and dropped here, so a client was
+        // told a turn had ended without being told why. The block is closed and the reason sent;
+        // `message_stop` is the server's, and comes last.
+        if (finish != null && blockOpen) {
+            builder.append(contentBlockStop())
+            builder.append(messageDelta(finish.toAnthropicStopReason()))
+        }
         return builder.toString().ifEmpty { null }
     }
+
+    private fun messageStart(model: String): String =
+        buildJsonObject {
+            put("type", "message_start")
+            put(
+                "message",
+                buildJsonObject {
+                    put("id", "msg_router")
+                    put("type", "message")
+                    put("role", "assistant")
+                    put("model", model)
+                    put("content", buildJsonArray { })
+                    put("stop_reason", kotlinx.serialization.json.JsonNull)
+                    put("stop_sequence", kotlinx.serialization.json.JsonNull)
+                    put("usage", buildJsonObject { put("input_tokens", 0); put("output_tokens", 0) })
+                },
+            )
+        }.toString()
+
+    private fun contentBlockStart(): String {
+        blockOpen = true
+        return buildJsonObject {
+            put("type", "content_block_start")
+            put("index", 0)
+            put("content_block", buildJsonObject { put("type", "text"); put("text", "") })
+        }.toString()
+    }
+
+    private fun contentBlockStop(): String {
+        blockOpen = false
+        return buildJsonObject {
+            put("type", "content_block_stop")
+            put("index", 0)
+        }.toString()
+    }
+
+    private fun messageDelta(stopReason: String): String =
+        buildJsonObject {
+            put("type", "message_delta")
+            put("delta", buildJsonObject { put("stop_reason", stopReason); put("stop_sequence", kotlinx.serialization.json.JsonNull) })
+            put("usage", buildJsonObject { put("output_tokens", 0) })
+        }.toString()
 
     private fun event(
         type: String,
