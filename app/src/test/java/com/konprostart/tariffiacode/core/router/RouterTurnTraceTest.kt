@@ -26,7 +26,8 @@ class RouterTurnTraceTest {
                 log = { lines += it },
             )
 
-        engine.stream("""{"model":"claude-haiku-4-5","max_tokens":32,"messages":[]}""") {}
+        // A chain that dies throws to its caller by design; the trace is what this test reads.
+        runCatching { engine.stream("""{"model":"claude-haiku-4-5","max_tokens":32,"messages":[]}""") {} }
 
         assertTrue(lines.isNotEmpty())
         assertEquals("the walk opens with the turn: $lines", true, lines.first().startsWith("turn start:"))
