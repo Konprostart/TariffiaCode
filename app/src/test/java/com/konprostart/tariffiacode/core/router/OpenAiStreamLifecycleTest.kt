@@ -75,6 +75,26 @@ class OpenAiStreamLifecycleTest {
     }
 
     @Test
+    fun `a tool call is announced by its own block before its arguments arrive`() {
+        val adapter = adapterFor("claude-sonnet-4-5")
+
+        val frames =
+            frames(
+                adapter,
+                """data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"Bash","arguments":"{\"command\":\"ls\"}"}}]},"finish_reason":null}]}""",
+            )
+
+        val types = frames.map { it["type"]?.jsonPrimitive?.content }
+        assertEquals("a tool call needs a block of its own: $types", "content_block_start", types[1])
+        val block = frames[1]["content_block"]?.jsonObject
+        assertEquals("tool_use", block!!["type"]?.jsonPrimitive?.content)
+        assertEquals("without the name the client cannot run the tool", "Bash", block["name"]?.jsonPrimitive?.content)
+        assertEquals("or the id it has to report the result under", "call_1", block["id"]?.jsonPrimitive?.content)
+        val inner = frames[2]["delta"]?.jsonObject
+        assertEquals("and then the arguments stream inside it", "input_json_delta", inner!!["type"]?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun `a tool call keeps its arguments and still closes the block`() {
         val adapter = adapterFor("claude-sonnet-4-5")
 
@@ -82,15 +102,70 @@ class OpenAiStreamLifecycleTest {
         val last =
             frames(
                 adapter,
-                """data: {"choices":[{"delta":{"tool_calls":[{"function":{"arguments":"{}"}}]},"finish_reason":"tool_calls"}]}""",
+                """data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"Bash","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}""",
             )
 
         val types = last.map { it["type"]?.jsonPrimitive?.content }
-        // The arguments are relayed inside the block, and only then does the block close.
-        assertEquals("arguments flow through the open block", "content_block_delta", types.first())
-        assertEquals("because `tool_use` follows, the block must close", "content_block_stop", types[1])
+        // The text block closes first: a block is one kind of thing, and a tool call cannot begin inside one.
+        assertEquals("because `tool_use` follows, the text block must close", "content_block_stop", types.first())
+        assertEquals("then the tool block opens", "content_block_start", types[1])
         val messageDelta = last.last()["delta"]?.jsonObject
         assertEquals("tool_use", messageDelta!!["stop_reason"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `a reasoning-only turn still ends with something the client can show`() {
+        // The shape that produced Claude Code's "no visible output": a model that answers entirely in
+        // `reasoning_content` and then stops. Relayed as a collapsed thinking block, that turn renders
+        // as nothing and the client retries it forever.
+        val adapter = adapterFor("claude-sonnet-4-5")
+
+        frames(adapter, """data: {"choices":[{"delta":{"reasoning_content":"Razmislim: 6*7 je 42."}}]}""")
+        val last = frames(adapter, """data: {"choices":[{"delta":{},"finish_reason":"stop"}]}""")
+
+        val text =
+            last.filter { it["type"]?.jsonPrimitive?.content == "content_block_delta" }
+                .mapNotNull { it["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.content }
+        assertTrue("the reasoning has to reach the client as text: ${last.map { it["type"] }}", text.any { "42" in it })
+    }
+
+    @Test
+    fun `reasoning becomes a thinking block rather than the answer's first word`() {
+        val adapter = adapterFor("claude-sonnet-4-5")
+
+        val first = frames(adapter, """data: {"choices":[{"delta":{"reasoning_content":"Razmislim..."}}]}""")
+
+        val block = first.first { it["type"]?.jsonPrimitive?.content == "content_block_start" }["content_block"]?.jsonObject
+        assertEquals("thinking", block!!["type"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `text and a tool call land in blocks of their own`() {
+        val adapter = adapterFor("claude-sonnet-4-5")
+
+        frames(adapter, """data: {"choices":[{"delta":{"content":"Provjeravam"}}]}""")
+        val tool =
+            frames(
+                adapter,
+                """data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_2","function":{"name":"Read","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}""",
+            )
+
+        val opened =
+            tool.filter { it["type"]?.jsonPrimitive?.content == "content_block_start" }
+                .mapNotNull { it["index"]?.jsonPrimitive?.content?.toIntOrNull() }
+        assertTrue("the tool block must not reuse the text block's index: $opened", opened.isNotEmpty() && opened.all { it >= 1 })
+    }
+
+    @Test
+    fun `a turn that produced nothing at all says so instead of ending empty`() {
+        val adapter = adapterFor("claude-sonnet-4-5")
+
+        val last = frames(adapter, """data: [DONE]""")
+
+        val text =
+            last.filter { it["type"]?.jsonPrimitive?.content == "content_block_delta" }
+                .mapNotNull { it["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.content }
+        assertTrue("an empty turn is what the client reports as no visible output: $last", text.isNotEmpty())
     }
 
     @Test

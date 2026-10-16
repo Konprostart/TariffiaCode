@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -118,9 +118,16 @@ data class AnthropicUsage(
  *  - **tool calls are a separate array**, not part of the message content, so a tool call has to be
  *    lifted out of the content stream and rebuilt;
  *  - **`system` is a message**, not a top-level field, so it has to be prepended;
- *  - **there is no thinking block**. Several models return reasoning inline; forwarding it as text
- *    would put the model's private reasoning into the answer the user sees, so it is dropped rather
- *    than surfaced.
+ *  - **reasoning arrives in its own field** (`reasoning_content`, or `reasoning` on OpenRouter and
+ *    Groq) and has no equivalent in Anthropic's shape. It is relayed as a thinking block, and - when
+ *    a model spends its whole answer there - surfaced as the answer text, because a turn the client
+ *    sees as empty is a turn it can only retry forever.
+ *
+ * The streamed answer is rebuilt as a complete Anthropic event sequence - `message_start`, a
+ * `content_block_start` per block, deltas, block stops, `message_delta`, `message_stop` - rather than
+ * a bare sequence of deltas. A client that is owed a message object it never receives builds an
+ * assistant turn with no content in it, whatever the deltas said, and reports that turn as having
+ * produced no visible output.
  */
 class OpenAiCompatibleAdapter : ProviderAdapter {
     override val kind: RouterProviderKind = RouterProviderKind.OPENAI_COMPATIBLE
@@ -135,9 +142,11 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
      * Per-turn stream state.
      *
      * One adapter is built per attempt, so these describe exactly one turn and nothing has to be
-     * reset between them. They exist because the Anthropic event sequence is a sequence: a client
-     * needs `message_start` before a delta has somewhere to go and `content_block_stop` before the
-     * turn is properly ended, and neither can be reconstructed from the deltas alone.
+     * reset between them. They exist because the Anthropic event sequence is a sequence, and because
+     * its blocks are typed: text, thinking and tool_use each need their own `content_block_start`,
+     * carrying their own fields, before any delta may land in them. A `tool_use` block that is never
+     * opened is a tool call the client cannot act on - it has no id and no name - and an agent turn
+     * that consists only of those renders as nothing at all.
      */
     private var turnOpened = false
 
@@ -146,6 +155,33 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
 
     /** The model name the client asked for, reported by `message_start`. */
     private var requestedModel: String = "router"
+
+    /** Index of the block currently open, and what kind it is; null when none is. */
+    private var openIndex = -1
+
+    /** What kind of block is open, which is what a delta may legally land in. */
+    private var openType: String? = null
+
+    /** The next block index, handed out in order so every block in the turn has its own. */
+    private var nextIndex = 0
+
+    /** Tool calls already opened, by the provider's own call index, so each is opened exactly once. */
+    private val openedToolCalls = mutableSetOf<Int>()
+
+    /** Reasoning seen this turn, so a turn that ends with nothing else still has an answer to give. */
+    private val reasoning = StringBuilder()
+
+    /**
+     * Whether anything the client can act on has been sent - text or a tool call.
+     *
+     * A thinking block is not that: the client collapses it, renders nothing, and still ends up
+     * asking for a turn that produced no visible output. So this is what decides whether the
+     * reasoning has to be promoted into the answer at the end.
+     */
+    private var producedAnswer = false
+
+    /** Whether the turn has already been closed, so a late frame cannot close it twice. */
+    private var turnFinished = false
 
     override fun buildRequest(
         request: AnthropicRequest,
@@ -198,7 +234,13 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
         val root = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull() ?: return null
         val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject ?: return null
         val message = choice["message"]?.jsonObject ?: return null
-        val content =
+        val usage = root["usage"]?.jsonObject
+        val reasoning =
+            (message["reasoning_content"] ?: message["reasoning"])
+                ?.jsonPrimitive
+                ?.contentOrNullSafe()
+                ?.takeIf { it.isNotBlank() }
+        val blocks =
             buildList {
                 message["content"]?.jsonPrimitive?.contentOrNullSafe()?.takeIf { it.isNotBlank() }?.let {
                     add(
@@ -219,11 +261,16 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
                         ),
                     )
                 }
+                // A reasoning-only model answered in the field with no Anthropic equivalent. Surfacing it
+                // as the answer is the difference between a turn the client can read and one it can only
+                // retry: an empty content list is not an answer to anything.
+                if (none { it.type == "text" || it.type == "tool_use" }) {
+                    reasoning?.let { add(AnthropicContent(type = "text", text = it)) }
+                }
             }
-        val usage = root["usage"]?.jsonObject
         return AnthropicResponse(
             model = requestedModel,
-            content = content,
+            content = blocks,
             stopReason = choice["finish_reason"]?.jsonPrimitive?.contentOrNullSafe()?.toAnthropicStopReason(),
             usage =
                 usage?.let {
@@ -237,11 +284,14 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
 
     override fun parseStreamEvent(raw: String): String? {
         val payload = raw.removePrefix("data:").trim()
-        if (payload.isEmpty() || payload == "[DONE]") return null
+        if (payload.isEmpty()) return null
+        // `[DONE]` is the other way a turn ends, and a provider that only ever sends it has answered
+        // with nothing at all - which is the shape the client sees as a turn with no visible output.
+        if (payload == "[DONE]") return closeTurn(null).ifEmpty { null }
         val root = runCatching { json.parseToJsonElement(payload).jsonObject }.getOrNull() ?: return null
         val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject ?: return null
         val delta = choice.get("delta")?.jsonObject
-        val finish = choice["finish_reason"]?.jsonPrimitive?.contentOrNullSafe()
+        val finish = choice["finish_reason"]?.jsonPrimitive?.contentOrNullSafe()?.takeIf { it != "null" }
 
         // The turn opens here, on the provider's first frame, and not before: a provider that turns
         // out to answer with nothing gets no frames at all rather than an empty turn.
@@ -257,44 +307,156 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
         if (!turnOpened) {
             turnOpened = true
             builder.append(messageStart(requestedModel))
-            builder.append(contentBlockStart())
         }
 
-        delta?.get("content")?.jsonPrimitive?.contentOrNullSafe()?.takeIf { it.isNotBlank() }?.let { text ->
-            builder.append(
-                event(
-                    "content_block_delta",
-                    buildJsonObject {
-                        put("type", "text_delta")
-                        put("text", text)
-                    },
-                ),
-            )
-        }
-        delta?.get("tool_calls")?.jsonArray?.forEach { call ->
-            val fn = call.jsonObject["function"]?.jsonObject
-            fn?.get("arguments")?.jsonPrimitive?.contentOrNullSafe()?.takeIf { it.isNotBlank() }?.let { args ->
+        // Reasoning, in whichever of the two fields the vendor chose. Anthropic has no equivalent of
+        // it in the streaming shape, so it becomes a thinking block: something the client renders,
+        // rather than bytes thrown away for a turn that may end up with nothing else in it.
+        val reasoningText =
+            (delta?.get("reasoning_content") ?: delta?.get("reasoning"))
+                ?.jsonPrimitive
+                ?.contentOrNullSafe()
+        if (!reasoningText.isNullOrEmpty()) {
+            if (reasoning.length < MAX_REASONING_CHARS) reasoning.append(reasoningText)
+            if (openIndex < 0) builder.append(openThinkingBlock())
+            if (isOpen("thinking")) {
                 builder.append(
-                    event(
-                        "content_block_delta",
-                        buildJsonObject {
-                            put("type", "input_json_delta")
-                            put("partial_json", args)
-                        },
-                    ),
+                    deltaEvent("thinking_delta") { put("thinking", reasoningText) },
                 )
             }
         }
 
-        // `finish_reason` was parsed for the non-streaming answer and dropped here, so a client was
-        // told a turn had ended without being told why. The block is closed and the reason sent;
-        // `message_stop` is the server's, and comes last.
-        if (finish != null && blockOpen) {
-            builder.append(contentBlockStop())
-            builder.append(messageDelta(finish.toAnthropicStopReason()))
+        val text = delta?.get("content")?.jsonPrimitive?.contentOrNullSafe()
+        if (!text.isNullOrBlank()) {
+            if (!isOpen("text")) builder.append(openTextBlock())
+            builder.append(deltaEvent("text_delta") { put("text", text) })
         }
+
+        // A tool call is announced by its own block, with the id and name the client needs to act on
+        // it, and only its arguments stream. Sending the arguments alone - which is what this used to
+        // do, at index 0 inside a text block - produces a turn the client cannot render and cannot
+        // execute, which for an agent is the same as no answer at all.
+        delta?.get("tool_calls")?.jsonArray?.forEach { call ->
+            val function = call.jsonObject["function"]?.jsonObject
+            val callIndex = call.jsonObject["index"]?.jsonPrimitive?.intOrNull() ?: 0
+            if (openedToolCalls.add(callIndex)) {
+                builder.append(
+                    openToolBlock(
+                        id = call.jsonObject["id"]?.jsonPrimitive?.contentOrNullSafe() ?: "toolu_$callIndex",
+                        name = function?.get("name")?.jsonPrimitive?.contentOrNullSafe() ?: "tool",
+                    ),
+                )
+            }
+            function?.get("arguments")?.jsonPrimitive?.contentOrNullSafe()?.takeIf { it.isNotBlank() }?.let { args ->
+                builder.append(deltaEvent("input_json_delta") { put("partial_json", args) })
+            }
+        }
+
+        // `finish_reason` is how the client learns why the turn ended. A tool call ended on
+        // `tool_calls` means the agent is expected to run something, not that the answer is finished.
+        if (finish != null) builder.append(closeTurn(finish))
         return builder.toString().ifEmpty { null }
     }
+
+    /**
+     * Ends the turn: the open block is closed, the reason is sent, and a turn that produced nothing
+     * visible still produces something.
+     *
+     * The last part is the whole reason reasoning is kept. A reasoning model can spend an entire
+     * answer in the field Anthropic has no name for; relayed as a thinking block, that leaves the
+     * client with a turn it cannot show and will only retry. So when the turn ends having produced
+     * neither text nor a tool call, the reasoning is closed out as the answer text. It is the model's
+     * own answer - only its label was missing.
+     */
+    private fun closeTurn(finishReason: String?): String {
+        if (turnFinished) return ""
+        turnFinished = true
+        val builder = StringBuilder()
+        if (!producedAnswer) {
+            // Promote the reasoning into the answer, or say plainly that there was none. Either way
+            // the client ends this turn with something in it; a turn it cannot render is a turn it
+            // retries, and a model that only ever reasons would otherwise never finish at all.
+            val answer = reasoning.toString().ifBlank { NO_ANSWER_TEXT }
+            builder.append(openTextBlock())
+            builder.append(deltaEvent("text_delta") { put("text", answer) })
+        }
+        if (openIndex >= 0) builder.append(closeOpenBlock())
+        builder.append(messageDelta(finishReason?.toAnthropicStopReason() ?: "end_turn"))
+        return builder.toString()
+    }
+
+    private fun isOpen(type: String): Boolean = blockOpen && openType == type
+
+    private fun openTextBlock(): String = openBlock("text") { put("text", "") }
+
+    private fun openThinkingBlock(): String = openBlock("thinking") { put("thinking", "") }
+
+    private fun openToolBlock(
+        id: String,
+        name: String,
+    ): String =
+        openBlock("tool_use") {
+            put("id", id)
+            put("name", name)
+            put("input", buildJsonObject { })
+        }
+
+    /**
+     * Opens the next block, closing whatever was open before it.
+     *
+     * The block's own `type` is written here rather than by the caller because it is the field the
+     * client dispatches on: a `content_block_start` whose payload does not say what kind of block
+     * it opens is a block no client can interpret, and the delta that follows lands nowhere - which
+     * the client reports as a turn with no visible output.
+     */
+    private fun openBlock(
+        type: String,
+        fields: JsonObjectBuilder.() -> Unit,
+    ): String {
+        val closing = if (openIndex >= 0) closeOpenBlock() else ""
+        openIndex = nextIndex++
+        openType = type
+        blockOpen = true
+        if (type != "thinking") producedAnswer = true
+        return closing +
+            buildJsonObject {
+                put("type", "content_block_start")
+                put("index", openIndex)
+                put(
+                    "content_block",
+                    buildJsonObject {
+                        put("type", type)
+                        fields()
+                    },
+                )
+            }.toString()
+    }
+
+    private fun closeOpenBlock(): String {
+        blockOpen = false
+        openType = null
+        return buildJsonObject {
+            put("type", "content_block_stop")
+            put("index", openIndex)
+        }.toString()
+    }
+
+    /** A delta for the block currently open, wherever that block sits in the turn. */
+    private fun deltaEvent(
+        deltaType: String,
+        fields: JsonObjectBuilder.() -> Unit,
+    ): String =
+        buildJsonObject {
+            put("type", "content_block_delta")
+            put("index", openIndex)
+            put(
+                "delta",
+                buildJsonObject {
+                    put("type", deltaType)
+                    fields()
+                },
+            )
+        }.toString()
 
     private fun messageStart(model: String): String =
         buildJsonObject {
@@ -320,29 +482,6 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
             )
         }.toString()
 
-    private fun contentBlockStart(): String {
-        blockOpen = true
-        return buildJsonObject {
-            put("type", "content_block_start")
-            put("index", 0)
-            put(
-                "content_block",
-                buildJsonObject {
-                    put("type", "text")
-                    put("text", "")
-                },
-            )
-        }.toString()
-    }
-
-    private fun contentBlockStop(): String {
-        blockOpen = false
-        return buildJsonObject {
-            put("type", "content_block_stop")
-            put("index", 0)
-        }.toString()
-    }
-
     private fun messageDelta(stopReason: String): String =
         buildJsonObject {
             put("type", "message_delta")
@@ -354,16 +493,6 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
                 },
             )
             put("usage", buildJsonObject { put("output_tokens", 0) })
-        }.toString()
-
-    private fun event(
-        type: String,
-        delta: JsonObject,
-    ): String =
-        buildJsonObject {
-            put("type", type)
-            put("index", 0)
-            put("delta", delta)
         }.toString()
 
     private fun List<AnthropicTool>.toOpenAiTools(): JsonArray =
@@ -403,5 +532,22 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
 
     private companion object {
         const val CHAT_COMPLETIONS_PATH = "/v1/chat/completions"
+
+        /**
+         * How much reasoning is kept for the fallback answer.
+         *
+         * A reasoning-only turn has to say something, and saying the whole chain of thought is not
+         * the answer to a coding question - but a fallback that is a fragment reads as a truncated
+         * one. A few thousand characters is the model's own summary of what it was doing.
+         */
+        const val MAX_REASONING_CHARS = 4_000
+
+        /**
+         * What a turn says when the provider answered with nothing at all.
+         *
+         * Not an apology and not a retry: a visible line saying so is the difference between the
+         * user seeing a broken provider and the user seeing a blank screen.
+         */
+        const val NO_ANSWER_TEXT = "[router] The provider ended this turn without any answer text."
     }
 }
