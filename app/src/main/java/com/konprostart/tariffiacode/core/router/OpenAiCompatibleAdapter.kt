@@ -309,7 +309,13 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
                     put("content", buildJsonArray { })
                     put("stop_reason", kotlinx.serialization.json.JsonNull)
                     put("stop_sequence", kotlinx.serialization.json.JsonNull)
-                    put("usage", buildJsonObject { put("input_tokens", 0); put("output_tokens", 0) })
+                    put(
+                        "usage",
+                        buildJsonObject {
+                            put("input_tokens", 0)
+                            put("output_tokens", 0)
+                        },
+                    )
                 },
             )
         }.toString()
@@ -319,7 +325,13 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
         return buildJsonObject {
             put("type", "content_block_start")
             put("index", 0)
-            put("content_block", buildJsonObject { put("type", "text"); put("text", "") })
+            put(
+                "content_block",
+                buildJsonObject {
+                    put("type", "text")
+                    put("text", "")
+                },
+            )
         }.toString()
     }
 
@@ -334,7 +346,13 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
     private fun messageDelta(stopReason: String): String =
         buildJsonObject {
             put("type", "message_delta")
-            put("delta", buildJsonObject { put("stop_reason", stopReason); put("stop_sequence", kotlinx.serialization.json.JsonNull) })
+            put(
+                "delta",
+                buildJsonObject {
+                    put("stop_reason", stopReason)
+                    put("stop_sequence", kotlinx.serialization.json.JsonNull)
+                },
+            )
             put("usage", buildJsonObject { put("output_tokens", 0) })
         }.toString()
 
