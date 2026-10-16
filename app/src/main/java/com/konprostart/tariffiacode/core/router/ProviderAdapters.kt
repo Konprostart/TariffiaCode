@@ -150,9 +150,22 @@ class GeminiAdapter(
                     )
                 }
             }
+        // The method follows the request, and it has to.
+        //
+        // Google has two verbs and they do not answer the same thing: `generateContent` returns one
+        // JSON object, `streamGenerateContent` returns a stream - a JSON array by default, and SSE
+        // only when asked for it. Sending a non-streaming turn to the streaming verb produces `data:`
+        // lines where a JSON object is expected, so the answer cannot be parsed, the turn is failed
+        // over, and the caller sees an empty response with no indication that a provider answered.
+        //
+        // Picking the streaming verb unconditionally is exactly that: every short, non-streamed
+        // Gemini request failed, while a streamed one looked fine, which reads as the router losing
+        // text rather than as a wrong URL.
+        val method = if (request.stream) "streamGenerateContent?alt=sse" else "generateContent"
         return TranslatedRequest(
-            // The model and the key travel in the path here, not in the body.
-            path = "/v1beta/models/${model.model}:streamGenerateContent?alt=sse",
+            // The model travels in the path; the key does not - it is in extraHeaders(), where no
+            // URL can reach it.
+            path = "/v1beta/models/${model.model}:$method",
             body = body.toString(),
             stream = request.stream,
         )
