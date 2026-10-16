@@ -901,14 +901,24 @@ def build_abi(
     if source_root.exists():
         shutil.rmtree(source_root)
     source_root.mkdir(parents=True, exist_ok=True)
+    # The vendored copies of the pinned archives, checked into the repo. A source host having a bad
+    # hour stalled every release behind a 503; a byte inside the clone does not depend on anybody's
+    # uptime, and comparing to the pinned digest keeps the vendor from drifting.
+    vendored_dir = REPO_ROOT / "runtime_tools" / "vendor"
 
     extracted: dict[str, Path] = {}
     for key, entry in sources.items():
-        archive = fetch_verified(
-            entry["url"],
-            archive_dir / f"{key}-{entry['version']}.{entry['archive']}",
-            expected_sha256=entry["sha256"],
-        )
+        filename = f"{key}-{entry['version']}.{entry['archive']}"
+        archive = (vendored_dir / filename).resolve()
+        if archive.is_file():
+            verify_archive(archive, entry["sha256"])
+            log(f"Using vendored archive {archive.name}")
+        else:
+            archive = fetch_verified(
+                entry["url"],
+                archive_dir / filename,
+                expected_sha256=entry["sha256"],
+            )
         extracted[key] = extract_archive(archive, source_root / key, entry["archive"])
         log(f"{key} {entry['version']} verified and extracted to {extracted[key]}")
 
