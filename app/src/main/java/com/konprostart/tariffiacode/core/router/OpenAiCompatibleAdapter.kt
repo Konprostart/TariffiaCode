@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -240,33 +240,34 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
                 ?.jsonPrimitive
                 ?.contentOrNullSafe()
                 ?.takeIf { it.isNotBlank() }
-        val blocks = buildList {
-            message["content"]?.jsonPrimitive?.contentOrNullSafe()?.takeIf { it.isNotBlank() }?.let {
-                add(
-                    AnthropicContent(type = "text", text = it),
-                )
+        val blocks =
+            buildList {
+                message["content"]?.jsonPrimitive?.contentOrNullSafe()?.takeIf { it.isNotBlank() }?.let {
+                    add(
+                        AnthropicContent(type = "text", text = it),
+                    )
+                }
+                message["tool_calls"]?.jsonArray?.forEach { call ->
+                    val fn = call.jsonObject["function"]?.jsonObject
+                    add(
+                        AnthropicContent(
+                            type = "tool_use",
+                            id = call.jsonObject["id"]?.jsonPrimitive?.contentOrNullSafe(),
+                            name = fn?.get("name")?.jsonPrimitive?.contentOrNullSafe(),
+                            input =
+                                fn?.get(
+                                    "arguments",
+                                )?.let { runCatching { json.parseToJsonElement(it.jsonPrimitive.content) }.getOrNull() },
+                        ),
+                    )
+                }
+                // A reasoning-only model answered in the field with no Anthropic equivalent. Surfacing it
+                // as the answer is the difference between a turn the client can read and one it can only
+                // retry: an empty content list is not an answer to anything.
+                if (none { it.type == "text" || it.type == "tool_use" }) {
+                    reasoning?.let { add(AnthropicContent(type = "text", text = it)) }
+                }
             }
-            message["tool_calls"]?.jsonArray?.forEach { call ->
-                val fn = call.jsonObject["function"]?.jsonObject
-                add(
-                    AnthropicContent(
-                        type = "tool_use",
-                        id = call.jsonObject["id"]?.jsonPrimitive?.contentOrNullSafe(),
-                        name = fn?.get("name")?.jsonPrimitive?.contentOrNullSafe(),
-                        input =
-                            fn?.get(
-                                "arguments",
-                            )?.let { runCatching { json.parseToJsonElement(it.jsonPrimitive.content) }.getOrNull() },
-                    ),
-                )
-            }
-            // A reasoning-only model answered in the field with no Anthropic equivalent. Surfacing it
-            // as the answer is the difference between a turn the client can read and one it can only
-            // retry: an empty content list is not an answer to anything.
-            if (none { it.type == "text" || it.type == "tool_use" }) {
-                reasoning?.let { add(AnthropicContent(type = "text", text = it)) }
-            }
-        }
         return AnthropicResponse(
             model = requestedModel,
             content = blocks,
@@ -311,9 +312,10 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
         // Reasoning, in whichever of the two fields the vendor chose. Anthropic has no equivalent of
         // it in the streaming shape, so it becomes a thinking block: something the client renders,
         // rather than bytes thrown away for a turn that may end up with nothing else in it.
-        val reasoningText = (delta?.get("reasoning_content") ?: delta?.get("reasoning"))
-            ?.jsonPrimitive
-            ?.contentOrNullSafe()
+        val reasoningText =
+            (delta?.get("reasoning_content") ?: delta?.get("reasoning"))
+                ?.jsonPrimitive
+                ?.contentOrNullSafe()
         if (!reasoningText.isNullOrEmpty()) {
             if (reasoning.length < MAX_REASONING_CHARS) reasoning.append(reasoningText)
             if (openIndex < 0) builder.append(openThinkingBlock())
@@ -409,7 +411,7 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
      */
     private fun openBlock(
         type: String,
-        fields: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit,
+        fields: JsonObjectBuilder.() -> Unit,
     ): String {
         val closing = if (openIndex >= 0) closeOpenBlock() else ""
         openIndex = nextIndex++
@@ -420,7 +422,13 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
             buildJsonObject {
                 put("type", "content_block_start")
                 put("index", openIndex)
-                put("content_block", buildJsonObject { put("type", type); fields() })
+                put(
+                    "content_block",
+                    buildJsonObject {
+                        put("type", type)
+                        fields()
+                    },
+                )
             }.toString()
     }
 
@@ -436,12 +444,18 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
     /** A delta for the block currently open, wherever that block sits in the turn. */
     private fun deltaEvent(
         deltaType: String,
-        fields: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit,
+        fields: JsonObjectBuilder.() -> Unit,
     ): String =
         buildJsonObject {
             put("type", "content_block_delta")
             put("index", openIndex)
-            put("delta", buildJsonObject { put("type", deltaType); fields() })
+            put(
+                "delta",
+                buildJsonObject {
+                    put("type", deltaType)
+                    fields()
+                },
+            )
         }.toString()
 
     private fun messageStart(model: String): String =

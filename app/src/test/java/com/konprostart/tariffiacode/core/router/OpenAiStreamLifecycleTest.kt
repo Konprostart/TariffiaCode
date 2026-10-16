@@ -1,6 +1,7 @@
 package com.konprostart.tariffiacode.core.router
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
@@ -90,7 +91,7 @@ class OpenAiStreamLifecycleTest {
         assertEquals("tool_use", block!!["type"]?.jsonPrimitive?.content)
         assertEquals("without the name the client cannot run the tool", "Bash", block["name"]?.jsonPrimitive?.content)
         assertEquals("or the id it has to report the result under", "call_1", block["id"]?.jsonPrimitive?.content)
-        assertEquals("and then the arguments stream inside it", "input_json_delta", types[1]?.jsonPrimitive?.content)
+        assertEquals("and then the arguments stream inside it", "input_json_delta", types[1])
     }
 
     @Test
@@ -122,8 +123,9 @@ class OpenAiStreamLifecycleTest {
         frames(adapter, """data: {"choices":[{"delta":{"reasoning_content":"Razmislim: 6*7 je 42."}}]}""")
         val last = frames(adapter, """data: {"choices":[{"delta":{},"finish_reason":"stop"}]}""")
 
-        val text = last.filter { it["type"]?.jsonPrimitive?.content == "content_block_delta" }
-            .mapNotNull { it["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.content }
+        val text =
+            last.filter { it["type"]?.jsonPrimitive?.content == "content_block_delta" }
+                .mapNotNull { it["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.content }
         assertTrue("the reasoning has to reach the client as text: ${last.map { it["type"] }}", text.any { "42" in it })
     }
 
@@ -158,8 +160,9 @@ class OpenAiStreamLifecycleTest {
 
         val last = frames(adapter, """data: [DONE]""")
 
-        val text = last.filter { it["type"]?.jsonPrimitive?.content == "content_block_delta" }
-            .mapNotNull { it["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.content }
+        val text =
+            last.filter { it["type"]?.jsonPrimitive?.content == "content_block_delta" }
+                .mapNotNull { it["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.content }
         assertTrue("an empty turn is what the client reports as no visible output: $last", text.isNotEmpty())
     }
 
