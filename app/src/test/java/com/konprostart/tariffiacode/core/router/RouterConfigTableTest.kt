@@ -26,9 +26,11 @@ class RouterConfigTableTest {
 
         assertTrue(
             "the rejection has to name the entry and the reason: ${result.rejected}",
-            result.rejected.single().contains("deepseek/claude-sonnet-4-20250514") &&
-                result.rejected.single().contains("cannot run on provider"),
+            result.rejected.any { entry ->
+                entry.contains("deepseek/claude-sonnet-4-20250514") && entry.contains("cannot run on provider")
+            },
         )
+        assertTrue("dropping the last entry also shuts the chain down: ${result.rejected}", result.rejected.any { it.contains("empty") })
         assertTrue("nothing servable is left, so the table must say so", !result.isUsable)
     }
 
@@ -79,7 +81,7 @@ class RouterConfigTableTest {
 
         val result = RouterConfigTable.fromJson(table)
 
-        assertTrue(result.rejected.single().contains("cannot run on provider"))
+        assertTrue(result.rejected.any { it.contains("cannot run on provider") })
         assertTrue(!result.isUsable)
     }
 
