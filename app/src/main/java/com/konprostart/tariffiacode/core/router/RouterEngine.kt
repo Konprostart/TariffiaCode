@@ -131,10 +131,16 @@ class RouterEngine(
             // on the provider the user just configured.
             val adapter =
                 ProviderAdapters.forProvider(model.provider, keys(), customProviders = customEndpoints().keys)
-                    ?: run { log("attempt $attempt provider=${model.provider}: no adapter, skipping"); continue }
+                    ?: run {
+                        log("attempt $attempt provider=${model.provider}: no adapter, skipping")
+                        continue
+                    }
             val translated =
                 runCatching { adapter.buildRequest(request, model) }.getOrNull()
-                    ?: run { log("attempt $attempt provider=${model.provider}: untranslatable, skipping"); continue }
+                    ?: run {
+                        log("attempt $attempt provider=${model.provider}: untranslatable, skipping")
+                        continue
+                    }
             log("attempt $attempt provider=${model.provider} url=${call(translated, model, adapter).url}")
             try {
                 streamOnce(translated, model, adapter, relay)
@@ -357,6 +363,7 @@ class RouterEngine(
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         const val CONNECT_TIMEOUT_SECONDS = 15L
+
         /**
          * Two separate quiet budgets rather than one.
          *
