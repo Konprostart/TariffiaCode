@@ -5,6 +5,7 @@ import com.konprostart.tariffiacode.core.ssh.SshHostKey
 import com.konprostart.tariffiacode.core.ssh.SshHostKeyVerifier
 import com.konprostart.tariffiacode.core.ssh.SshPortForward
 import com.konprostart.tariffiacode.core.ssh.SshPortForwardResult
+import com.konprostart.tariffiacode.core.ssh.SshPortForwarder
 import com.konprostart.tariffiacode.core.ssh.SshSessionSharingForwarder
 import com.konprostart.tariffiacode.core.ssh.SshTunnelSession
 import com.konprostart.tariffiacode.core.ssh.SshTunnelSessionResult
@@ -23,6 +24,12 @@ data class TunnelKey(
     val port: Int,
     val remoteHost: String,
     val remotePort: Int,
+    /**
+     * Local port the forward binds, or [SshPortForwarder.EPHEMERAL_LOCAL_PORT] for any free one.
+     * Part of the key because two forwards to the same remote port that bind different local
+     * ports are two different channels, and sharing one of them would serve the wrong address.
+     */
+    val localPort: Int = SshPortForwarder.EPHEMERAL_LOCAL_PORT,
 )
 
 /**
@@ -292,7 +299,7 @@ class SshTunnelPool(
     private suspend fun bind(
         session: SshTunnelSession,
         key: TunnelKey,
-    ): SshPortForwardResult = forwarder.openForwardOver(session, key.remoteHost, key.remotePort)
+    ): SshPortForwardResult = forwarder.openForwardOver(session, key.remoteHost, key.remotePort, key.localPort)
 
     private sealed interface Establishment {
         class Established(

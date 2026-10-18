@@ -83,6 +83,7 @@ class SshSettingsViewModelTest {
             session: SshTunnelSession,
             remoteHost: String,
             remotePort: Int,
+            localPort: Int,
         ): SshPortForwardResult = failure
 
         override suspend fun openLocalForward(
@@ -93,6 +94,7 @@ class SshSettingsViewModelTest {
             remoteHost: String,
             remotePort: Int,
             connectTimeoutMillis: Long,
+            localPort: Int,
         ): SshPortForwardResult {
             capturedAuth = auth
             return failure

@@ -71,7 +71,7 @@ class VpsPreviewViewModel(
         closeForward()
         mutableState.update { it.copy(isOpening = true, error = null, localUrl = null, pendingHostKey = null) }
         viewModelScope.launch {
-            when (val outcome = manager.open(profile, port)) {
+            when (val outcome = manager.open(profile, port, localPort = VpsPortForwardManager.localPortFor(port))) {
                 is VpsPortForwardOutcome.Connected -> {
                     forward = outcome.forward
                     mutableState.update { it.copy(isOpening = false, localUrl = outcome.localUrl) }

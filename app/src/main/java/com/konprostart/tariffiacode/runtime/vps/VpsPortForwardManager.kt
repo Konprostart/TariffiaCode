@@ -4,6 +4,7 @@ import com.konprostart.tariffiacode.core.ssh.SshFailureDiagnostic
 import com.konprostart.tariffiacode.core.ssh.SshHostKey
 import com.konprostart.tariffiacode.core.ssh.SshPortForward
 import com.konprostart.tariffiacode.core.ssh.SshPortForwardResult
+import com.konprostart.tariffiacode.core.ssh.SshPortForwarder
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.data.ssh.SshProfileHostKeyVerifier
@@ -52,6 +53,7 @@ class VpsPortForwardManager(
         remotePort: Int,
         remoteHost: String = DEFAULT_REMOTE_HOST,
         connectTimeoutMillis: Long = DEFAULT_CONNECT_TIMEOUT_MILLIS,
+        localPort: Int = SshPortForwarder.EPHEMERAL_LOCAL_PORT,
     ): VpsPortForwardOutcome {
         val credential = credentials.credential(profile.credentialRef)
         if (credential == null || !credential.isUsable) return VpsPortForwardOutcome.MissingCredential
@@ -68,6 +70,7 @@ class VpsPortForwardManager(
                             port = profile.port,
                             remoteHost = remoteHost,
                             remotePort = remotePort,
+                            localPort = localPort,
                         ),
                     auth = auth,
                     verifier = verifier,
@@ -94,6 +97,19 @@ class VpsPortForwardManager(
         /** The default Vite dev-server port, offered as the first preview choice. */
         const val DEFAULT_REMOTE_PORT = 5173
 
+        /**
+         * The port Ollama serves on. The router's built-in `ollama` provider is pinned to
+         * 127.0.0.1:11434 with no way to override the address from the routing table, so a tunnel to
+         * Ollama has to land on that same port locally for the router to reach it.
+         */
+        const val OLLAMA_PORT = 11434
+
         const val DEFAULT_CONNECT_TIMEOUT_MILLIS = 15_000L
+
+        /**
+         * The local port to bind when forwarding to [remotePort]: Ollama mirrors its port so the
+         * router can find it, everything else keeps taking a free ephemeral port as before.
+         */
+        fun localPortFor(remotePort: Int): Int = if (remotePort == OLLAMA_PORT) OLLAMA_PORT else SshPortForwarder.EPHEMERAL_LOCAL_PORT
     }
 }

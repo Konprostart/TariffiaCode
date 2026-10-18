@@ -79,6 +79,7 @@ class SshTunnelPoolTest {
             session: SshTunnelSession,
             remoteHost: String,
             remotePort: Int,
+            localPort: Int,
         ): SshPortForwardResult {
             forwardOpens++
             val result = forwardResult(remoteHost, remotePort)
@@ -94,6 +95,7 @@ class SshTunnelPoolTest {
             remoteHost: String,
             remotePort: Int,
             connectTimeoutMillis: Long,
+            localPort: Int,
         ): SshPortForwardResult = forwardResult(remoteHost, remotePort)
     }
 
@@ -111,7 +113,15 @@ class SshTunnelPoolTest {
     private fun key(
         port: Int,
         profileId: String = "vps-1",
-    ) = TunnelKey(profileId = profileId, host = "127.0.0.1", port = 22, remoteHost = "127.0.0.1", remotePort = port)
+        localPort: Int = 0,
+    ) = TunnelKey(
+        profileId = profileId,
+        host = "127.0.0.1",
+        port = 22,
+        remoteHost = "127.0.0.1",
+        remotePort = port,
+        localPort = localPort,
+    )
 
     private suspend fun SshTunnelPool.listen(k: TunnelKey): SshPortForward =
         (open(k, auth, verifier) as SshPortForwardResult.Listening).forward
@@ -128,6 +138,20 @@ class SshTunnelPoolTest {
             assertEquals("one handshake should serve both tunnels", 1, transport.sessionOpens)
             assertEquals("each tunnel is its own channel", 2, transport.forwardOpens)
             assertEquals(2, pool.holders("vps-1"))
+        }
+
+    @Test
+    fun `the same remote port on a different local port is a different tunnel`() =
+        runTest {
+            val transport = FakeTransport()
+            val pool = SshTunnelPool(transport)
+
+            pool.listen(key(11434, localPort = 0))
+            pool.listen(key(11434, localPort = 11434))
+
+            // Sharing here would hand the pinned-port caller a forward on some other local port,
+            // which is exactly the address it cannot use.
+            assertEquals(2, transport.forwardOpens)
         }
 
     @Test
