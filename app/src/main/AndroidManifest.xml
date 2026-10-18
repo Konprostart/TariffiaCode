@@ -118,19 +118,19 @@
                     android:value="Runs user-requested local AI coding agent runtimes and runtime installation tasks." />
         </service>
 
-<service
+        <service
             android:name=".runtime.local.CodexKeepAliveService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                    android:value="Keeps a user-started Codex sign-in or coding turn connected while the app is in the background." />
+                android:value="Keeps a user-started Codex sign-in or coding turn connected while the app is in the background." />
         </service>
 
         <!--
-          The SSH forward to the user's own VPS, which the router reaches for a model served there.
-          In the main process, unlike the router itself: it shares the SSH session pool, so a tunnel
-          held here outlives every screen that opened it.
+            The SSH forward to the user's own VPS, which the router reaches for a model served there.
+            In the main process, unlike the router itself: it shares the SSH session pool, so a tunnel
+            held here outlives every screen that opened it.
         -->
         <service
             android:name=".runtime.vps.VpsTunnelService"

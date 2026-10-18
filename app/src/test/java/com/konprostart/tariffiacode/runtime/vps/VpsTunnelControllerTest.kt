@@ -1,5 +1,6 @@
 package com.konprostart.tariffiacode.runtime.vps
 
+import com.konprostart.tariffiacode.core.network.NetworkStatus
 import com.konprostart.tariffiacode.core.runtime.RuntimeWorkTracker
 import com.konprostart.tariffiacode.core.ssh.SshHostKey
 import com.konprostart.tariffiacode.core.ssh.SshPortForward
@@ -10,6 +11,8 @@ import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.data.ssh.SshProfileStore
 import com.konprostart.tariffiacode.data.vps.VpsTunnelStore
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -46,7 +49,7 @@ class VpsTunnelControllerTest {
 
     /** Counts the forwards the controller hands out, and hands back whatever the test asked for. */
     private class Opener(
-        var outcome: (SshProfile) -> VpsPortForwardOutcome,
+        var outcome: suspend (SshProfile) -> VpsPortForwardOutcome,
     ) {
         var calls = 0
 
@@ -72,6 +75,7 @@ class VpsTunnelControllerTest {
         profiles: SshProfileStore? = null,
         enabled: Boolean = false,
         work: RuntimeWorkTracker? = null,
+        recovery: VpsRecovery? = null,
     ): VpsTunnelController =
         VpsTunnelController(
             opener = opener::open,
@@ -80,6 +84,7 @@ class VpsTunnelControllerTest {
             scope = scope,
             profiles = profiles,
             work = work,
+            recovery = recovery,
         )
 
     @Test
@@ -278,5 +283,149 @@ class VpsTunnelControllerTest {
             assertFalse("the choice has to outlive the process", enabled)
             assertTrue("the forward the user was holding has to go down with the switch", forward.closed)
             assertEquals(VpsTunnelState.Stopped, controller.state.value)
+        }
+
+    @Test
+    fun `stopping while the handshake is in flight closes the forward it was building`() =
+        runTest {
+            val handshake = CompletableDeferred<Unit>()
+            val forward = FakeForward()
+            val opener =
+                Opener {
+                    handshake.await()
+                    VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", forward)
+                }
+            val work = RuntimeWorkTracker()
+            val controller = controller(this, opener, work = work)
+
+            controller.start()
+            testScheduler.advanceUntilIdle()
+            controller.stop()
+            // The handshake now completes, behind the user's back.
+            handshake.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertTrue("a tunnel the user turned off must not appear behind their back", forward.closed)
+            assertEquals(VpsTunnelState.Stopped, controller.state.value)
+            assertFalse(work.active.value)
+        }
+
+    @Test
+    fun `a forward whose ssh session died is reopened rather than reported as open`() =
+        runTest {
+            val first = FakeForward()
+            val second = FakeForward()
+            val opener =
+                Opener { p ->
+                    if (p.id == "never") {
+                        VpsPortForwardOutcome.Failed(
+                            "unused",
+                        )
+                    } else {
+                        VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", first)
+                    }
+                }
+            val controller = controller(this, opener)
+
+            controller.start()
+            testScheduler.advanceUntilIdle()
+
+            // The SSH session goes away without anything here being told: a NAT timeout or an sshd
+            // idle timeout looks exactly like this.
+            first.isOpen = false
+            opener.outcome = { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", second) }
+            controller.start()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(2, opener.calls)
+            assertTrue(second.isOpen)
+            assertEquals(VpsTunnelState.Open("http://127.0.0.1:11434/"), controller.state.value)
+        }
+
+    @Test
+    fun `a network handover rebuilds a tunnel that was up`() =
+        runTest {
+            val network = MutableStateFlow<NetworkStatus>(NetworkStatus.Connected("wifi"))
+            val first = FakeForward()
+            val second = FakeForward()
+            val opener = Opener { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", if (opener.calls == 1) first else second) }
+            val controller = controller(this, opener, recovery = VpsRecovery(scope = this, networkStatus = network))
+            testScheduler.advanceUntilIdle()
+
+            controller.start()
+            testScheduler.advanceUntilIdle()
+            assertTrue(first.isOpen)
+
+            network.value = NetworkStatus.Connected("cellular")
+            testScheduler.advanceUntilIdle()
+
+            assertTrue("the old socket is gone with the old network", first.closed)
+            assertTrue(second.isOpen)
+            assertEquals(VpsTunnelState.Open("http://127.0.0.1:11434/"), controller.state.value)
+        }
+
+    @Test
+    fun `a handover retries rather than giving up on the first failure`() =
+        runTest {
+            val network = MutableStateFlow<NetworkStatus>(NetworkStatus.Connected("wifi"))
+            val forward = FakeForward()
+            var failNext = true
+            val opener =
+                Opener {
+                    if (failNext) {
+                        failNext = false
+                        VpsPortForwardOutcome.Failed("network is not up yet")
+                    } else {
+                        VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", forward)
+                    }
+                }
+            val controller = controller(this, opener, recovery = VpsRecovery(scope = this, networkStatus = network))
+            testScheduler.advanceUntilIdle()
+
+            controller.start()
+            testScheduler.advanceUntilIdle()
+            failNext = true
+
+            network.value = NetworkStatus.Connected("cellular")
+            testScheduler.advanceUntilIdle()
+
+            assertTrue("the first attempt after a handover routinely fails", forward.isOpen)
+            assertEquals(VpsTunnelState.Open("http://127.0.0.1:11434/"), controller.state.value)
+        }
+
+    @Test
+    fun `coming back to the foreground restores a tunnel the user asked to keep`() =
+        runTest {
+            val forward = FakeForward()
+            val opener = Opener { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", forward) }
+
+            val off = controller(this, opener, enabled = false)
+            off.onForeground()
+            testScheduler.advanceUntilIdle()
+            assertEquals("an unasked-for tunnel stays closed", 0, opener.calls)
+
+            val on = controller(this, opener, enabled = true)
+            on.onForeground()
+            testScheduler.advanceUntilIdle()
+            assertTrue(on.state.value is VpsTunnelState.Open)
+        }
+
+    @Test
+    fun `the failure text comes from the caller rather than from the controller`() =
+        runTest {
+            val opener = Opener { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", FakeForward()) }
+            val controller =
+                VpsTunnelController(
+                    opener = opener::open,
+                    profileProvider = { null },
+                    store = VpsTunnelStore(loadEnabled = { false }, saveEnabled = {}),
+                    scope = this,
+                    noProfileMessage = { "nema SSH konekcije" },
+                )
+
+            controller.start()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(VpsTunnelState.Failed("nema SSH konekcije"), controller.state.value)
         }
 }

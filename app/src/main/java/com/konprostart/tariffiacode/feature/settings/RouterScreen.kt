@@ -30,10 +30,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.core.router.RouterConfigSource
 import com.konprostart.tariffiacode.runtime.vps.VpsTunnelState
 
@@ -213,30 +215,46 @@ private fun VpsTunnelCard(
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("VPS tunnel", style = MaterialTheme.typography.titleMedium)
-            Text(
-                text =
-                    when {
-                        state.tunnelIsOpen -> "Open at ${(state.tunnel as VpsTunnelState.Open).localUrl}"
-                        state.tunnel is VpsTunnelState.Opening -> "Opening..."
-                        state.tunnelEnabled -> "Kept open in the background"
-                        else -> "Stopped"
-                    },
-                style = MaterialTheme.typography.bodySmall,
-            )
-            state.tunnelError?.let { message ->
-                Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            Text(stringResource(R.string.vps_tunnel_card_title), style = MaterialTheme.typography.titleMedium)
+            when (val tunnel = state.tunnel) {
+                is VpsTunnelState.Open ->
+                    Text(
+                        text = stringResource(R.string.vps_tunnel_state_open, tunnel.localUrl),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
+                VpsTunnelState.Opening ->
+                    Text(
+                        text = stringResource(R.string.vps_tunnel_state_opening),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
+                VpsTunnelState.Stopped ->
+                    Text(
+                        text =
+                            stringResource(
+                                if (state.tunnelEnabled) R.string.vps_tunnel_state_background else R.string.vps_tunnel_state_stopped,
+                            ),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
+                is VpsTunnelState.Failed ->
+                    Text(
+                        text = tunnel.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
             }
             val hostKey = state.tunnelHostKey
             if (hostKey != null) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "The server key is not trusted yet: ${hostKey.sha256Fingerprint}",
+                    text = stringResource(R.string.vps_tunnel_host_key_untrusted, hostKey.sha256Fingerprint),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onTrustHostKey) { Text("Trust and retry") }
-                    OutlinedButton(onClick = onDismissHostKey) { Text("Not now") }
+                    Button(onClick = onTrustHostKey) { Text(stringResource(R.string.vps_tunnel_trust_and_retry)) }
+                    OutlinedButton(onClick = onDismissHostKey) { Text(stringResource(R.string.vps_tunnel_not_now)) }
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -246,8 +264,8 @@ private fun VpsTunnelCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Keep it open in the background", style = MaterialTheme.typography.bodyMedium)
-                    Text("Starts with the router and again after the app restarts", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.vps_tunnel_keep_open), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.vps_tunnel_keep_open_description), style = MaterialTheme.typography.bodySmall)
                 }
                 Switch(
                     checked = state.tunnelEnabled,
@@ -255,12 +273,20 @@ private fun VpsTunnelCard(
                     onCheckedChange = onToggle,
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (state.tunnelIsOpen) {
-                    OutlinedButton(onClick = onStop, enabled = !state.tunnelPending) { Text("Stop tunnel") }
-                } else {
-                    Button(onClick = onStart, enabled = !state.tunnelPending) { Text("Start tunnel") }
+            // Only offered while the switch is off: with it on, the switch is already the control,
+            // and a second one saying the same thing is how a screen ends up with two truths.
+            if (!state.tunnelEnabled) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (state.tunnelIsOpen) {
+                        OutlinedButton(onClick = onStop, enabled = !state.tunnelPending) {
+                            Text(stringResource(R.string.vps_tunnel_stop))
+                        }
+                    } else {
+                        Button(onClick = onStart, enabled = !state.tunnelPending) {
+                            Text(stringResource(R.string.vps_tunnel_start))
+                        }
+                    }
                 }
             }
         }

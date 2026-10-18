@@ -1,5 +1,6 @@
 package com.konprostart.tariffiacode.runtime.vps
 
+import android.util.Log
 import com.konprostart.tariffiacode.core.network.NetworkStatus
 import com.konprostart.tariffiacode.core.network.shouldRebuildTunnel
 import com.konprostart.tariffiacode.core.runtime.RuntimeWorkTracker
@@ -10,11 +11,14 @@ import com.konprostart.tariffiacode.data.ssh.SshProfileStore
 import com.konprostart.tariffiacode.data.vps.VpsTunnelStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /** What the background tunnel is doing, as the screen shows it. */
 sealed interface VpsTunnelState {
@@ -46,17 +50,22 @@ sealed interface VpsTunnelState {
  *
  * Three things can open it, and all three come through here:
  *  - the user turning it on, or pressing start, from the router screen;
- *  - the router being started, when the user asked for it to be kept open
- *    ([onRouterStarted]);
+ *  - the router being started, when the user asked for it to be kept open ([onRouterStarted]);
  *  - the app coming back to the foreground after process death ([onForeground]), because the process
  *    is the thing that holds the forward and process death is the one way it silently goes away.
  *
- * Recovery is optional, as it is for [VpsRuntimeTarget]: a built without [recovery] behaves exactly
- * as before. With it, a Wi-Fi <-> cellular handover rebuilds a tunnel that was up, since that is
- * precisely when the socket behind it is dead and nothing else would notice.
+ * Recovery is optional, as it is for [VpsRuntimeTarget]: a controller built without [recovery]
+ * behaves exactly as before. With it, a Wi-Fi <-> cellular handover rebuilds a tunnel that was up -
+ * that is precisely when the socket behind it is dead and nothing else would notice - with the same
+ * bounded backoff the VPS runtime uses, because the first attempt after a handover routinely lands
+ * before the new network is usable.
  *
  * The opener is a suspend lambda rather than [VpsPortForwardManager] so the whole lifecycle can be
  * driven in a unit test without an SSH server; the app passes a lambda that calls the manager.
+ *
+ * The two failure messages are injected with English defaults rather than hard-coded strings: this
+ * class is not Android code and its messages end up on a screen, so the caller that has a Context
+ * supplies the localised text.
  */
 class VpsTunnelController(
     private val opener: suspend (SshProfile) -> VpsPortForwardOutcome,
@@ -66,6 +75,8 @@ class VpsTunnelController(
     private val profiles: SshProfileStore? = null,
     private val work: RuntimeWorkTracker? = null,
     private val recovery: VpsRecovery? = null,
+    private val noProfileMessage: () -> String = { "Select an SSH connection for the VPS first" },
+    private val noCredentialMessage: () -> String = { "No stored SSH credential for that connection" },
 ) {
     private val _state = MutableStateFlow<VpsTunnelState>(VpsTunnelState.Stopped)
     val state: StateFlow<VpsTunnelState> = _state.asStateFlow()
@@ -73,7 +84,7 @@ class VpsTunnelController(
     private val _pendingHostKey = MutableStateFlow<SshHostKey?>(null)
     val pendingHostKey: StateFlow<SshHostKey?> = _pendingHostKey.asStateFlow()
 
-    /** The lease is held for as long as the forward is, so the device does not sleep mid-session. */
+    /** Held for as long as the forward is, so the device may not suspend under an agent mid-turn. */
     @Volatile
     private var lease: RuntimeWorkTracker.Lease? = null
 
@@ -82,6 +93,12 @@ class VpsTunnelController(
 
     /** One open at a time: a second start while the first is in flight must not leak a forward. */
     private val opening = AtomicBoolean(false)
+
+    /** Bumped by [stop] so an open that finishes afterwards knows it was cancelled. */
+    private val epoch = AtomicLong(0)
+
+    /** One recovery loop at a time, however many handovers arrive while it is running. */
+    private val recovering = AtomicBoolean(false)
 
     init {
         observeNetwork()
@@ -108,6 +125,10 @@ class VpsTunnelController(
      * caller has to handle.
      */
     fun stop() {
+        // Before the close, not after: an open that is still in its SSH handshake has to notice it
+        // was cancelled, or it installs the forward it was building moments after the user turned
+        // this off - and nothing would then hold it but the process itself.
+        epoch.incrementAndGet()
         val held = forward
         forward = null
         if (held != null) runCatching { held.close() }
@@ -129,9 +150,9 @@ class VpsTunnelController(
     fun trustPendingHostKey(): SshProfile? {
         val pending = _pendingHostKey.value ?: return null
         val profile = profileProvider() ?: return null
-        val store = profiles ?: return null
+        val profileStore = profiles ?: return null
         val trusted = profile.trusting(pending.sha256Fingerprint)
-        store.upsert(trusted)
+        profileStore.upsert(trusted)
         _pendingHostKey.value = null
         // Retried with the profile that was just trusted rather than through [profileProvider]:
         // whoever supplies it holds a snapshot of the selection, so it is still the untrusted copy
@@ -146,16 +167,27 @@ class VpsTunnelController(
     }
 
     private suspend fun open(trustedProfile: SshProfile? = null) {
-        if (forward != null || _state.value is VpsTunnelState.Opening) return
+        // `isOpen`, not merely non-null: a forward whose SSH session died behind our back is still a
+        // held object, and treating it as one leaves a "tunnel is open" screen and notification over
+        // a port nothing answers on until the user happens to stop and start it by hand.
+        if (forward?.isOpen == true || _state.value is VpsTunnelState.Opening) return
         if (!opening.compareAndSet(false, true)) return
+        val started = epoch.get()
         try {
             _state.value = VpsTunnelState.Opening
             val profile = trustedProfile ?: profileProvider()
             if (profile == null) {
-                _state.value = VpsTunnelState.Failed(NO_PROFILE)
+                _state.value = VpsTunnelState.Failed(noProfileMessage())
                 return
             }
-            when (val outcome = opener(profile)) {
+            val outcome = opener(profile)
+            if (epoch.get() != started) {
+                // Cancelled while the handshake was in flight. The forward this attempt built is one
+                // the user has already asked to be gone, so it is closed here instead of installed.
+                if (outcome is VpsPortForwardOutcome.Connected) runCatching { outcome.forward.close() }
+                return
+            }
+            when (outcome) {
                 is VpsPortForwardOutcome.Connected -> {
                     forward = outcome.forward
                     // Taken only once a forward is actually held: a lease for an attempt that failed
@@ -169,7 +201,7 @@ class VpsTunnelController(
                     _state.value = VpsTunnelState.Stopped
                 }
 
-                VpsPortForwardOutcome.MissingCredential -> _state.value = VpsTunnelState.Failed(NO_CREDENTIAL)
+                VpsPortForwardOutcome.MissingCredential -> _state.value = VpsTunnelState.Failed(noCredentialMessage())
                 is VpsPortForwardOutcome.Failed -> _state.value = VpsTunnelState.Failed(outcome.message)
             }
         } finally {
@@ -185,7 +217,9 @@ class VpsTunnelController(
     /**
      * Rebuild a tunnel the user believes is up after the network handed over underneath it.
      *
-     * The first emission is a baseline, never a trigger: the monitor delivers the current network on
+     * Gated on the forward rather than on the connection being healthy: a handover is exactly the
+     * case where it is not, so waiting for it to look healthy is how this goes unrecovered. The
+     * first emission is a baseline, never a trigger - the monitor delivers the current network on
      * registration, and treating that as a handover would tear down a healthy tunnel.
      */
     private fun observeNetwork() {
@@ -197,13 +231,40 @@ class VpsTunnelController(
                 val handover = seeded && shouldRebuildTunnel(previous, current)
                 previous = current
                 seeded = true
-                // Gated on the forward rather than on the connection being healthy: a handover is
-                // exactly the case where it is not, so waiting for it to look healthy is how this
-                // goes unrecovered.
-                if (handover && forward != null) {
+                if (handover && forward != null) scheduleReconnect(recovery)
+            }
+        }
+    }
+
+    /**
+     * Retries with the same bounded backoff [VpsRuntimeTarget] uses, for the same reason: the first
+     * attempt after a handover routinely lands before the new network is usable, and without a retry
+     * loop the tunnel would stay down until the next foreground - which is minutes away for an agent
+     * that is using the router right now.
+     */
+    private fun scheduleReconnect(recovery: VpsRecovery) {
+        if (!recovering.compareAndSet(false, true)) return
+        val wasUp = forward
+        // UNDISPATCHED so the flag is cleared by this coroutine's own finally even when the scope is
+        // cancelled before it would otherwise have started; otherwise one dead scope would latch
+        // `recovering` on and refuse every later recovery for the life of the process.
+        recovery.scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                var attempt = 0
+                while (isActive && attempt < MAX_RECONNECT_ATTEMPTS) {
+                    delay(recovery.backoff.delayMillis(attempt))
                     stop()
-                    start()
+                    open()
+                    if (_state.value is VpsTunnelState.Open) return@launch
+                    attempt++
                 }
+                // Every attempt failed. Put the forward the user was relying on back, so the screen
+                // and the notification still describe what they were describing a moment ago.
+                if (wasUp != null && _state.value !is VpsTunnelState.Open) {
+                    Log.w(TAG, "could not rebuild the VPS tunnel after ${MAX_RECONNECT_ATTEMPTS} attempts")
+                }
+            } finally {
+                recovering.set(false)
             }
         }
     }
@@ -212,8 +273,8 @@ class VpsTunnelController(
         /** Ollama's port. The router's built-in `ollama` provider is pinned to 127.0.0.1:11434. */
         const val REMOTE_PORT: Int = VpsPortForwardManager.OLLAMA_PORT
 
+        private const val TAG = "VpsTunnel"
         private const val WAKE_LOCK_TAG = "vps-tunnel"
-        private const val NO_PROFILE = "Select an SSH connection for the VPS first"
-        private const val NO_CREDENTIAL = "No stored SSH credential for that connection"
+        private const val MAX_RECONNECT_ATTEMPTS = 5
     }
 }

@@ -26,9 +26,12 @@ import com.konprostart.tariffiacode.TariffiaCodeApplication
  * platform's own answer to that, and it is the same one [com.konprostart.tariffiacode.runtime.local.LocalRuntimeService]
  * and Codex already use here.
  *
- * It owns no tunnel logic: [VpsTunnelService.start] is called after the controller has been asked
- * to open one, and stopping is the controller's `setEnabled(false)` followed by [stop], which is a
- * decision the user's screen makes rather than something the service decides for itself.
+ * It follows [VpsTunnelController.state] rather than being told what to think: started when a forward
+ * actually goes up, stopped when it does not, so there is no path where an ongoing "VPS tunnel is
+ * open" notification survives a tunnel that is not there - or where the tunnel is up and nothing is
+ * holding the process alive. It owns no tunnel logic either, and deliberately does not stop the
+ * tunnel on the way out: the user's choice to keep it open is theirs, not this service's to undo
+ * because the platform took the service away.
  */
 class VpsTunnelService : Service() {
     private val controller: VpsTunnelController
@@ -40,10 +43,17 @@ class VpsTunnelService : Service() {
         super.onCreate()
         createChannel()
         // Promotion can be refused - Android 12+ refuses a start that lands while the app is in the
-        // background - and the tunnel this was started for is already open, so the honest response
-        // is to carry on without the notification rather than tear the tunnel down.
+        // background - and it must be answered with stopSelf(): a service that was started and never
+        // promoted is killed by the platform with ForegroundServiceDidNotStartInTimeException, which
+        // would take the tunnel down with it. The tunnel itself is left alone.
         runCatching { startForeground(NOTIFICATION_ID, notification()) }
-            .onFailure { error -> Log.w(TAG, "Could not enter the foreground", error) }
+            .onFailure { error ->
+                Log.w(TAG, "Could not enter the foreground", error)
+                stopSelf()
+            }
+        // Started for a tunnel that has since gone down (a stop that raced the start): there is
+        // nothing to keep alive, and an ongoing notification with no subject is worse than none.
+        if (controller.state.value !is VpsTunnelState.Open) stopSelf()
     }
 
     override fun onStartCommand(
@@ -53,9 +63,9 @@ class VpsTunnelService : Service() {
     ): Int = START_NOT_STICKY
 
     override fun onDestroy() {
-        // The service is what the user asked to keep running, so its death takes the tunnel with it:
-        // a forward with nothing holding it would advertise a port that is about to disappear.
-        controller.stop()
+        // The forward belongs to the controller and to the process, not to this service. Closing it
+        // here would turn the platform taking a notification away into the user losing the tunnel
+        // they had asked to keep, and the controller would put it back on the next foreground anyway.
         super.onDestroy()
     }
 

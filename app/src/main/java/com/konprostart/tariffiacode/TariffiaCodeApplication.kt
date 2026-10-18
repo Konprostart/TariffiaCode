@@ -597,7 +597,27 @@ class TariffiaCodeApplication : Application() {
                 profiles = sshProfileStore,
                 work = runtimeWork,
                 recovery = VpsRecovery(scope = applicationScope, networkStatus = networkMonitor.status),
+                // The controller is not Android code but these two end up on a screen, so the text
+                // comes from here where there is a Context to resolve it with.
+                noProfileMessage = { getString(R.string.vps_tunnel_error_no_profile) },
+                noCredentialMessage = { getString(R.string.vps_tunnel_error_no_credential) },
             )
+        // The keep-alive service follows the tunnel rather than being told about it: every trigger -
+        // the user, the router starting, the app returning to the foreground, a network handover
+        // rebuilding it - lands in the controller, and one collector here covers all of them. Starting
+        // it from anywhere else is how an ongoing "tunnel is open" notification ends up outliving the
+        // tunnel it is announcing.
+        applicationScope.launch {
+            vpsTunnelController.state.collect { tunnel ->
+                if (tunnel is VpsTunnelState.Open) {
+                    VpsTunnelService.start(
+                        this@TariffiaCodeApplication,
+                    )
+                } else {
+                    VpsTunnelService.stop(this@TariffiaCodeApplication)
+                }
+            }
+        }
         runtimeRegistry =
             RuntimeRegistry(
                 store = settings,

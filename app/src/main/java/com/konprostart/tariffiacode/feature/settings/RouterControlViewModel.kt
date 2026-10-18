@@ -8,7 +8,6 @@ import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.core.router.RouterService
 import com.konprostart.tariffiacode.core.router.RouterStatus
 import com.konprostart.tariffiacode.core.ssh.SshHostKey
-import com.konprostart.tariffiacode.runtime.vps.VpsTunnelService
 import com.konprostart.tariffiacode.runtime.vps.VpsTunnelState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -132,18 +131,19 @@ class RouterControlViewModel(
         }
     }
 
-    /** Keep the tunnel open in the background, or take it down and remember that choice. */
+    /**
+     * Keep the tunnel open in the background, or take it down and remember that choice.
+     *
+     * The keep-alive service is not touched here: it follows the controller's own state, so every
+     * trigger gets the same behaviour and none of them can leave a notification describing a tunnel
+     * that is not there.
+     */
     fun setTunnelEnabled(enabled: Boolean) {
         val controller = tunnel ?: return
         _state.update { it.copy(tunnelPending = true, tunnelEnabled = enabled) }
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) {
-                    controller.setEnabled(enabled)
-                    // The service is what the platform was told to keep alive; turning the tunnel
-                    // off has to take the notification down with it, or it outlives its own subject.
-                    if (enabled) VpsTunnelService.start(context) else VpsTunnelService.stop(context)
-                }
+                withContext(Dispatchers.IO) { controller.setEnabled(enabled) }
             } finally {
                 _state.update { it.copy(tunnelPending = false) }
             }
@@ -156,10 +156,7 @@ class RouterControlViewModel(
         _state.update { it.copy(tunnelPending = true) }
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) {
-                    controller.start()
-                    VpsTunnelService.start(context)
-                }
+                withContext(Dispatchers.IO) { controller.start() }
             } finally {
                 _state.update { it.copy(tunnelPending = false) }
             }
