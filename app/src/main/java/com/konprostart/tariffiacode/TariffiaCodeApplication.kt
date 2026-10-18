@@ -19,6 +19,7 @@ import com.konprostart.tariffiacode.core.network.NetworkMonitor
 import com.konprostart.tariffiacode.core.notification.RuntimeNotificationHelper
 import com.konprostart.tariffiacode.core.runtime.RuntimeWorkTracker
 import com.konprostart.tariffiacode.core.security.SecretRedaction
+import com.konprostart.tariffiacode.core.ssh.MinaSshClient
 import com.konprostart.tariffiacode.core.ssh.MinaSshPortForwarder
 import com.konprostart.tariffiacode.core.ssh.installSshUserHomeFolder
 import com.konprostart.tariffiacode.core.storage.DeviceStorage
@@ -36,6 +37,7 @@ import com.konprostart.tariffiacode.data.repository.SessionAutoArchiver
 import com.konprostart.tariffiacode.data.schedule.ScheduleRepository
 import com.konprostart.tariffiacode.data.settings.AppPreferencesRepository
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
+import com.konprostart.tariffiacode.data.ssh.SshHeldSessionStore
 import com.konprostart.tariffiacode.data.ssh.SshProfileStore
 import com.konprostart.tariffiacode.data.vps.VpsSelectionStore
 import com.konprostart.tariffiacode.data.vps.VpsTunnelStore
@@ -86,6 +88,8 @@ import com.konprostart.tariffiacode.runtime.local.RuntimeCredentialPolicy
 import com.konprostart.tariffiacode.runtime.local.SystemPromptStore
 import com.konprostart.tariffiacode.runtime.local.VerifiedRuntimeDownloader
 import com.konprostart.tariffiacode.runtime.local.applyOpenCodeSystemPrompt
+import com.konprostart.tariffiacode.runtime.ssh.SshConnectionManager
+import com.konprostart.tariffiacode.runtime.ssh.SshSessionHolder
 import com.konprostart.tariffiacode.runtime.vps.SshTunnelPool
 import com.konprostart.tariffiacode.runtime.vps.VpsPortForwardManager
 import com.konprostart.tariffiacode.runtime.vps.VpsRecovery
@@ -188,6 +192,14 @@ class TariffiaCodeApplication : Application() {
      * as the app runs, rather than for as long as a screen does. The router screen drives it.
      */
     lateinit var vpsTunnelController: VpsTunnelController
+        private set
+
+    /**
+     * The app-scoped SSH session the user asked to stay connected from the settings screen. Living
+     * here rather than inside a screen's ViewModel is what keeps "Connected" true after the screen
+     * is gone, and gives every later press of Disconnect something real to stop.
+     */
+    lateinit var sshSessionHolder: SshSessionHolder
         private set
 
     lateinit var catalogRepository: RuntimeCatalogRepository
@@ -580,6 +592,20 @@ class TariffiaCodeApplication : Application() {
                 selection = VpsSelectionStore(settings),
                 recovery = VpsRecovery(scope = applicationScope, networkStatus = networkMonitor.status),
             )
+        // One app-scoped shell session for the settings screen's Connect, so the connection outlives
+        // the screen. Its credentials and diagnostics come from the same SSH machinery the VPS
+        // runtime already uses.
+        val sshCredentialStore = SshCredentialStore(settings)
+        sshSessionHolder =
+            SshSessionHolder(
+                opener =
+                    SshConnectionManager(MinaSshClient(), sshCredentialStore).diagnosticOpener(
+                        sshCredentialStore,
+                    ),
+                profiles = sshProfileStore,
+                selection = SshHeldSessionStore(settings),
+                scope = applicationScope,
+            )
         // The same pool and the same SSH profile the VPS runtime uses, so the tunnel costs one more
         // channel on a session that is already open rather than a second handshake.
         vpsTunnelController =
@@ -764,6 +790,9 @@ class TariffiaCodeApplication : Application() {
             appForeground.foreground.collect { inForeground ->
                 if (!detector.onForegroundChanged(inForeground)) return@collect
                 vpsTunnelController.onForeground()
+                // Same event, same policy: top up a session the user explicitly connected once the
+                // app is actually visible again.
+                sshSessionHolder.restoreIfRemembered()
             }
         }
     }

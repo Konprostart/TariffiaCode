@@ -8,8 +8,12 @@ import com.konprostart.tariffiacode.data.ssh.SshAuthType
 import com.konprostart.tariffiacode.data.ssh.SshCredential
 import com.konprostart.tariffiacode.data.ssh.SshCredentialCodec
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
+import com.konprostart.tariffiacode.data.ssh.SshHeldSessionStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.data.ssh.SshProfileStore
+import com.konprostart.tariffiacode.runtime.ssh.SshConnectionManager
+import com.konprostart.tariffiacode.runtime.ssh.SshSessionHolder
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -55,6 +59,40 @@ class SshSettingsViewModelConnectTest {
         ): SshConnectResult = failure
     }
 
+    /**
+     * Same wiring the app builds: holder owns the session; the VM only mirrors it, so every
+     * assertion here now exercises the exact code path a press of Connect takes in production.
+     */
+    private fun screenViewModel(
+        profile: SshProfile,
+        entries: Map<String, String>,
+        client: SshConnectionClient,
+        testScheduler: kotlinx.coroutines.test.TestCoroutineScheduler,
+    ): SshSettingsViewModel {
+        val credentialStore = SshCredentialStore(load = { entries }, save = {})
+        val profileStore =
+            SshProfileStore(
+                load = { listOf(profile) },
+                save = {},
+                credentials = credentialStore,
+            )
+        val holder =
+            SshSessionHolder(
+                opener =
+                    SshConnectionManager(client = client, credentials = credentialStore).diagnosticOpener(
+                        credentialStore,
+                    ),
+                profiles = profileStore,
+                selection = SshHeldSessionStore({ null }, {}),
+                scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+            )
+        return SshSettingsViewModel(
+            profiles = profileStore,
+            credentials = credentialStore,
+            sessions = holder,
+        )
+    }
+
     @Test
     fun `connect surfaces a thrown Error as an error state instead of crashing`() =
         runTest {
@@ -68,19 +106,7 @@ class SshSettingsViewModelConnectTest {
                     credentialRef = "ref",
                 )
             val entries = mapOf("ref" to SshCredentialCodec.encode(SshCredential.Password("secret")))
-            val credentialStore = SshCredentialStore(load = { entries }, save = {})
-            val profileStore =
-                SshProfileStore(
-                    load = { listOf(profile) },
-                    save = {},
-                    credentials = credentialStore,
-                )
-            val vm =
-                SshSettingsViewModel(
-                    profiles = profileStore,
-                    credentials = credentialStore,
-                    connections = SshConnectionManager(client = ThrowingClient(), credentials = credentialStore),
-                )
+            val vm = screenViewModel(profile, entries, ThrowingClient(), testScheduler)
 
             vm.connect("p1")
 
@@ -107,12 +133,7 @@ class SshSettingsViewModelConnectTest {
                     authType = SshAuthType.PASSWORD,
                     credentialRef = "ref",
                 )
-            val credentials =
-                SshCredentialStore(
-                    load = { mapOf("ref" to SshCredentialCodec.encode(SshCredential.Password(password))) },
-                    save = {},
-                )
-            val profileStore = SshProfileStore(load = { listOf(profile) }, save = {}, credentials = credentials)
+            val entries = mapOf("ref" to SshCredentialCodec.encode(SshCredential.Password(password)))
             val failure =
                 SshConnectResult.Failure(
                     message = "auth() failed for $password",
@@ -122,12 +143,7 @@ class SshSettingsViewModelConnectTest {
                             java.security.NoSuchAlgorithmException("provider BC cannot load $password"),
                         ),
                 )
-            val vm =
-                SshSettingsViewModel(
-                    profiles = profileStore,
-                    credentials = credentials,
-                    connections = SshConnectionManager(client = FailingClient(failure), credentials = credentials),
-                )
+            val vm = screenViewModel(profile, entries, FailingClient(failure), testScheduler)
 
             vm.connect(profile.id)
 

@@ -11,19 +11,39 @@ import com.konprostart.tariffiacode.core.ssh.SshTunnelSessionResult
 import com.konprostart.tariffiacode.data.ssh.SshAuthType
 import com.konprostart.tariffiacode.data.ssh.SshCredential
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
+import com.konprostart.tariffiacode.data.ssh.SshHeldSessionStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.data.ssh.SshProfileStore
 import com.konprostart.tariffiacode.runtime.RuntimeState
+import com.konprostart.tariffiacode.runtime.ssh.SshConnectionManager
+import com.konprostart.tariffiacode.runtime.ssh.SshSessionHolder
 import com.konprostart.tariffiacode.runtime.vps.SshTunnelPool
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeConnector
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeTarget
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class SshSettingsViewModelTest {
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
     private class Backend {
         var profiles: List<SshProfile> = emptyList()
         var credentials: Map<String, String> = emptyMap()
@@ -40,10 +60,16 @@ class SshSettingsViewModelTest {
         return SshSettingsViewModel(
             profiles = profileStore,
             credentials = credentialStore,
-            connections =
-                SshConnectionManager(
-                    client = NoopClient,
-                    credentials = credentialStore,
+            sessions =
+                SshSessionHolder(
+                    opener =
+                        SshConnectionManager(
+                            client = NoopClient,
+                            credentials = credentialStore,
+                        ).diagnosticOpener(credentialStore),
+                    profiles = profileStore,
+                    selection = SshHeldSessionStore({ null }, {}),
+                    scope = CoroutineScope(UnconfinedTestDispatcher()),
                 ),
         )
     }
