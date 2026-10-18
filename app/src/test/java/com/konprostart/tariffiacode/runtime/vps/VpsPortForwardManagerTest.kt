@@ -141,7 +141,7 @@ class VpsPortForwardManagerTest {
             assertTrue(outcome is VpsPortForwardOutcome.Connected)
             assertEquals(11434, forwarder.requestedRemotePort)
             assertEquals(11434, forwarder.requestedLocalPort)
-            outcome.forward.close()
+            (outcome as VpsPortForwardOutcome.Connected).forward.close()
         }
 
     @Test
