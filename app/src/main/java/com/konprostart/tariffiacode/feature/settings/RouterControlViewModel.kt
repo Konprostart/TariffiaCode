@@ -196,7 +196,6 @@ data class RouterControlUiState(
     val isRunning: Boolean get() = status is RouterStatus.Running
     val port: Int? get() = (status as? RouterStatus.Running)?.port
     val tunnelIsOpen: Boolean get() = tunnel is VpsTunnelState.Open
-    val tunnelError: String? get() = (tunnel as? VpsTunnelState.Failed)?.message
 }
 
 /** How long stop() waits for the service to go quiet before it cleans up after it. */

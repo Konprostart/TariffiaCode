@@ -611,12 +611,13 @@ class TariffiaCodeApplication : Application() {
         // tunnel it is announcing.
         applicationScope.launch {
             vpsTunnelController.state.collect { tunnel ->
-                if (tunnel is VpsTunnelState.Open) {
-                    VpsTunnelService.start(
-                        this@TariffiaCodeApplication,
-                    )
-                } else {
-                    VpsTunnelService.stop(this@TariffiaCodeApplication)
+                when (tunnel) {
+                    is VpsTunnelState.Open -> VpsTunnelService.start(this@TariffiaCodeApplication)
+                    // Mid-rebuild is not "gone": stopping here would drop the notification and then
+                    // try to start it again from the background a second later, which Android 12+
+                    // refuses - leaving the tunnel held by a process nothing is protecting.
+                    VpsTunnelState.Opening -> Unit
+                    VpsTunnelState.Stopped, is VpsTunnelState.Failed -> VpsTunnelService.stop(this@TariffiaCodeApplication)
                 }
             }
         }

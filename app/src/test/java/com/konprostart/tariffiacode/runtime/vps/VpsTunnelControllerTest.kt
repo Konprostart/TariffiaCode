@@ -315,16 +315,8 @@ class VpsTunnelControllerTest {
         runTest {
             val first = FakeForward()
             val second = FakeForward()
-            val opener =
-                Opener { p ->
-                    if (p.id == "never") {
-                        VpsPortForwardOutcome.Failed(
-                            "unused",
-                        )
-                    } else {
-                        VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", first)
-                    }
-                }
+            var handed = 0
+            val opener = Opener { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", if (handed++ == 0) first else second) }
             val controller = controller(this, opener)
 
             controller.start()
@@ -333,7 +325,6 @@ class VpsTunnelControllerTest {
             // The SSH session goes away without anything here being told: a NAT timeout or an sshd
             // idle timeout looks exactly like this.
             first.isOpen = false
-            opener.outcome = { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", second) }
             controller.start()
             testScheduler.advanceUntilIdle()
 
@@ -436,5 +427,85 @@ class VpsTunnelControllerTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(VpsTunnelState.Failed("nema SSH konekcije"), controller.state.value)
+        }
+
+    @Test
+    fun `turning the tunnel off during a handover retry stops the recovery for good`() =
+        runTest {
+            val network = MutableStateFlow<NetworkStatus>(NetworkStatus.Connected("wifi"))
+            var live: FakeForward? = null
+            val opener =
+                Opener {
+                    FakeForward().also { live = it }.let { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", it) }
+                }
+            var enabled = true
+            val tunnelScope = TestScope(testScheduler)
+            val controller =
+                VpsTunnelController(
+                    opener = opener::open,
+                    profileProvider = { profile },
+                    store = VpsTunnelStore(loadEnabled = { enabled }, saveEnabled = { enabled = it }),
+                    scope = tunnelScope,
+                    recovery = VpsRecovery(scope = tunnelScope, networkStatus = network),
+                )
+            testScheduler.advanceUntilIdle()
+            controller.start()
+            testScheduler.advanceUntilIdle()
+            val held = live
+
+            // The handover starts a backoff measured in seconds; the user changes their mind inside it.
+            network.value = NetworkStatus.Connected("cellular")
+            controller.setEnabled(false)
+            testScheduler.advanceUntilIdle()
+
+            assertFalse("a cancelled recovery must not leave the tunnel on", enabled)
+            assertEquals(VpsTunnelState.Stopped, controller.state.value)
+            assertTrue("no forward may be installed after the user turned it off", requireNotNull(held).closed)
+        }
+
+    @Test
+    fun `a trusted key survives a later restart of the tunnel`() =
+        runTest {
+            val store = profileStore()
+            val key = SshHostKey("ssh-ed25519", "ab".repeat(32))
+            val forward = FakeForward()
+            // The selection the app hands over is a snapshot that keeps saying "untrusted", the way it
+            // does after the user trusted the key and the in-memory selection was never updated.
+            val selected: SshProfile = profile
+            val opener =
+                Opener { p ->
+                    if (p.trustedHostKeyFingerprint == key.sha256Fingerprint) {
+                        VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", forward)
+                    } else {
+                        VpsPortForwardOutcome.NeedsHostKeyTrust(key)
+                    }
+                }
+            val tunnelScope = TestScope(testScheduler)
+            val controller =
+                VpsTunnelController(
+                    opener = opener::open,
+                    profileProvider = { selected },
+                    store = VpsTunnelStore(loadEnabled = { true }, saveEnabled = {}),
+                    scope = tunnelScope,
+                    profiles = store,
+                )
+
+            controller.start()
+            testScheduler.advanceUntilIdle()
+            assertEquals(key, controller.pendingHostKey.value)
+
+            controller.trustPendingHostKey()
+            testScheduler.advanceUntilIdle()
+            assertTrue(controller.state.value is VpsTunnelState.Open)
+
+            // The next rebuild - a handover, a foreground return, the user pressing start - must not
+            // ask for the key again.
+            controller.stop()
+            testScheduler.advanceUntilIdle()
+            controller.start()
+            testScheduler.advanceUntilIdle()
+
+            assertTrue(controller.state.value is VpsTunnelState.Open)
+            assertNull(controller.pendingHostKey.value)
         }
 }

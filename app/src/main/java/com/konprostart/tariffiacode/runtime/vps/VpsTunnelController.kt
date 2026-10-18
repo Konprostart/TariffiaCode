@@ -129,11 +129,25 @@ class VpsTunnelController(
         // was cancelled, or it installs the forward it was building moments after the user turned
         // this off - and nothing would then hold it but the process itself.
         epoch.incrementAndGet()
+        closeHeldForward()
+        releaseLease()
+        // A key the user has not accepted belongs to a tunnel they just stopped; leaving it on the
+        // screen invites them to press "Trust and retry" on something that is no longer there.
+        _pendingHostKey.value = null
+        _state.value = VpsTunnelState.Stopped
+    }
+
+    /**
+     * Drops the forward without announcing that the tunnel is gone.
+     *
+     * Used while rebuilding one: the tunnel was up a moment ago, still belongs to the user, and is
+     * coming back in a second or two - so publishing a stop for it would take the keep-alive service
+     * down and then try to start it again from the background, which Android 12+ refuses.
+     */
+    private fun closeHeldForward() {
         val held = forward
         forward = null
         if (held != null) runCatching { held.close() }
-        releaseLease()
-        _state.value = VpsTunnelState.Stopped
     }
 
     /** Called when the router is started: what the user asked for should be up before an agent dials in. */
@@ -175,7 +189,10 @@ class VpsTunnelController(
         val started = epoch.get()
         try {
             _state.value = VpsTunnelState.Opening
-            val profile = trustedProfile ?: profileProvider()
+            // Re-read from the store rather than trusting the selection snapshot: trusting a host key
+            // writes the profile, and the selection the caller holds still says the old, untrusted
+            // copy - so every later rebuild would ask the user for the same key again.
+            val profile = trustedProfile ?: profileProvider()?.let { selected -> profiles?.profile(selected.id) ?: selected }
             if (profile == null) {
                 _state.value = VpsTunnelState.Failed(noProfileMessage())
                 return
@@ -194,6 +211,15 @@ class VpsTunnelController(
                     // would keep the device awake for a tunnel that does not exist.
                     lease = work?.acquire(WAKE_LOCK_TAG)
                     _state.value = VpsTunnelState.Open(outcome.localUrl)
+                    // Re-checked after installing, not only before: a stop() that lands between that
+                    // check and here found no forward to close and moved on, and without this the
+                    // tunnel the user just turned off would be installed behind their back.
+                    if (epoch.get() != started) {
+                        forward = null
+                        releaseLease()
+                        runCatching { outcome.forward.close() }
+                        _state.value = VpsTunnelState.Stopped
+                    }
                 }
 
                 is VpsPortForwardOutcome.NeedsHostKeyTrust -> {
@@ -244,7 +270,11 @@ class VpsTunnelController(
      */
     private fun scheduleReconnect(recovery: VpsRecovery) {
         if (!recovering.compareAndSet(false, true)) return
-        val wasUp = forward
+        // Taken before the first delay and checked after each one: the user can turn the tunnel off
+        // while this is waiting, and the loop's own stop() bumps the epoch too - so the check has to
+        // happen before it, or a cancelled recovery spends the next 30 seconds reopening a tunnel
+        // nobody asked for any more.
+        val started = epoch.get()
         // UNDISPATCHED so the flag is cleared by this coroutine's own finally even when the scope is
         // cancelled before it would otherwise have started; otherwise one dead scope would latch
         // `recovering` on and refuse every later recovery for the life of the process.
@@ -253,16 +283,15 @@ class VpsTunnelController(
                 var attempt = 0
                 while (isActive && attempt < MAX_RECONNECT_ATTEMPTS) {
                     delay(recovery.backoff.delayMillis(attempt))
-                    stop()
+                    if (epoch.get() != started) return@launch
+                    // Not stop(): the lease stays held and the state never says "stopped", so the
+                    // keep-alive service is not torn down and rebuilt in the middle of a handover.
+                    closeHeldForward()
                     open()
                     if (_state.value is VpsTunnelState.Open) return@launch
                     attempt++
                 }
-                // Every attempt failed. Put the forward the user was relying on back, so the screen
-                // and the notification still describe what they were describing a moment ago.
-                if (wasUp != null && _state.value !is VpsTunnelState.Open) {
-                    Log.w(TAG, "could not rebuild the VPS tunnel after ${MAX_RECONNECT_ATTEMPTS} attempts")
-                }
+                Log.w(TAG, "could not rebuild the VPS tunnel after ${MAX_RECONNECT_ATTEMPTS} attempts")
             } finally {
                 recovering.set(false)
             }
