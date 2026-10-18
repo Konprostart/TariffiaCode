@@ -354,14 +354,14 @@ class VpsTunnelControllerTest {
             // controller lives, which is exactly what `runTest` waits on before it can finish.
             val tunnelScope = TestScope(testScheduler)
             val controller = controller(tunnelScope, opener, recovery = VpsRecovery(scope = tunnelScope, networkStatus = network))
-            advanceUntilIdle()
+            testScheduler.advanceUntilIdle()
 
             controller.start()
-            advanceUntilIdle()
+            testScheduler.advanceUntilIdle()
             assertTrue(first.isOpen)
 
             network.value = NetworkStatus.Connected("cellular")
-            advanceUntilIdle()
+            testScheduler.advanceUntilIdle()
 
             assertTrue("the old socket is gone with the old network", first.closed)
             assertTrue(second.isOpen)
@@ -385,14 +385,14 @@ class VpsTunnelControllerTest {
                 }
             val tunnelScope = TestScope(testScheduler)
             val controller = controller(tunnelScope, opener, recovery = VpsRecovery(scope = tunnelScope, networkStatus = network))
-            advanceUntilIdle()
+            testScheduler.advanceUntilIdle()
 
             controller.start()
-            advanceUntilIdle()
+            testScheduler.advanceUntilIdle()
             failNext = true
 
             network.value = NetworkStatus.Connected("cellular")
-            advanceUntilIdle()
+            testScheduler.advanceUntilIdle()
 
             assertTrue("the first attempt after a handover routinely fails", forward.isOpen)
             assertEquals(VpsTunnelState.Open("http://127.0.0.1:11434/"), controller.state.value)
