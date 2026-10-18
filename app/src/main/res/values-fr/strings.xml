@@ -1019,6 +1019,9 @@
     <string name="notification_channel_codex">Connexion et tâches de Codex</string>
     <string name="codex_keepalive_notification_title">Codex est en cours d’exécution</string>
     <string name="codex_keepalive_notification_text">Maintient Codex connecté lorsque l’application est en arrière-plan.</string>
+    <string name="notification_channel_vps_tunnel">Tunnel VPS</string>
+    <string name="vps_tunnel_notification_title">Le tunnel VPS est ouvert</string>
+    <string name="vps_tunnel_notification_text">Garde une connexion SSH vers votre VPS disponible pour les agents de cet appareil.</string>
     <string name="setup_download_agents_description">Prépare l’environnement Linux partagé et les agents que vous avez choisis.</string>
     <string name="settings_agents_row">Agents</string>
     <string name="settings_agents_section">Agents</string>

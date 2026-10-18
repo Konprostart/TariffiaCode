@@ -1063,6 +1063,9 @@
     <string name="notification_channel_codex">Codexのサインインとタスク</string>
     <string name="codex_keepalive_notification_title">Codexを実行中</string>
     <string name="codex_keepalive_notification_text">アプリがバックグラウンドでもCodexの接続を維持します。</string>
+    <string name="notification_channel_vps_tunnel">VPSトンネル</string>
+    <string name="vps_tunnel_notification_title">VPSトンネルが開いています</string>
+    <string name="vps_tunnel_notification_text">この端末のエージェントがVPSにSSH接続できるよう維持します。</string>
     <string name="setup_download_agents_description">共有のLinux環境と、選んだエージェントを準備します。</string>
     <string name="settings_agents_row">エージェント</string>
     <string name="settings_agents_section">エージェント</string>

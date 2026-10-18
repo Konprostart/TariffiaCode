@@ -1019,6 +1019,9 @@
     <string name="notification_channel_codex">Inicio de sesión y tareas de Codex</string>
     <string name="codex_keepalive_notification_title">Codex se está ejecutando</string>
     <string name="codex_keepalive_notification_text">Mantiene Codex conectado mientras la aplicación está en segundo plano.</string>
+    <string name="notification_channel_vps_tunnel">Túnel VPS</string>
+    <string name="vps_tunnel_notification_title">El túnel VPS está abierto</string>
+    <string name="vps_tunnel_notification_text">Mantiene una conexión SSH con tu VPS disponible para los agentes de este dispositivo.</string>
     <string name="setup_download_agents_description">Prepara el entorno Linux compartido y los agentes que eligió.</string>
     <string name="settings_agents_row">Agentes</string>
     <string name="settings_agents_section">Agentes</string>

@@ -1025,6 +1025,9 @@
     <string name="notification_channel_codex">تسجيل دخول Codex ومهامه</string>
     <string name="codex_keepalive_notification_title">Codex قيد التشغيل</string>
     <string name="codex_keepalive_notification_text">يُبقي Codex متصلًا أثناء وجود التطبيق في الخلفية.</string>
+    <string name="notification_channel_vps_tunnel">نفق VPS</string>
+    <string name="vps_tunnel_notification_title">نفق VPS مفتوح</string>
+    <string name="vps_tunnel_notification_text">يبقي اتصال SSH بخادمك البرمجي متاحًا للوكلاء على هذا الجهاز.</string>
     <string name="setup_download_agents_description">تحضير بيئة Linux المشتركة والوكلاء الذين اخترتهم.</string>
     <string name="settings_agents_row">الوكلاء</string>
     <string name="settings_agents_section">الوكلاء</string>

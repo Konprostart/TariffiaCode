@@ -1015,6 +1015,9 @@
     <string name="notification_channel_codex">Codex 登录与任务</string>
     <string name="codex_keepalive_notification_title">Codex 正在运行</string>
     <string name="codex_keepalive_notification_text">应用在后台时保持 Codex 的连接。</string>
+    <string name="notification_channel_vps_tunnel">VPS 隧道</string>
+    <string name="vps_tunnel_notification_title">VPS 隧道已开启</string>
+    <string name="vps_tunnel_notification_text">保持到您 VPS 的 SSH 连接，供本设备上的智能体使用。</string>
     <string name="setup_download_agents_description">准备共享的 Linux 环境以及你选择的智能体。</string>
     <string name="settings_agents_row">智能体</string>
     <string name="settings_agents_section">智能体</string>

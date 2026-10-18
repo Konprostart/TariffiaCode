@@ -1021,6 +1021,9 @@
     <string name="notification_channel_codex">Вход и задачи Codex</string>
     <string name="codex_keepalive_notification_title">Codex работает</string>
     <string name="codex_keepalive_notification_text">Поддерживает связь Codex, пока приложение работает в фоне.</string>
+    <string name="notification_channel_vps_tunnel">Туннель VPS</string>
+    <string name="vps_tunnel_notification_title">Туннель VPS открыт</string>
+    <string name="vps_tunnel_notification_text">Поддерживает SSH-соединение с вашим VPS для агентов на этом устройстве.</string>
     <string name="setup_download_agents_description">Подготовка общей среды Linux и выбранных агентов.</string>
     <string name="settings_agents_row">Агенты</string>
     <string name="settings_agents_section">Агенты</string>
