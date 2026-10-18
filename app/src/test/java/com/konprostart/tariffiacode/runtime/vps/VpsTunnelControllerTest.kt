@@ -350,15 +350,18 @@ class VpsTunnelControllerTest {
             val second = FakeForward()
             var handed = 0
             val opener = Opener { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", if (handed++ == 0) first else second) }
-            val controller = controller(this, opener, recovery = VpsRecovery(scope = this, networkStatus = network))
-            testScheduler.advanceUntilIdle()
+            // Its own scope on the shared scheduler: the network observer collects for as long as the
+            // controller lives, which is exactly what `runTest` waits on before it can finish.
+            val tunnelScope = TestScope(testScheduler)
+            val controller = controller(tunnelScope, opener, recovery = VpsRecovery(scope = tunnelScope, networkStatus = network))
+            advanceUntilIdle()
 
             controller.start()
-            testScheduler.advanceUntilIdle()
+            advanceUntilIdle()
             assertTrue(first.isOpen)
 
             network.value = NetworkStatus.Connected("cellular")
-            testScheduler.advanceUntilIdle()
+            advanceUntilIdle()
 
             assertTrue("the old socket is gone with the old network", first.closed)
             assertTrue(second.isOpen)
@@ -380,15 +383,16 @@ class VpsTunnelControllerTest {
                         VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", forward)
                     }
                 }
-            val controller = controller(this, opener, recovery = VpsRecovery(scope = this, networkStatus = network))
-            testScheduler.advanceUntilIdle()
+            val tunnelScope = TestScope(testScheduler)
+            val controller = controller(tunnelScope, opener, recovery = VpsRecovery(scope = tunnelScope, networkStatus = network))
+            advanceUntilIdle()
 
             controller.start()
-            testScheduler.advanceUntilIdle()
+            advanceUntilIdle()
             failNext = true
 
             network.value = NetworkStatus.Connected("cellular")
-            testScheduler.advanceUntilIdle()
+            advanceUntilIdle()
 
             assertTrue("the first attempt after a handover routinely fails", forward.isOpen)
             assertEquals(VpsTunnelState.Open("http://127.0.0.1:11434/"), controller.state.value)
