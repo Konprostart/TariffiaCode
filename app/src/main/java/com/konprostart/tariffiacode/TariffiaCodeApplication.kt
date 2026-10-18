@@ -92,6 +92,8 @@ import com.konprostart.tariffiacode.runtime.vps.VpsRecovery
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeConnector
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeTarget
 import com.konprostart.tariffiacode.runtime.vps.VpsTunnelController
+import com.konprostart.tariffiacode.runtime.vps.VpsTunnelService
+import com.konprostart.tariffiacode.runtime.vps.VpsTunnelState
 import com.konprostart.tariffiacode.startup.CatalogReconcileInitializer
 import com.konprostart.tariffiacode.startup.RuntimeAutoStartInitializer
 import com.konprostart.tariffiacode.startup.RuntimeAutoStartTrigger
