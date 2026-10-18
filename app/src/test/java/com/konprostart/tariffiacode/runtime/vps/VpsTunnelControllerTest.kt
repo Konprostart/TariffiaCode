@@ -372,17 +372,19 @@ class VpsTunnelControllerTest {
     fun `a handover retries rather than giving up on the first failure`() =
         runTest {
             val network = MutableStateFlow<NetworkStatus>(NetworkStatus.Connected("wifi"))
-            val forward = FakeForward()
             // Set only around the handover below, so the tunnel is up beforehand - which is the
             // whole premise: a handover rebuilds a tunnel that was working.
             var failNext = false
+            // A fresh forward per attempt, the way the pool hands out a new one: reusing the one the
+            // rebuild closed would report a dead socket as the live tunnel.
+            var live: FakeForward? = null
             val opener =
                 Opener {
                     if (failNext) {
                         failNext = false
                         VpsPortForwardOutcome.Failed("network is not up yet")
                     } else {
-                        VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", forward)
+                        FakeForward().also { live = it }.let { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", it) }
                     }
                 }
             val tunnelScope = TestScope(testScheduler)
@@ -396,7 +398,7 @@ class VpsTunnelControllerTest {
             network.value = NetworkStatus.Connected("cellular")
             testScheduler.advanceUntilIdle()
 
-            assertTrue("the first attempt after a handover routinely fails", forward.isOpen)
+            assertTrue("the first attempt after a handover routinely fails", live?.isOpen == true)
             assertEquals(VpsTunnelState.Open("http://127.0.0.1:11434/"), controller.state.value)
         }
 
