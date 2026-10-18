@@ -1060,6 +1060,9 @@
     <string name="notification_channel_codex">Codex sign-in and tasks</string>
     <string name="codex_keepalive_notification_title">Codex is running</string>
     <string name="codex_keepalive_notification_text">Keeps Codex connected while the app is in the background.</string>
+    <string name="notification_channel_vps_tunnel">VPS tunnel</string>
+    <string name="vps_tunnel_notification_title">VPS tunnel is open</string>
+    <string name="vps_tunnel_notification_text">Keeps an SSH connection to your VPS available for agents on this device.</string>
     <string name="setup_download_agents_description">Prepare the shared Linux environment and the agents you picked.</string>
     <string name="settings_agents_row">Agents</string>
     <string name="settings_agents_section">Agents</string>

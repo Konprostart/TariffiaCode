@@ -19,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.konprostart.tariffiacode.core.router.RouterConfigSource
+import com.konprostart.tariffiacode.runtime.vps.VpsTunnelState
 
 /**
  * The router, on one screen: whether it is on, and which keys it has.
@@ -139,6 +141,17 @@ fun RouterScreen(
             }
 
             item {
+                VpsTunnelCard(
+                    state = routerState,
+                    onToggle = control::setTunnelEnabled,
+                    onStart = control::startTunnel,
+                    onStop = control::stopTunnel,
+                    onTrustHostKey = control::trustTunnelHostKey,
+                    onDismissHostKey = control::dismissTunnelHostKey,
+                )
+            }
+
+            item {
                 Text(
                     text =
                         "Routing table: " +
@@ -176,6 +189,80 @@ fun RouterScreen(
                 )
             }
             item { Spacer(Modifier.height(24.dp)) }
+        }
+    }
+}
+
+/**
+ * The user's own VPS, kept reachable from the router.
+ *
+ * A separate card rather than another row under the router switch, because it is a separate thing:
+ * the router can be on with every chain entry pointing at a cloud provider, and the tunnel can be up
+ * with the router off. What ties them together is the switch - a tunnel that comes back on its own
+ * when the router starts, so a chain entry pointing at the VPS is not the first thing an agent
+ * discovers to be down.
+ */
+@Composable
+private fun VpsTunnelCard(
+    state: RouterControlUiState,
+    onToggle: (Boolean) -> Unit,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    onTrustHostKey: () -> Unit,
+    onDismissHostKey: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("VPS tunnel", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text =
+                    when {
+                        state.tunnelIsOpen -> "Open at ${(state.tunnel as VpsTunnelState.Open).localUrl}"
+                        state.tunnel is VpsTunnelState.Opening -> "Opening..."
+                        state.tunnelEnabled -> "Kept open in the background"
+                        else -> "Stopped"
+                    },
+                style = MaterialTheme.typography.bodySmall,
+            )
+            state.tunnelError?.let { message ->
+                Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+            val hostKey = state.tunnelHostKey
+            if (hostKey != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "The server key is not trusted yet: ${hostKey.sha256Fingerprint}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onTrustHostKey) { Text("Trust and retry") }
+                    OutlinedButton(onClick = onDismissHostKey) { Text("Not now") }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Keep it open in the background", style = MaterialTheme.typography.bodyMedium)
+                    Text("Starts with the router and again after the app restarts", style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(
+                    checked = state.tunnelEnabled,
+                    enabled = !state.tunnelPending,
+                    onCheckedChange = onToggle,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state.tunnelIsOpen) {
+                    OutlinedButton(onClick = onStop, enabled = !state.tunnelPending) { Text("Stop tunnel") }
+                } else {
+                    Button(onClick = onStart, enabled = !state.tunnelPending) { Text("Start tunnel") }
+                }
+            }
         }
     }
 }
