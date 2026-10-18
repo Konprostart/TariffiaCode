@@ -19,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -29,11 +30,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.konprostart.tariffiacode.R
 import com.konprostart.tariffiacode.core.router.RouterConfigSource
+import com.konprostart.tariffiacode.runtime.vps.VpsTunnelState
 
 /**
  * The router, on one screen: whether it is on, and which keys it has.
@@ -139,6 +143,17 @@ fun RouterScreen(
             }
 
             item {
+                VpsTunnelCard(
+                    state = routerState,
+                    onToggle = control::setTunnelEnabled,
+                    onStart = control::startTunnel,
+                    onStop = control::stopTunnel,
+                    onTrustHostKey = control::trustTunnelHostKey,
+                    onDismissHostKey = control::dismissTunnelHostKey,
+                )
+            }
+
+            item {
                 Text(
                     text =
                         "Routing table: " +
@@ -176,6 +191,104 @@ fun RouterScreen(
                 )
             }
             item { Spacer(Modifier.height(24.dp)) }
+        }
+    }
+}
+
+/**
+ * The user's own VPS, kept reachable from the router.
+ *
+ * A separate card rather than another row under the router switch, because it is a separate thing:
+ * the router can be on with every chain entry pointing at a cloud provider, and the tunnel can be up
+ * with the router off. What ties them together is the switch - a tunnel that comes back on its own
+ * when the router starts, so a chain entry pointing at the VPS is not the first thing an agent
+ * discovers to be down.
+ */
+@Composable
+private fun VpsTunnelCard(
+    state: RouterControlUiState,
+    onToggle: (Boolean) -> Unit,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    onTrustHostKey: () -> Unit,
+    onDismissHostKey: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(stringResource(R.string.vps_tunnel_card_title), style = MaterialTheme.typography.titleMedium)
+            when (val tunnel = state.tunnel) {
+                is VpsTunnelState.Open ->
+                    Text(
+                        text = stringResource(R.string.vps_tunnel_state_open, tunnel.localUrl),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
+                VpsTunnelState.Opening ->
+                    Text(
+                        text = stringResource(R.string.vps_tunnel_state_opening),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
+                VpsTunnelState.Stopped ->
+                    Text(
+                        text =
+                            stringResource(
+                                if (state.tunnelEnabled) R.string.vps_tunnel_state_background else R.string.vps_tunnel_state_stopped,
+                            ),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
+                is VpsTunnelState.Failed ->
+                    Text(
+                        text = tunnel.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+            }
+            val hostKey = state.tunnelHostKey
+            if (hostKey != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.vps_tunnel_host_key_untrusted, hostKey.sha256Fingerprint),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onTrustHostKey) { Text(stringResource(R.string.vps_tunnel_trust_and_retry)) }
+                    OutlinedButton(onClick = onDismissHostKey) { Text(stringResource(R.string.vps_tunnel_not_now)) }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.vps_tunnel_keep_open), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.vps_tunnel_keep_open_description), style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(
+                    checked = state.tunnelEnabled,
+                    enabled = !state.tunnelPending,
+                    onCheckedChange = onToggle,
+                )
+            }
+            // Only offered while the switch is off: with it on, the switch is already the control,
+            // and a second one saying the same thing is how a screen ends up with two truths.
+            if (!state.tunnelEnabled) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (state.tunnelIsOpen) {
+                        OutlinedButton(onClick = onStop, enabled = !state.tunnelPending) {
+                            Text(stringResource(R.string.vps_tunnel_stop))
+                        }
+                    } else {
+                        Button(onClick = onStart, enabled = !state.tunnelPending) {
+                            Text(stringResource(R.string.vps_tunnel_start))
+                        }
+                    }
+                }
+            }
         }
     }
 }

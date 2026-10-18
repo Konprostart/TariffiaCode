@@ -4,8 +4,11 @@ import android.app.Application
 import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.konprostart.tariffiacode.TariffiaCodeApplication
 import com.konprostart.tariffiacode.core.router.RouterService
 import com.konprostart.tariffiacode.core.router.RouterStatus
+import com.konprostart.tariffiacode.core.ssh.SshHostKey
+import com.konprostart.tariffiacode.runtime.vps.VpsTunnelState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,11 +31,26 @@ class RouterControlViewModel(
 ) : AndroidViewModel(application) {
     private val context = application
 
+    /**
+     * The background VPS tunnel, which is app-scoped rather than owned by this screen - that is the
+     * whole point of it. Read through the application rather than constructed here so the screen can
+     * be destroyed and rebuilt without the forward it started going away with it. Null only where
+     * there is no application object to ask, i.e. in tests.
+     */
+    private val tunnel = (application as? TariffiaCodeApplication)?.vpsTunnelController
+
     private val _state = MutableStateFlow(RouterControlUiState())
     val state: StateFlow<RouterControlUiState> = _state.asStateFlow()
 
     init {
         refresh()
+        _state.update { it.copy(tunnelEnabled = tunnel?.isEnabled() ?: false) }
+        tunnel?.state?.let { flow ->
+            viewModelScope.launch { flow.collect { value -> _state.update { it.copy(tunnel = value) } } }
+        }
+        tunnel?.pendingHostKey?.let { flow ->
+            viewModelScope.launch { flow.collect { value -> _state.update { it.copy(tunnelHostKey = value) } } }
+        }
     }
 
     fun refresh() {
@@ -52,6 +70,9 @@ class RouterControlViewModel(
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) { RouterService.start(context) }
+                // The agent is about to dial this router, and a chain entry that points at the user's
+                // own VPS is only reachable if its tunnel is already up - not a second later.
+                tunnel?.onRouterStarted()
                 // Give the service time to write its endpoint before reporting on it.
                 repeat(30) {
                     val status = withContext(Dispatchers.IO) { RouterService.status(context) }
@@ -109,6 +130,51 @@ class RouterControlViewModel(
             }
         }
     }
+
+    /**
+     * Keep the tunnel open in the background, or take it down and remember that choice.
+     *
+     * The keep-alive service is not touched here: it follows the controller's own state, so every
+     * trigger gets the same behaviour and none of them can leave a notification describing a tunnel
+     * that is not there.
+     */
+    fun setTunnelEnabled(enabled: Boolean) {
+        val controller = tunnel ?: return
+        _state.update { it.copy(tunnelPending = true, tunnelEnabled = enabled) }
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { controller.setEnabled(enabled) }
+            } finally {
+                _state.update { it.copy(tunnelPending = false) }
+            }
+        }
+    }
+
+    /** Start it now without changing the preference, for when it is off but wanted for this session. */
+    fun startTunnel() {
+        val controller = tunnel ?: return
+        _state.update { it.copy(tunnelPending = true) }
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { controller.start() }
+            } finally {
+                _state.update { it.copy(tunnelPending = false) }
+            }
+        }
+    }
+
+    fun stopTunnel() {
+        setTunnelEnabled(false)
+    }
+
+    /** Accept the SSH host key the tunnel is waiting on and try again. */
+    fun trustTunnelHostKey() {
+        viewModelScope.launch { withContext(Dispatchers.IO) { tunnel?.trustPendingHostKey() } }
+    }
+
+    fun dismissTunnelHostKey() {
+        tunnel?.dismissHostKey()
+    }
 }
 
 /** What the screen shows. */
@@ -118,9 +184,18 @@ data class RouterControlUiState(
     val failure: String? = null,
     /** A start or stop is in flight; the switch waits rather than snapping back. */
     val pending: Boolean = false,
+    /** The background VPS tunnel, owned by the app rather than by this screen. */
+    val tunnel: VpsTunnelState = VpsTunnelState.Stopped,
+    /** The user asked for the tunnel to come back on their own after a restart. */
+    val tunnelEnabled: Boolean = false,
+    /** A tunnel start or stop is in flight. */
+    val tunnelPending: Boolean = false,
+    /** A server key the tunnel is waiting on before it can open. */
+    val tunnelHostKey: SshHostKey? = null,
 ) {
     val isRunning: Boolean get() = status is RouterStatus.Running
     val port: Int? get() = (status as? RouterStatus.Running)?.port
+    val tunnelIsOpen: Boolean get() = tunnel is VpsTunnelState.Open
 }
 
 /** How long stop() waits for the service to go quiet before it cleans up after it. */

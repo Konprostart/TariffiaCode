@@ -404,6 +404,15 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
         set(value) = preferences.edit().putString(KEY_APPLIED_REMOTE_PROJECT_ID, value).apply()
 
     /**
+     * Whether the VPS port forward should stay open in the background, so a cold start can put it
+     * back up without asking again. Off until the user turns it on: an open tunnel holds an SSH
+     * session and a wake lock for as long as it lasts.
+     */
+    var vpsTunnelEnabled: Boolean
+        get() = preferences.getBoolean(KEY_VPS_TUNNEL_ENABLED, false)
+        set(value) = preferences.edit().putBoolean(KEY_VPS_TUNNEL_ENABLED, value).apply()
+
+    /**
      * SSH secrets keyed by the profile's credential reference, each a JSON-encoded
      * [com.konprostart.tariffiacode.data.ssh.SshCredential]. Encrypted with the same MasterKey as
      * every other stored secret; never written to plaintext.
@@ -669,6 +678,7 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
         private const val KEY_REMOTE_PROJECTS = "remote_projects"
         private const val KEY_SELECTED_VPS_PROFILE_ID = "selected_vps_profile_id"
         private const val KEY_APPLIED_REMOTE_PROJECT_ID = "applied_remote_project_id"
+        private const val KEY_VPS_TUNNEL_ENABLED = "vps_tunnel_enabled"
         private const val KEY_GITHUB_TOKEN = "github_token"
         private const val KEY_GITHUB_LOGIN = "github_login"
         private const val KEY_GITHUB_STAR_PROMPT_SHOWN = "github_star_prompt_shown"

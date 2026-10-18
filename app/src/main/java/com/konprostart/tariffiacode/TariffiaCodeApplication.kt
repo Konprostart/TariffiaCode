@@ -38,6 +38,7 @@ import com.konprostart.tariffiacode.data.settings.AppPreferencesRepository
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfileStore
 import com.konprostart.tariffiacode.data.vps.VpsSelectionStore
+import com.konprostart.tariffiacode.data.vps.VpsTunnelStore
 import com.konprostart.tariffiacode.di.appModule
 import com.konprostart.tariffiacode.feature.schedule.AppScheduleStore
 import com.konprostart.tariffiacode.feature.schedule.ScheduleBridge
@@ -86,9 +87,13 @@ import com.konprostart.tariffiacode.runtime.local.SystemPromptStore
 import com.konprostart.tariffiacode.runtime.local.VerifiedRuntimeDownloader
 import com.konprostart.tariffiacode.runtime.local.applyOpenCodeSystemPrompt
 import com.konprostart.tariffiacode.runtime.vps.SshTunnelPool
+import com.konprostart.tariffiacode.runtime.vps.VpsPortForwardManager
 import com.konprostart.tariffiacode.runtime.vps.VpsRecovery
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeConnector
 import com.konprostart.tariffiacode.runtime.vps.VpsRuntimeTarget
+import com.konprostart.tariffiacode.runtime.vps.VpsTunnelController
+import com.konprostart.tariffiacode.runtime.vps.VpsTunnelService
+import com.konprostart.tariffiacode.runtime.vps.VpsTunnelState
 import com.konprostart.tariffiacode.startup.CatalogReconcileInitializer
 import com.konprostart.tariffiacode.startup.RuntimeAutoStartInitializer
 import com.konprostart.tariffiacode.startup.RuntimeAutoStartTrigger
@@ -176,6 +181,13 @@ class TariffiaCodeApplication : Application() {
      * profile instead of opening its own. Live Preview reaches it through `VpsPortForwardManager`.
      */
     lateinit var sshTunnelPool: SshTunnelPool
+        private set
+
+    /**
+     * The forward that carries the user's VPS services (an Ollama, today) to this device for as long
+     * as the app runs, rather than for as long as a screen does. The router screen drives it.
+     */
+    lateinit var vpsTunnelController: VpsTunnelController
         private set
 
     lateinit var catalogRepository: RuntimeCatalogRepository
@@ -568,6 +580,47 @@ class TariffiaCodeApplication : Application() {
                 selection = VpsSelectionStore(settings),
                 recovery = VpsRecovery(scope = applicationScope, networkStatus = networkMonitor.status),
             )
+        // The same pool and the same SSH profile the VPS runtime uses, so the tunnel costs one more
+        // channel on a session that is already open rather than a second handshake.
+        vpsTunnelController =
+            VpsTunnelController(
+                opener = { profile ->
+                    VpsPortForwardManager(sshTunnelPool, SshCredentialStore(settings)).open(
+                        profile,
+                        remotePort = VpsTunnelController.REMOTE_PORT,
+                        // The router's built-in `ollama` provider is pinned to 127.0.0.1:11434, so
+                        // this forward has to land there for the router to find it.
+                        localPort = VpsPortForwardManager.localPortFor(VpsTunnelController.REMOTE_PORT),
+                    )
+                },
+                profileProvider = { vpsRuntimeTarget.selectedProfile.value },
+                store = VpsTunnelStore(settings),
+                scope = applicationScope,
+                profiles = sshProfileStore,
+                work = runtimeWork,
+                recovery = VpsRecovery(scope = applicationScope, networkStatus = networkMonitor.status),
+                // The controller is not Android code but these two end up on a screen, so the text
+                // comes from here where there is a Context to resolve it with.
+                noProfileMessage = { getString(R.string.vps_tunnel_error_no_profile) },
+                noCredentialMessage = { getString(R.string.vps_tunnel_error_no_credential) },
+            )
+        // The keep-alive service follows the tunnel rather than being told about it: every trigger -
+        // the user, the router starting, the app returning to the foreground, a network handover
+        // rebuilding it - lands in the controller, and one collector here covers all of them. Starting
+        // it from anywhere else is how an ongoing "tunnel is open" notification ends up outliving the
+        // tunnel it is announcing.
+        applicationScope.launch {
+            vpsTunnelController.state.collect { tunnel ->
+                when (tunnel) {
+                    is VpsTunnelState.Open -> VpsTunnelService.start(this@TariffiaCodeApplication)
+                    // Mid-rebuild is not "gone": stopping here would drop the notification and then
+                    // try to start it again from the background a second later, which Android 12+
+                    // refuses - leaving the tunnel held by a process nothing is protecting.
+                    VpsTunnelState.Opening -> Unit
+                    VpsTunnelState.Stopped, is VpsTunnelState.Failed -> VpsTunnelService.stop(this@TariffiaCodeApplication)
+                }
+            }
+        }
         runtimeRegistry =
             RuntimeRegistry(
                 store = settings,
@@ -693,7 +746,26 @@ class TariffiaCodeApplication : Application() {
         val scheduleBridge = ScheduleBridge(File(runtimeDirectory, "workspace"), AppScheduleStore(scheduleRepository, scheduleManager))
         applicationScope.launch { scheduleBridge.run() }
         observeForegroundForRuntimeRestart()
+        observeForegroundForVpsTunnel()
         scheduleDeferredInitialization()
+    }
+
+    /**
+     * Puts a tunnel the user asked to keep open back up after the process that was holding it died.
+     *
+     * Nothing else can: the forward is a socket in this process, so process death is the one way it
+     * goes away without anyone being told, and the agent that would have used it only finds out when
+     * its request fails. Coming back to the foreground is the earliest moment the app may open an SSH
+     * session again on its own, and only if the user is the kind who wants it.
+     */
+    private fun observeForegroundForVpsTunnel() {
+        val detector = ForegroundReturnDetector()
+        applicationScope.launch {
+            appForeground.foreground.collect { inForeground ->
+                if (!detector.onForegroundChanged(inForeground)) return@collect
+                vpsTunnelController.onForeground()
+            }
+        }
     }
 
     /**
