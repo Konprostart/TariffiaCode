@@ -60,13 +60,17 @@ interface SshSessionSharingForwarder : SshPortForwarder {
         connectTimeoutMillis: Long = SshPortForwarder.DEFAULT_CONNECT_TIMEOUT_MILLIS,
     ): SshTunnelSessionResult
 
-    /**
-     * Bind a loopback port that forwards to [remoteHost]:[remotePort] as seen from the server,
+/**
+     * Bind a loopback port that forwards to [remoteHost]:[remotePort] as seen by the server,
      * over an existing [session]. The session is *borrowed*: closing the forward leaves it open.
+     *
+     * [localPort] defaults to [SshPortForwarder.EPHEMERAL_LOCAL_PORT]; pass a fixed port only when
+     * the consumer of the tunnel already knows which address to call.
      */
     suspend fun openForwardOver(
         session: SshTunnelSession,
         remoteHost: String,
         remotePort: Int,
+        localPort: Int = SshPortForwarder.EPHEMERAL_LOCAL_PORT,
     ): SshPortForwardResult
 }

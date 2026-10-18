@@ -55,6 +55,7 @@ class VpsPortForwardManagerTest {
         private val result: SshPortForwardResult,
     ) : SshSessionSharingForwarder {
         var requestedRemotePort: Int? = null
+        var requestedLocalPort: Int? = null
 
         override suspend fun openSession(
             host: String,
@@ -74,8 +75,10 @@ class VpsPortForwardManagerTest {
             session: SshTunnelSession,
             remoteHost: String,
             remotePort: Int,
+            localPort: Int,
         ): SshPortForwardResult {
             requestedRemotePort = remotePort
+            requestedLocalPort = localPort
             return result
         }
 
@@ -87,6 +90,7 @@ class VpsPortForwardManagerTest {
             remoteHost: String,
             remotePort: Int,
             connectTimeoutMillis: Long,
+            localPort: Int,
         ): SshPortForwardResult {
             requestedRemotePort = remotePort
             return result
@@ -125,6 +129,29 @@ class VpsPortForwardManagerTest {
             outcome.forward.close()
             assertTrue(forward.closed)
         }
+
+    @Test
+    fun `a fixed local port reaches the forwarder so a pinned consumer can find the tunnel`() =
+        runTest {
+            val forwarder = FakeForwarder(SshPortForwardResult.Listening(FakeForward()))
+            val manager = VpsPortForwardManager(SshTunnelPool(forwarder), credentialStore(SshCredential.Password("hunter2")))
+
+            val outcome = manager.open(profile(), remotePort = 11434, localPort = 11434)
+
+            assertTrue(outcome is VpsPortForwardOutcome.Connected)
+            assertEquals(11434, forwarder.requestedRemotePort)
+            assertEquals(11434, forwarder.requestedLocalPort)
+            (outcome as VpsPortForwardOutcome.Connected).forward.close()
+        }
+
+    @Test
+    fun `ollama mirrors its port locally and every other port stays ephemeral`() {
+        // The router's built-in ollama provider is pinned to 127.0.0.1:11434; anything else keeps
+        // taking a free port so the existing preview behaviour is untouched.
+        assertEquals(11434, VpsPortForwardManager.localPortFor(11434))
+        assertEquals(0, VpsPortForwardManager.localPortFor(5173))
+        assertEquals(0, VpsPortForwardManager.localPortFor(4096))
+    }
 
     @Test
     fun `untrusted host key is surfaced and can be trusted then retried`() =

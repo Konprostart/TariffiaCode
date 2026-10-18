@@ -64,8 +64,13 @@ sealed interface SshPortForwardResult {
 interface SshPortForwarder {
     /**
      * Connect to [host]:[port], authenticate with [auth], enforce host-key verification through
-     * [verifier], then listen on a loopback ephemeral port and forward to
+     * [verifier], then listen on a loopback port and forward to
      * [remoteHost]:[remotePort] as seen from the server.
+     *
+     * [localPort] is the port to bind on the device; the default
+     * [EPHEMERAL_LOCAL_PORT] (0) takes whatever the OS assigns. A fixed port is for the callers whose
+     * consumer is pinned to an address - the router's built-in `ollama` provider is hard-wired to
+     * 127.0.0.1:11434 - and binding fails loudly when that port is already taken.
      *
      * Cancellable and timeout-bounded. The returned [SshPortForward] owns the SSH session until closed.
      */
@@ -77,10 +82,17 @@ interface SshPortForwarder {
         remoteHost: String = DEFAULT_REMOTE_HOST,
         remotePort: Int = DEFAULT_REMOTE_PORT,
         connectTimeoutMillis: Long = DEFAULT_CONNECT_TIMEOUT_MILLIS,
+        localPort: Int = EPHEMERAL_LOCAL_PORT,
     ): SshPortForwardResult
 
     companion object {
         const val DEFAULT_SSH_PORT = 22
+
+        /**
+         * Ask the OS for any free local port, which is what every caller wants except the few that
+         * need a service to be reachable at a port something else already knows.
+         */
+        const val EPHEMERAL_LOCAL_PORT = 0
 
         /** A service on the server reached over the tunnel is normally on the server's own loopback. */
         const val DEFAULT_REMOTE_HOST = "127.0.0.1"

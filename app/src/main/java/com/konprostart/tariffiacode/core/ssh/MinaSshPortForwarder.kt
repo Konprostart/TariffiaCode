@@ -80,9 +80,10 @@ class MinaSshPortForwarder(
         session: SshTunnelSession,
         remoteHost: String,
         remotePort: Int,
+        localPort: Int,
     ): SshPortForwardResult {
         val mina = session as? MinaSshTunnelSession ?: return SshPortForwardResult.Failure("Session is not a MINA session")
-        return withContext(Dispatchers.IO) { bindForward(mina, remoteHost, remotePort, ownedSession = null) }
+        return withContext(Dispatchers.IO) { bindForward(mina, remoteHost, remotePort, ownedSession = null, localPort = localPort) }
     }
 
     override suspend fun openLocalForward(
@@ -93,6 +94,7 @@ class MinaSshPortForwarder(
         remoteHost: String,
         remotePort: Int,
         connectTimeoutMillis: Long,
+        localPort: Int,
     ): SshPortForwardResult {
         val opened =
             when (val result = openSession(host, port, auth, verifier, connectTimeoutMillis)) {
@@ -111,7 +113,7 @@ class MinaSshPortForwarder(
         // `return try` rather than a bare try: a try/catch is not implicitly returned as the tail
         // expression of a block body.
         return try {
-            val bound = bindForward(session, remoteHost, remotePort, ownedSession = session)
+            val bound = bindForward(session, remoteHost, remotePort, ownedSession = session, localPort = localPort)
             if (bound is SshPortForwardResult.Listening) {
                 handedOffForward.set(bound.forward)
                 bound
@@ -135,11 +137,12 @@ class MinaSshPortForwarder(
         remoteHost: String,
         remotePort: Int,
         ownedSession: MinaSshTunnelSession?,
+        localPort: Int,
     ): SshPortForwardResult =
         try {
-            // Bind an ephemeral port on the device's loopback; the OS assigns the real port,
-            // which we read back from the tracker's bound address.
-            val local = SshdSocketAddress(LOCAL_HOST, 0)
+            // Bind [localPort] on the device's loopback - ephemeral (0) unless a caller needs a known
+            // address; the OS-assigned port is read back from the tracker's bound address either way.
+            val local = SshdSocketAddress(LOCAL_HOST, localPort)
             val remote = SshdSocketAddress(remoteHost, remotePort)
             val tracker = session.connectedSession.createLocalPortForwardingTracker(local, remote)
             SshPortForwardResult.Listening(
