@@ -12,6 +12,7 @@ import com.konprostart.tariffiacode.data.ssh.SshAuthType
 import com.konprostart.tariffiacode.data.ssh.SshCredential
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
+import com.konprostart.tariffiacode.data.ssh.resolveAuth
 
 /** Outcome of an attempted SSH connection, everything the UI needs to render a result. */
 sealed interface SshConnectionOutcome {
@@ -109,11 +110,36 @@ class SshConnectionManager(
         }
     }
 
-    /** Persist the host key the user explicitly confirmed for [profile]. */
+    /** Re-issue [profile] with the fingerprint the user explicitly confirmed for [hostKey]. */
     fun trustHostKey(
         profile: SshProfile,
         hostKey: SshHostKey,
     ): SshProfile = profile.trusting(hostKey.sha256Fingerprint)
+
+    /**
+     * The wrapper the app-scoped SSH session holder runs [connect] through.
+     *
+     * A transport that throws - including an Error raised from a failing static init of the SSH
+     * library - surfaces as [SshConnectionOutcome.Failed] with the usual diagnostics and a masked
+     * secret, rather than escaping into the holder's scope and taking the process down. The settings
+     * screen's old ViewModel made exactly this deal when the connect path was still its own.
+     */
+    fun diagnosticOpener(credentials: SshCredentialStore): suspend (SshProfile) -> SshConnectionOutcome =
+        { profile ->
+            runCatching { connect(profile) }
+                .getOrElse { error ->
+                    val auth =
+                        runCatching { credentials.credential(profile.credentialRef)?.let { profile.resolveAuth(it) } }
+                            .getOrNull()
+                    SshConnectionOutcome.Failed(
+                        SshFailureDiagnostic.format(
+                            "${error::class.java.simpleName}: ${error.message ?: "SSH connection failed"}",
+                            error,
+                            auth,
+                        ),
+                    )
+                }
+        }
 
     private fun buildAuth(
         profile: SshProfile,

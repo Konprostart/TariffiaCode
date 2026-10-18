@@ -225,8 +225,16 @@ private class MinaSshSession(
         runCatching { channel.sendWindowChange(columns, rows) }
     }
 
+    /**
+     * True while we have not been asked to close AND the transport's channel is still open.
+     *
+     * `open` on its own lies about the network: a server EOF, a Wi-Fi handover or an sshd idle
+     * timeout take the channel down without anyone in this process calling [close], and a holder
+     * that polls [isOpen] to notice exactly such a death would never see it. MINA's channel carries
+     * the transport's own state, so it is what makes this honest.
+     */
     override val isOpen: Boolean
-        get() = open
+        get() = open && channel.isOpen
 
     @Synchronized
     override fun close() {

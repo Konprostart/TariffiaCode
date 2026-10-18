@@ -238,4 +238,38 @@ class MinaSshClientTest {
             assertTrue("expected Failure, got $result", result is SshConnectResult.Failure)
             assertFalse("a failed connect must not leave the client running", mina.isStarted)
         }
+
+    @Test
+    fun `a transport that dies without a local close flips isOpen`() =
+        runTest {
+            // Regression: `isOpen` used to mirror only the local flag a close() sets, so a session
+            // the server or the network killed stayed "open" forever - nothing on the device could
+            // notice a quiet death and rebuild. The MINA channel state must be part of the answer.
+            val s = startServer(password = "secret")
+            val result =
+                MinaSshClient().connect(
+                    host = "127.0.0.1",
+                    port = s.port,
+                    auth = SshAuth.Password("tester", "secret"),
+                    verifier = trustAllVerifier(),
+                )
+            assertTrue("expected Connected, got $result", result is SshConnectResult.Connected)
+            val session = (result as SshConnectResult.Connected).session
+            try {
+                assertTrue("a fresh session must report open", session.isOpen)
+            } finally {
+                s.stop(true)
+            }
+            // The server side is gone; the client learns of it over the socket, so poll briefly
+            // instead of assuming a fixed propagation delay.
+            val deadline = System.currentTimeMillis() + 10_000
+            var lastSeen: Boolean
+            do {
+                Thread.sleep(20)
+                lastSeen = session.isOpen
+            } while (lastSeen && System.currentTimeMillis() < deadline)
+            assertFalse("a dead transport must not report open", lastSeen)
+            session.close()
+            assertFalse(session.isOpen)
+        }
 }

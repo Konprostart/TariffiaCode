@@ -238,6 +238,9 @@ class SshSettingsViewModel(
     // ---- connect ----
 
     fun connect(id: String) {
+        // A new attempt starts from a clean banner: the previous failure text belongs to the
+        // previous attempt, not to whatever this one reports.
+        _state.update { it.copy(message = null) }
         sessions.connect(id)
     }
 

@@ -29,10 +29,13 @@ class SshSessionHolderTest {
     private class FakeSession : SshSession {
         var closed = false
 
+        /** Whether the transport underneath is still alive, apart from an explicit [close]. */
+        var transportAlive = true
+
         override val output: Flow<ByteArray> = emptyFlow()
 
         override val isOpen: Boolean
-            get() = !closed
+            get() = transportAlive && !closed
 
         override fun writeStandardInput(bytes: ByteArray) {}
 
@@ -122,6 +125,36 @@ class SshSessionHolderTest {
         }
 
     @Test
+    fun `a second tap on the same connecting profile leaves the first attempt intact`() =
+        runTest {
+            // Regression: the attempt slot used to be reserved by the second tap before it checked
+            // who was already opening, so the second tap invalidated the first attempt's own epoch
+            // and the screen sat on Connecting with no attempt left running.
+            val gate = CompletableDeferred<Unit>()
+            var attempts = 0
+            val session = FakeSession()
+            val holder =
+                holder(profile(), testScheduler, {
+                    attempts++
+                    gate.await()
+                    SshConnectionOutcome.Connected(session)
+                })
+
+            holder.connect("p1")
+            testScheduler.runCurrent()
+            assertEquals(HeldSshConnection.Connecting("p1"), holder.state.value)
+
+            holder.connect("p1")
+            gate.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals("the second tap must not open a second handshake", 1, attempts)
+            assertTrue("the session the first attempt opened must be kept", session.transportAlive)
+            assertFalse(session.closed)
+            assertEquals(HeldSshConnection.Connected("p1"), holder.state.value)
+        }
+
+    @Test
     fun `a disconnect before the attempt starts stops it before the transport is touched`() =
         runTest {
             val gate = CompletableDeferred<Unit>()
@@ -188,7 +221,7 @@ class SshSessionHolderTest {
             assertEquals(HeldSshConnection.Connected("p1"), holder.state.value)
 
             // The network goes away with nobody watching; only the next event notices.
-            first.isOpen = false
+            first.transportAlive = false
             holder.restoreIfRemembered()
             testScheduler.advanceUntilIdle()
 
