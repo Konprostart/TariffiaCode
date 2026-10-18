@@ -565,11 +565,7 @@ fun NavGraphBuilder.settingsNavGraph(
                         com.konprostart.tariffiacode.feature.ssh.SshSettingsViewModel(
                             profiles = profileStore,
                             credentials = credentialStore,
-                            connections =
-                                com.konprostart.tariffiacode.feature.ssh.SshConnectionManager(
-                                    client = com.konprostart.tariffiacode.core.ssh.MinaSshClient(),
-                                    credentials = credentialStore,
-                                ),
+                            sessions = app.sshSessionHolder,
                         )
                     },
             )

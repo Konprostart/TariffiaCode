@@ -1,4 +1,4 @@
-package com.konprostart.tariffiacode.feature.ssh
+package com.konprostart.tariffiacode.runtime.ssh
 
 import com.konprostart.tariffiacode.core.ssh.SshAuth
 import com.konprostart.tariffiacode.core.ssh.SshConnectResult

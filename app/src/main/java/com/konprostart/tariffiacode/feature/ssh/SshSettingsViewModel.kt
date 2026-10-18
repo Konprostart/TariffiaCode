@@ -2,15 +2,14 @@ package com.konprostart.tariffiacode.feature.ssh
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.konprostart.tariffiacode.core.ssh.SshFailureDiagnostic
 import com.konprostart.tariffiacode.core.ssh.SshHostKey
-import com.konprostart.tariffiacode.core.ssh.SshSession
 import com.konprostart.tariffiacode.data.ssh.SshAuthType
 import com.konprostart.tariffiacode.data.ssh.SshCredential
 import com.konprostart.tariffiacode.data.ssh.SshCredentialStore
 import com.konprostart.tariffiacode.data.ssh.SshProfile
 import com.konprostart.tariffiacode.data.ssh.SshProfileStore
-import com.konprostart.tariffiacode.data.ssh.resolveAuth
+import com.konprostart.tariffiacode.runtime.ssh.HeldSshConnection
+import com.konprostart.tariffiacode.runtime.ssh.SshSessionHolder
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,7 +70,6 @@ sealed interface SshConnectionStatus {
 
     data class Connected(
         val profileId: String,
-        val session: SshSession,
     ) : SshConnectionStatus
 
     data class Error(
@@ -98,16 +96,41 @@ data class PendingHostKey(
 
 /**
  * Backs the SSH settings screen: lists saved profiles, edits one in [SshProfileForm], stores secrets
- * through [SshCredentialStore], and connects through [SshConnectionManager] using the strict host-key
- * policy from the transport layer.
+ * through [SshCredentialStore], and delegates connecting to the app-scoped [SshSessionHolder].
  */
 class SshSettingsViewModel(
     private val profiles: SshProfileStore,
     private val credentials: SshCredentialStore,
-    private val connections: SshConnectionManager,
+    private val sessions: SshSessionHolder,
 ) : ViewModel() {
     private val _state = MutableStateFlow(SshSettingsUiState(profiles = profiles.profiles()))
     val state: StateFlow<SshSettingsUiState> = _state.asStateFlow()
+
+    init {
+        // The holder outlives this screen, so its state is the truth behind every "Connected"
+        // label the screen ever shows; walking away and back restores it from here untouched.
+        viewModelScope.launch {
+            sessions.state.collect { held ->
+                _state.update { current ->
+                    when (held) {
+                        is HeldSshConnection.Idle ->
+                            current.copy(connection = SshConnectionStatus.Idle, pendingHostKey = null)
+                        is HeldSshConnection.Connecting ->
+                            current.copy(connection = SshConnectionStatus.Connecting(held.profileId), pendingHostKey = null)
+                        is HeldSshConnection.Connected ->
+                            current.copy(connection = SshConnectionStatus.Connected(held.profileId), pendingHostKey = null)
+                        is HeldSshConnection.Failed ->
+                            current.copy(connection = SshConnectionStatus.Error(held.profileId, held.message), pendingHostKey = null)
+                        is HeldSshConnection.NeedsTrust ->
+                            current.copy(
+                                connection = SshConnectionStatus.Idle,
+                                pendingHostKey = PendingHostKey(held.profileId, held.hostKey, held.mismatch),
+                            )
+                    }
+                }
+            }
+        }
+    }
 
     fun refresh() {
         _state.update { it.copy(profiles = profiles.profiles()) }
@@ -207,8 +230,7 @@ class SshSettingsViewModel(
     }
 
     fun deleteProfile(id: String) {
-        val wasConnected = (_state.value.connection as? SshConnectionStatus.Connected)?.profileId == id
-        if (wasConnected) closeConnection()
+        if (sessions.heldProfileId == id) closeConnection()
         profiles.delete(id)
         _state.update { it.copy(profiles = profiles.profiles()) }
     }
@@ -216,73 +238,10 @@ class SshSettingsViewModel(
     // ---- connect ----
 
     fun connect(id: String) {
-        val profile = profiles.profile(id) ?: return
-        if (_state.value.connection is SshConnectionStatus.Connecting) return
-        _state.update {
-            it.copy(
-                connection = SshConnectionStatus.Connecting(id),
-                pendingHostKey = null,
-                message = null,
-            )
-        }
-        viewModelScope.launch {
-            // A transport that throws (including an Error from native/static init) must never escape
-            // into the coroutine and crash the app; surface it as a normal failure instead.
-            val outcome =
-                runCatching { connections.connect(profile) }
-                    .getOrElse { error ->
-                        val auth =
-                            runCatching {
-                                credentials.credential(profile.credentialRef)?.let { profile.resolveAuth(it) }
-                            }.getOrNull()
-                        SshConnectionOutcome.Failed(
-                            SshFailureDiagnostic.format(
-                                "${error::class.java.simpleName}: ${error.message ?: "SSH connection failed"}",
-                                error,
-                                auth,
-                            ),
-                        )
-                    }
-            when (outcome) {
-                is SshConnectionOutcome.Connected -> {
-                    _state.update {
-                        it.copy(
-                            connection = SshConnectionStatus.Connected(id, outcome.session),
-                        )
-                    }
-                }
-                is SshConnectionOutcome.NeedsHostKeyTrust -> {
-                    _state.update {
-                        it.copy(
-                            connection = SshConnectionStatus.Idle,
-                            pendingHostKey = PendingHostKey(id, outcome.hostKey, mismatch = false),
-                        )
-                    }
-                }
-                is SshConnectionOutcome.HostKeyMismatch -> {
-                    _state.update {
-                        it.copy(
-                            connection =
-                                SshConnectionStatus.Error(
-                                    id,
-                                    "Host key mismatch: expected ${outcome.expectedFingerprint}, got ${outcome.presentedFingerprint}",
-                                ),
-                            pendingHostKey = PendingHostKey(id, SshHostKey("", outcome.presentedFingerprint), mismatch = true),
-                        )
-                    }
-                }
-                is SshConnectionOutcome.MissingCredential -> {
-                    _state.update {
-                        it.copy(connection = SshConnectionStatus.Error(id, "No stored credential for this profile"))
-                    }
-                }
-                is SshConnectionOutcome.Failed -> {
-                    _state.update {
-                        it.copy(connection = SshConnectionStatus.Error(id, outcome.message))
-                    }
-                }
-            }
-        }
+        // A new attempt starts from a clean banner: the previous failure text belongs to the
+        // previous attempt, not to whatever this one reports.
+        _state.update { it.copy(message = null) }
+        sessions.connect(id)
     }
 
     /** User confirmed the presented host key; persist it and retry the connection. */
@@ -294,7 +253,7 @@ class SshSettingsViewModel(
             return
         }
         val profile = profiles.profile(pending.profileId) ?: return
-        profiles.upsert(connections.trustHostKey(profile, pending.hostKey))
+        profiles.upsert(profile.trusting(pending.hostKey.sha256Fingerprint))
         _state.update {
             it.copy(
                 profiles = profiles.profiles(),
@@ -305,17 +264,11 @@ class SshSettingsViewModel(
     }
 
     fun dismissPendingHostKey() {
-        _state.update {
-            it.copy(
-                pendingHostKey = null,
-                connection = SshConnectionStatus.Idle,
-            )
-        }
+        sessions.dismissTrust()
     }
 
     fun closeConnection() {
-        (_state.value.connection as? SshConnectionStatus.Connected)?.session?.close()
-        _state.update { it.copy(connection = SshConnectionStatus.Idle) }
+        sessions.disconnect()
     }
 
     fun clearMessage() {

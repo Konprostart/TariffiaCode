@@ -398,6 +398,18 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
         get() = preferences.getString(KEY_SELECTED_VPS_PROFILE_ID, null)
         set(value) = preferences.edit().putString(KEY_SELECTED_VPS_PROFILE_ID, value).apply()
 
+    /**
+     * The SSH profile the user asked to stay connected with the settings screen's Connect button, so
+     * a cold start or a foreground return can put the session back up without asking again.
+     *
+     * Remembered only because the user pressed Connect on it; cleared the moment they press
+     * Disconnect. An SSH session holds a socket and a wake lock, so nothing here re-opens it behind
+     * an explicit request.
+     */
+    var sshHeldProfileId: String?
+        get() = preferences.getString(KEY_SSH_HELD_PROFILE_ID, null)
+        set(value) = preferences.edit().putString(KEY_SSH_HELD_PROFILE_ID, value).apply()
+
     /** Which Remote Project mapping is applied to the VPS runtime, so the mapping survives restarts. */
     var appliedRemoteProjectId: String?
         get() = preferences.getString(KEY_APPLIED_REMOTE_PROJECT_ID, null)
@@ -679,6 +691,7 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore, Unrea
         private const val KEY_SELECTED_VPS_PROFILE_ID = "selected_vps_profile_id"
         private const val KEY_APPLIED_REMOTE_PROJECT_ID = "applied_remote_project_id"
         private const val KEY_VPS_TUNNEL_ENABLED = "vps_tunnel_enabled"
+        private const val KEY_SSH_HELD_PROFILE_ID = "ssh_held_profile_id"
         private const val KEY_GITHUB_TOKEN = "github_token"
         private const val KEY_GITHUB_LOGIN = "github_login"
         private const val KEY_GITHUB_STAR_PROMPT_SHOWN = "github_star_prompt_shown"
