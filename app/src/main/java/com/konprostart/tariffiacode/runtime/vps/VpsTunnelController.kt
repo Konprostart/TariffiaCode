@@ -125,7 +125,7 @@ class VpsTunnelController(
         if (store.isEnabled()) start()
     }
 
-    /** Persist the key the user confirmed, then try again. Returns the profile that was updated. */
+    /** Persist the key the user confirmed, then try again with it. Returns the profile that was updated. */
     fun trustPendingHostKey(): SshProfile? {
         val pending = _pendingHostKey.value ?: return null
         val profile = profileProvider() ?: return null
@@ -133,7 +133,10 @@ class VpsTunnelController(
         val trusted = profile.trusting(pending.sha256Fingerprint)
         store.upsert(trusted)
         _pendingHostKey.value = null
-        start()
+        // Retried with the profile that was just trusted rather than through [profileProvider]:
+        // whoever supplies it holds a snapshot of the selection, so it is still the untrusted copy
+        // and the retry would refuse the very key the user just accepted.
+        scope.launch { open(trusted) }
         return trusted
     }
 
@@ -142,12 +145,12 @@ class VpsTunnelController(
         _pendingHostKey.value = null
     }
 
-    private suspend fun open() {
+    private suspend fun open(trustedProfile: SshProfile? = null) {
         if (forward != null || _state.value is VpsTunnelState.Opening) return
         if (!opening.compareAndSet(false, true)) return
         try {
             _state.value = VpsTunnelState.Opening
-            val profile = profileProvider()
+            val profile = trustedProfile ?: profileProvider()
             if (profile == null) {
                 _state.value = VpsTunnelState.Failed(NO_PROFILE)
                 return

@@ -102,7 +102,7 @@ class VpsTunnelControllerTest {
             val first = FakeForward()
             val second = FakeForward()
             val handedOut = mutableListOf<FakeForward>()
-            val opener = Opener { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", handedOut.removeFirst()) }
+            val opener = Opener { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", handedOut.removeAt(0)) }
             handedOut.addAll(listOf(first, second))
             val controller = controller(this, opener)
 
@@ -271,10 +271,12 @@ class VpsTunnelControllerTest {
                     scope = this,
                 )
 
+            controller.start()
+            testScheduler.advanceUntilIdle()
             controller.setEnabled(false)
 
             assertFalse("the choice has to outlive the process", enabled)
-            assertTrue(forward.closed)
+            assertTrue("the forward the user was holding has to go down with the switch", forward.closed)
             assertEquals(VpsTunnelState.Stopped, controller.state.value)
         }
 }
