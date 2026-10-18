@@ -1027,14 +1027,14 @@
     <string name="vps_tunnel_state_opening">Ouverture...</string>
     <string name="vps_tunnel_state_background">Maintenu ouvert en arrière-plan</string>
     <string name="vps_tunnel_state_stopped">Arrêté</string>
-    <string name="vps_tunnel_host_key_untrusted">La clé du serveur n'est pas encore approuvée : %1$s</string>
+    <string name="vps_tunnel_host_key_untrusted">La clé du serveur n\'est pas encore approuvée : %1$s</string>
     <string name="vps_tunnel_trust_and_retry">Approuver et réessayer</string>
     <string name="vps_tunnel_not_now">Pas maintenant</string>
     <string name="vps_tunnel_keep_open">Le maintenir ouvert en arrière-plan</string>
-    <string name="vps_tunnel_keep_open_description">Démarre avec le routeur et à chaque redémarrage de l'application</string>
+    <string name="vps_tunnel_keep_open_description">Démarre avec le routeur et à chaque redémarrage de l\'application</string>
     <string name="vps_tunnel_start">Démarrer le tunnel</string>
     <string name="vps_tunnel_stop">Arrêter le tunnel</string>
-    <string name="vps_tunnel_error_no_profile">Sélectionnez d'abord une connexion SSH vers le VPS</string>
+    <string name="vps_tunnel_error_no_profile">Sélectionnez d\'abord une connexion SSH vers le VPS</string>
     <string name="vps_tunnel_error_no_credential">Aucun identifiant SSH enregistré pour cette connexion</string>
     <string name="setup_download_agents_description">Prépare l’environnement Linux partagé et les agents que vous avez choisis.</string>
     <string name="settings_agents_row">Agents</string>
