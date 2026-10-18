@@ -112,8 +112,8 @@ class VpsTunnelControllerTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(1, opener.calls)
-            assertTrue("the first forward is still held", first.isOpen)
-            assertFalse("the second forward must never be opened", second.isOpen)
+            assertTrue("the forward that was handed out is still held", first.isOpen)
+            assertEquals("the second forward must never have been handed out", listOf(second), handedOut)
         }
 
     @Test
