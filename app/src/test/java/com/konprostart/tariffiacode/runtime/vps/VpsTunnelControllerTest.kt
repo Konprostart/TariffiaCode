@@ -348,7 +348,8 @@ class VpsTunnelControllerTest {
             val network = MutableStateFlow<NetworkStatus>(NetworkStatus.Connected("wifi"))
             val first = FakeForward()
             val second = FakeForward()
-            val opener = Opener { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", if (opener.calls == 1) first else second) }
+            var handed = 0
+            val opener = Opener { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", if (handed++ == 0) first else second) }
             val controller = controller(this, opener, recovery = VpsRecovery(scope = this, networkStatus = network))
             testScheduler.advanceUntilIdle()
 
