@@ -373,7 +373,9 @@ class VpsTunnelControllerTest {
         runTest {
             val network = MutableStateFlow<NetworkStatus>(NetworkStatus.Connected("wifi"))
             val forward = FakeForward()
-            var failNext = true
+            // Set only around the handover below, so the tunnel is up beforehand - which is the
+            // whole premise: a handover rebuilds a tunnel that was working.
+            var failNext = false
             val opener =
                 Opener {
                     if (failNext) {
