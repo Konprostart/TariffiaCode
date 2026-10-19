@@ -59,10 +59,18 @@ class AnthropicAdapter(
         requestedModel: String,
     ): AnthropicResponse? {
         if (statusCode !in 200..299) return null
-        return runCatching { json.decodeFromString<AnthropicResponse>(body) }.getOrElse {
-            val root = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull() ?: return null
+        val decoded = runCatching { json.decodeFromString<AnthropicResponse>(body) }.getOrNull()
+        // A real message decodes as one, and only one parse is spent on the path every turn takes.
+        if (decoded != null && decoded.type != ERROR_TYPE) return decoded
+        // Either the body is not a message or it says it is an error: an error body served with a 200
+        // is still a refusal - the shape Anthropic uses when the credit balance is gone. Raised rather
+        // than returned as null so the reason reaches the log line and the client; null would fail over
+        // just as correctly but would report "unreadable".
+        val root = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull()
+        if (root != null) providerReportedError(root)?.let { throw ProviderErrorFrame(PROVIDER_NAME, it.errorType, it.detail) }
+        return decoded ?: root?.let {
             AnthropicResponse(
-                model = root["model"]?.jsonPrimitive?.content ?: requestedModel,
+                model = it["model"]?.jsonPrimitive?.content ?: requestedModel,
                 content = emptyList(),
             )
         }
@@ -74,11 +82,21 @@ class AnthropicAdapter(
      * Returned as the event object, because the server writes the event name and the data line
      * itself - for every adapter. Doing that here too is how the shape came out nested inside a delta
      * once already.
+     *
+     * Except when the frame is Anthropic's own error. Anthropic answers `200` and then reports
+     * running out of credit, or being overloaded mid-turn, as an in-stream `{"type":"error"}` frame.
+     * Forwarding it would be the worst of both worlds: the chain would count it as the first byte
+     * (committing the turn and ending failover for good), the client would be handed an error instead
+     * of an answer, and the provider would be recorded as having served the request. Raising it
+     * instead is what turns "Anthropic is out of credit" into "the next provider in the chain is
+     * tried" - which is the entire reason the chain exists.
      */
     override fun parseStreamEvent(raw: String): String? {
         val payload = raw.removePrefix(DATA_PREFIX).trim()
         if (payload.isEmpty() || payload == DONE_MARKER) return null
-        return runCatching { json.parseToJsonElement(payload).toString() }.getOrNull()
+        val frame = runCatching { json.parseToJsonElement(payload).jsonObject }.getOrNull() ?: return null
+        providerReportedError(frame)?.let { throw ProviderErrorFrame(PROVIDER_NAME, it.errorType, it.detail) }
+        return frame.toString()
     }
 
     private companion object {
@@ -86,5 +104,9 @@ class AnthropicAdapter(
         const val DATA_PREFIX = "data:"
         const val DONE_MARKER = "[DONE]"
         const val ANTHROPIC_VERSION = "2023-06-01"
+        const val ERROR_TYPE = "error"
+
+        /** Named in the failure so a log line says which provider refused, not just that one did. */
+        const val PROVIDER_NAME = "anthropic"
     }
 }

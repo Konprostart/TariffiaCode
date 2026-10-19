@@ -6,6 +6,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
@@ -162,6 +163,54 @@ class RouterServerTest {
         assertTrue("every chunk must be length-prefixed", CHUNK_PREFIX.containsMatchIn(raw))
         assertTrue("the stream must end with a zero-length chunk", raw.contains("\r\n0\r\n\r\n"))
         assertTrue("the payload must still be intact", raw.contains("""data: {"type":"content_block_delta""""))
+    }
+
+    @Test
+    fun `a chain that could not serve anything reports it instead of ending the stream empty`() {
+        // Regression: every failure below is an IOException - a refused provider, a chain with
+        // nothing left in it - and the server read every one of those as "the agent hung up" and
+        // wrote nothing at all. The client was left with a 200, a content type, and no body: an empty
+        // turn with nothing to act on, which is exactly what the client cannot tell from a hang.
+        val gateway =
+            RecordingGateway().apply {
+                // Nothing reached the client at all: this is the chain walking its whole list and
+                // coming back empty-handed, which is the case that used to end in silence.
+                frames = emptyList()
+                streamFailure = ProviderErrorFrame("anthropic", "rate_limit_error", "credit balance too low")
+            }
+        val started = start(gateway)
+
+        val response = post(started, "/v1/messages", """{"model":"claude-sonnet-4-5","stream":true}""", token)
+
+        assertEquals(200, response.status)
+        assertTrue(
+            "the reason must reach the client in the shape it parses, got: ${response.body}",
+            response.body.contains("event: error"),
+        )
+        assertTrue(
+            "and it must be the vendor's own reason, not just that something failed",
+            response.body.contains("credit balance too low"),
+        )
+    }
+
+    @Test
+    fun `a failure after the first event writes nothing more`() {
+        // The other direction, and the one that must not change: once the client holds part of the
+        // answer, the turn is committed and an error frame on top of it is the client's to handle.
+        val gateway =
+            RecordingGateway().apply {
+                frames = listOf(START_EVENT, DELTA_EVENT)
+                streamFailure = ProviderErrorFrame("anthropic", "overloaded_error", "overloaded")
+            }
+        val started = start(gateway)
+
+        val response = post(started, "/v1/messages", """{"model":"claude-sonnet-4-5","stream":true}""", token)
+
+        assertTrue(response.body.contains("event: message_start"))
+        assertTrue(
+            "a committed stream must not be topped with an error frame",
+            !response.body.contains("event: error"),
+        )
     }
 
     @Test
@@ -401,6 +450,9 @@ class RouterServerTest {
         var lastRequest: AnthropicRequest? = null
         var frames: List<String> = listOf(START_EVENT)
 
+        /** What the chain raises instead of finishing, for the turns that cannot be served. */
+        var streamFailure: IOException? = null
+
         override fun isStreaming(rawRequest: String): Boolean = rawRequest.contains(""""stream":true""")
 
         override fun handle(rawRequest: String): String {
@@ -418,6 +470,7 @@ class RouterServerTest {
             streaming = true
             record(rawRequest)
             frames.forEach(onEvent)
+            streamFailure?.let { throw it }
         }
 
         private fun record(rawRequest: String) {

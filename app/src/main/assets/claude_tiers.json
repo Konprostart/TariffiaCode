@@ -1,5 +1,5 @@
 {
-  "_comment": "Routing table for the smart router. DATA, not code: these lists change every few weeks, so they are shipped as an asset and can be updated without a release. Order within a chain is the failover order. contextWindow is used to reject entries that cannot carry Claude Code's system prompt plus tool definitions at all; below 64000 a normal turn fails and the chain would chase a model that can never work.",
+  "_comment": "Routing table for the smart router. DATA, not code: these lists change every few weeks, so they are shipped as an asset and can be updated without a release. Order within a chain is the failover order, and a chain is only as good as what stands behind the entry that fails: anthropic is deliberately never the last entry, because Anthropic reports an exhausted credit balance or an overload as its own error, and a chain that ends with it has nowhere to fail over to. contextWindow is used to reject entries that cannot carry Claude Code's system prompt plus tool definitions at all; below 64000 a normal turn fails and the chain would chase a model that can never work.",
   "chains": [
     {
       "tier": "haiku",
@@ -8,6 +8,12 @@
           "provider": "ollama",
           "model": "qwen3-coder:30b",
           "contextWindow": 262144,
+          "supportsTools": true
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-sonnet-4-5",
+          "contextWindow": 200000,
           "supportsTools": true
         },
         {
@@ -21,12 +27,6 @@
           "model": "deepseek-chat",
           "contextWindow": 131072,
           "supportsTools": true
-        },
-        {
-          "provider": "anthropic",
-          "model": "claude-sonnet-4-5",
-          "contextWindow": 200000,
-          "supportsTools": true
         }
       ]
     },
@@ -37,6 +37,12 @@
           "provider": "ollama",
           "model": "qwen3-coder:30b",
           "contextWindow": 262144,
+          "supportsTools": true
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-sonnet-4-5",
+          "contextWindow": 200000,
           "supportsTools": true
         },
         {
@@ -62,12 +68,6 @@
           "model": "llama-3.3-70b-versatile",
           "contextWindow": 131072,
           "supportsTools": true
-        },
-        {
-          "provider": "anthropic",
-          "model": "claude-sonnet-4-5",
-          "contextWindow": 200000,
-          "supportsTools": true
         }
       ]
     },
@@ -75,9 +75,9 @@
       "tier": "opus",
       "models": [
         {
-          "provider": "deepseek",
-          "model": "deepseek-reasoner",
-          "contextWindow": 131072,
+          "provider": "anthropic",
+          "model": "claude-sonnet-4-5",
+          "contextWindow": 200000,
           "supportsTools": true
         },
         {
@@ -99,9 +99,9 @@
           "supportsTools": true
         },
         {
-          "provider": "anthropic",
-          "model": "claude-sonnet-4-5",
-          "contextWindow": 200000,
+          "provider": "deepseek",
+          "model": "deepseek-reasoner",
+          "contextWindow": 131072,
           "supportsTools": true
         }
       ]

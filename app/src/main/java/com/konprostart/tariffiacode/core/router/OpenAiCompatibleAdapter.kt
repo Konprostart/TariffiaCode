@@ -58,6 +58,11 @@ interface ProviderAdapter {
      * Returns null when the provider failed rather than answered - a 429, a refused connection - so
      * the caller can move down the chain. Returning an error body instead would let a failure look
      * like a successful empty reply.
+     *
+     * Raises [ProviderErrorFrame] for the one refusal the status line cannot express: a `200` whose
+     * body is an error. That is a failure with a reason attached, and the reason is what the chain
+     * log and the client's error event need - "unreadable answer" would hide the only part the user
+     * could act on, which is that the credits ran out.
      */
     fun parseResponse(
         statusCode: Int,
@@ -71,6 +76,10 @@ interface ProviderAdapter {
      * Null for a provider frame that carries nothing to forward - a keep-alive, a usage-only
      * trailer - which is different from a parse failure, and the caller needs the two apart: a
      * malformed frame should surface, a silent one should not.
+     *
+     * Raises [ProviderErrorFrame] when the frame is the provider's own refusal (`{"error": ...}` on
+     * an open stream). Null cannot express that: it would be indistinguishable from a frame with
+     * nothing in it, and the turn would end quietly instead of failing over.
      */
     fun parseStreamEvent(raw: String): String?
 }
@@ -129,7 +138,10 @@ data class AnthropicUsage(
  * assistant turn with no content in it, whatever the deltas said, and reports that turn as having
  * produced no visible output.
  */
-class OpenAiCompatibleAdapter : ProviderAdapter {
+class OpenAiCompatibleAdapter(
+    /** Named in a failure so a log line says which provider refused; the shape is shared. */
+    private val providerName: String = "openai-compatible",
+) : ProviderAdapter {
     override val kind: RouterProviderKind = RouterProviderKind.OPENAI_COMPATIBLE
 
     private val json =
@@ -232,6 +244,9 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
     ): AnthropicResponse? {
         if (statusCode !in 200..299) return null
         val root = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull() ?: return null
+        // A gateway that answers a refused quota with 200 and an `{"error": ...}` body must not be
+        // read as an empty answer: that is how a provider failure becomes a silent empty turn.
+        providerReportedError(root)?.let { throw ProviderErrorFrame(providerName, it.errorType, it.detail) }
         val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject ?: return null
         val message = choice["message"]?.jsonObject ?: return null
         val usage = root["usage"]?.jsonObject
@@ -289,6 +304,10 @@ class OpenAiCompatibleAdapter : ProviderAdapter {
         // with nothing at all - which is the shape the client sees as a turn with no visible output.
         if (payload == "[DONE]") return closeTurn(null).ifEmpty { null }
         val root = runCatching { json.parseToJsonElement(payload).jsonObject }.getOrNull() ?: return null
+        // An in-stream `{"error": ...}` frame is this provider refusing mid-turn, not a silent frame.
+        // Raising it lets the chain try the next provider instead of ending the turn with nothing in
+        // it; the caller treats it exactly like a refused connection.
+        providerReportedError(root)?.let { throw ProviderErrorFrame(providerName, it.errorType, it.detail) }
         val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject ?: return null
         val delta = choice.get("delta")?.jsonObject
         val finish = choice["finish_reason"]?.jsonPrimitive?.contentOrNullSafe()?.takeIf { it != "null" }

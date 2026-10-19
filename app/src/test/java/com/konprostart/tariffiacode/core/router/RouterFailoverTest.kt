@@ -104,6 +104,67 @@ class RouterFailoverTest {
     }
 
     @Test
+    fun `an error carried inside a 200 stream fails over like any other refusal`() {
+        // Regression: Anthropic reports an exhausted credit balance, or an overload mid-turn, as an
+        // `{"type":"error"}` frame on a stream it already opened with 200. The frame used to be
+        // forwarded to the client, which counted as the first byte: the chain was committed, the
+        // provider was recorded as having served the request, and the turn ended with an error
+        // instead of the next provider answering.
+        server.on("anthropic") { Reply.inBandStreamError("rate_limit_error", "Your credit balance is too low") }
+        server.on("groq") { Reply.stream("served-by-second") }
+
+        val events = mutableListOf<String>()
+        engine(listOf(model("anthropic"), model("groq")))
+            .stream("""{"model":"claude-sonnet-4-5","stream":true,"messages":[]}""") { events += it }
+
+        assertEquals("the refusing provider must have been tried once and abandoned", 1, server.hits("anthropic"))
+        assertEquals("and the next provider in the chain must have answered", 1, server.hits("groq"))
+        assertTrue("only the provider that produced text may speak", events.any { it.contains("served-by-second") })
+        assertTrue(
+            "the refusal must not reach the client as an answer",
+            events.none { it.contains("credit balance") },
+        )
+    }
+
+    @Test
+    fun `an error carried inside a 200 body fails over rather than reading as an empty answer`() {
+        // The non-streamed twin: a gateway that answers a refused quota with 200 and an
+        // `{"error": ...}` body. Read as an answer it is an empty turn nobody can trace.
+        server.on("anthropic") { Reply.inBandBodyError("insufficient_quota", "no credits left") }
+        server.on("openrouter") { Reply.answer("served-by-second") }
+
+        val response =
+            engine(listOf(model("anthropic"), model("openrouter"))).handle(
+                """{"model":"claude-sonnet-4-5","messages":[]}""",
+            )
+
+        assertNotNull("a refused provider must not end the turn", response)
+        assertTrue(response!!.contains("served-by-second"))
+        assertEquals(1, server.hits("anthropic"))
+        assertEquals(1, server.hits("openrouter"))
+    }
+
+    @Test
+    fun `an error after the first event still ends the turn instead of failing over`() {
+        // The other half of the contract: once the client holds part of the answer, swapping providers
+        // would duplicate or corrupt it. The error is reported, not papered over - and no second
+        // provider is contacted, however healthy it is.
+        server.on("anthropic") { Reply.streamThenError("half an ans", "overloaded_error", "overloaded") }
+        server.on("groq") { Reply.stream("must-not-be-used") }
+
+        val events = mutableListOf<String>()
+        val failure =
+            runCatching {
+                engine(listOf(model("anthropic"), model("groq")))
+                    .stream("""{"model":"claude-sonnet-4-5","stream":true,"messages":[]}""") { events += it }
+            }.exceptionOrNull()
+
+        assertTrue("what the provider did send must still have reached the client", events.any { it.contains("half an ans") })
+        assertEquals("the second provider must never be touched once the turn has begun", 0, server.hits("groq"))
+        assertNotNull("and the failure must be reported rather than swallowed", failure)
+    }
+
+    @Test
     fun `a provider with no key is never contacted`() {
         server.on("openrouter") { Reply.answer("unused") }
         server.on("groq") { Reply.answer("served") }
