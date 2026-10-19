@@ -566,6 +566,14 @@ fun NavGraphBuilder.settingsNavGraph(
                             profiles = profileStore,
                             credentials = credentialStore,
                             sessions = app.sshSessionHolder,
+                            // A Connect press here is also the statement "this is the VPS
+                            // connection": point the VPS runtime at the same profile - the only
+                            // other place that does this is applying a Remote Project - and nudge
+                            // an already-armed tunnel that was left waiting for a profile.
+                            onSelectForVps = { profile ->
+                                app.vpsRuntimeTarget.selectProfile(profile)
+                                app.vpsTunnelController.onProfileSelected()
+                            },
                         )
                     },
             )
@@ -605,9 +613,13 @@ fun NavGraphBuilder.settingsNavGraph(
                             controller = app.vpsRuntimeTarget,
                             // Applying a mapping points the VPS runtime at the mapping's SSH profile and
                             // remote path; the existing OpenCode experience then uses that directory.
+                            // The tunnel is retried here too, for the same reason the SSH screen
+                            // does it: an armed tunnel that was waiting for a profile must come up
+                            // on the selection, not on the next foreground return.
                             onApply = { project, profile ->
                                 app.vpsRuntimeTarget.selectProfile(profile)
                                 app.vpsRuntimeTarget.selectRemoteProject(project)
+                                app.vpsTunnelController.onProfileSelected()
                             },
                         )
                     },
