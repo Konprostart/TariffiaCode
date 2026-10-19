@@ -94,6 +94,43 @@ class AnthropicAdapterTest {
         assertNull(adapter.parseStreamEvent("data: "))
     }
 
+    @Test
+    fun `an in-stream error frame is a provider failure, not an event to forward`() {
+        // Regression: this frame used to be relayed like any other. The engine counts a relayed event
+        // as the first byte, so an exhausted Anthropic credit balance committed the chain, was recorded
+        // as a success, and ended the turn with an error where the answer should have been.
+        val failure =
+            runCatching {
+                adapter.parseStreamEvent(
+                    """data: {"type":"error","error":{"type":"rate_limit_error","message":"credit balance too low"}}""",
+                )
+            }.exceptionOrNull()
+
+        assertTrue("an error frame must fail the provider", failure is ProviderErrorFrame)
+        val reported = failure as ProviderErrorFrame
+        assertEquals("rate_limit_error", reported.errorType)
+        assertTrue("and it must name what the vendor said", reported.detail!!.contains("credit balance"))
+        assertTrue("a failure a client can act on has to say which provider", reported.message!!.contains("anthropic"))
+    }
+
+    @Test
+    fun `an error body served with a 200 fails the provider rather than reading as an empty answer`() {
+        val failure =
+            runCatching {
+                adapter.parseResponse(
+                    200,
+                    """{"type":"error","error":{"type":"invalid_request_error","message":"credit balance too low"}}""",
+                    "m",
+                )
+            }.exceptionOrNull()
+
+        assertTrue("a refusal served with a 200 must still be a refusal", failure is ProviderErrorFrame)
+        assertTrue(
+            "and it must carry what the vendor said, not just 'unreadable'",
+            failure!!.message!!.contains("credit balance"),
+        )
+    }
+
     /**
      * The parsed request, built from a minimal body.
      *

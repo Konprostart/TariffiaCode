@@ -166,6 +166,39 @@ internal data class Reply(
 
         fun notFound() = Reply(404, """{"error":"no such provider"}""")
 
+        /**
+         * A 200 whose body is an error rather than an answer.
+         *
+         * How a vendor says "your credit is gone" without the transport noticing: the status is a
+         * success and the socket stays open, so the refusal only exists inside the payload. Anthropic
+         * sends it as an in-stream frame; a gateway sends it as the whole body. Both are here, because
+         * a provider that fails only in one of those shapes is exactly the one the chain must survive.
+         */
+        fun inBandStreamError(
+            errorType: String,
+            message: String,
+        ) = Reply(200, "data: {\"type\":\"error\",\"error\":{\"type\":\"$errorType\",\"message\":\"$message\"}}\n\n")
+
+        /**
+         * A stream that has already said something and then fails.
+         *
+         * The order is the whole point: the client holds the first part of the answer by the time the
+         * error arrives, so the chain is committed and no other provider may be tried.
+         */
+        fun streamThenError(
+            text: String,
+            errorType: String,
+            message: String,
+        ) = Reply(
+            200,
+            frame(text) + "data: {\"type\":\"error\",\"error\":{\"type\":\"$errorType\",\"message\":\"$message\"}}\n\n",
+        )
+
+        fun inBandBodyError(
+            errorType: String,
+            message: String,
+        ) = Reply(200, """{"error":{"code":"$errorType","message":"$message"}}""")
+
         private fun frame(text: String) = "data: {\"choices\":[{\"delta\":{\"content\":\"$text\"}}]}\n\n"
     }
 }

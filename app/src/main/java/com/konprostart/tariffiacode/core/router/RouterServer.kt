@@ -361,9 +361,12 @@ class RouterServer(
      * buffer here would make a long first-token model look like it had hung.
      *
      * The chain has already committed to a provider by the time the first frame is written, so a
-     * failure after that point cannot be failed over - it is reported to the client as an Anthropic
-     * error event and the connection ends. That boundary is the whole reason this is separate from the
-     * non-streaming path.
+     * failure after that point cannot be failed over. It is not reported as an error event either:
+     * the client already holds part of an answer, and an `error` frame on top of that is a turn the
+     * client has to interpret. The stream simply ends, which is what the frames so far say happened.
+     *
+     * The boundary is the whole reason this is separate from the non-streaming path, and it is also
+     * what decides whether a failure is reported: see the catch below.
      */
     private fun streamResponses(
         request: HttpRequest,
@@ -376,10 +379,15 @@ class RouterServer(
         val stream = ChunkedStream(out)
         val heartbeat = Heartbeat(stream)
         heartbeat.start()
+        // Whether an event has reached the client. It decides whether a failure can still be
+        // reported: before the first event there is nothing to contradict, after it the turn is
+        // committed and an error frame would land on a half-answered client.
+        var wroteAnything = false
         try {
             var sawStop = false
             gateway.stream(raw) { event ->
                 if (event.contains(STOP_EVENT)) sawStop = true
+                wroteAnything = true
                 stream.write(sseFrames(event))
             }
             // Only if the chain did not already close its own stream: two message_stop events make a
@@ -390,13 +398,28 @@ class RouterServer(
             heartbeat.stop()
             stream.finish()
         } catch (failure: IOException) {
-            // The agent closed the connection mid-turn. Nothing to report to a caller that left.
+            // An IOException here is two different things, and the only thing that tells them apart is
+            // whether the client has been given anything yet. With nothing on the wire it is the chain
+            // saying it had nothing to serve - every provider refused, most often because the one the
+            // user is paying for is out of credit - and the client is owed that reason in the shape it
+            // parses, or the turn ends as a 200 with no body at all, which is indistinguishable from a
+            // hang. With something already on the wire the turn is committed: the answer is partly
+            // shown, and an error frame on top of it is a state the client has to interpret. The stream
+            // simply ends there instead.
             heartbeat.stop()
+            runCatching {
+                if (!wroteAnything) stream.write(sseFrames(gateway.errorEvent(failure)))
+                // Either way the chunked framing has to be closed. A stream that is abandoned with no
+                // terminator is a "premature end of stream" to the client, which turns a provider that
+                // refused into a transport error and hides the reason the failure was reported with.
+                stream.finish()
+            }
         } catch (failure: Exception) {
-            // Report it in the shape the client parses rather than dropping the stream silently.
+            // Whatever the gateway raised that is not an IOException, reported under the same rule as
+            // the branch above: only while the turn is still the client's to start.
             runCatching {
                 heartbeat.stop()
-                stream.write(sseFrames(gateway.errorEvent(failure)))
+                if (!wroteAnything) stream.write(sseFrames(gateway.errorEvent(failure)))
                 stream.finish()
             }
         }

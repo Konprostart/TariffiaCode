@@ -26,7 +26,7 @@ class OllamaAdapter(
 ) : ProviderAdapter {
     override val kind: RouterProviderKind = RouterProviderKind.LOCAL
 
-    private val openAi = OpenAiCompatibleAdapter()
+    private val openAi = OpenAiCompatibleAdapter(PROVIDER_NAME)
 
     override fun buildRequest(
         request: AnthropicRequest,
@@ -52,6 +52,9 @@ class OllamaAdapter(
     companion object {
         const val DEFAULT_GUEST_PORT = 11434
         const val OPENAI_PATH = "v1/chat/completions"
+
+        /** Named in the failure so a log line says which provider refused, not just that one did. */
+        const val PROVIDER_NAME = "ollama"
     }
 }
 
@@ -178,6 +181,9 @@ class GeminiAdapter(
     ): AnthropicResponse? {
         if (statusCode !in 200..299) return null
         val root = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull() ?: return null
+        // A quota refusal served with a 200 is still a refusal, and reading it as an answer is how a
+        // failed provider becomes an empty turn nobody can trace.
+        providerReportedError(root)?.let { throw ProviderErrorFrame(PROVIDER_NAME, it.errorType, it.detail) }
         val candidate = root["candidates"]?.jsonArray?.firstOrNull()?.jsonObject ?: return null
         val parts = candidate["content"]?.jsonObject?.get("parts")?.jsonArray ?: return null
         val content =
@@ -215,6 +221,9 @@ class GeminiAdapter(
         val payload = raw.removePrefix("data:").trim()
         if (payload.isEmpty() || payload == "[DONE]") return null
         val root = runCatching { json.parseToJsonElement(payload).jsonObject }.getOrNull() ?: return null
+        // Google's quota and overload refusals arrive as an in-stream `{"error": ...}` object. It
+        // must fail the provider rather than pass as a frame with nothing in it.
+        providerReportedError(root)?.let { throw ProviderErrorFrame(PROVIDER_NAME, it.errorType, it.detail) }
         val parts =
             root["candidates"]?.jsonArray?.firstOrNull()?.jsonObject?.get(
                 "content",
@@ -245,6 +254,11 @@ class GeminiAdapter(
         }
 
     private fun JsonPrimitive.intOrNull(): Int? = runCatching { content.toInt() }.getOrNull()
+
+    private companion object {
+        /** Named in the failure so a log line says which provider refused, not just that one did. */
+        const val PROVIDER_NAME = "gemini"
+    }
 }
 
 /** The adapters the router can use, resolved from the routing table's provider name. */
@@ -277,8 +291,10 @@ object ProviderAdapters {
             provider.equals("ollama", true) || provider.equals("lmstudio", true) -> OllamaAdapter(ollamaPort)
             provider.equals("gemini", true) || provider.equals("google", true) -> key?.let { GeminiAdapter(it) }
             provider.equals("anthropic", true) -> key?.let { AnthropicAdapter(it) }
-            RouterProviderKind.of(provider) != null -> OpenAiCompatibleAdapter()
-            provider.trim().lowercase() in customProviders -> OpenAiCompatibleAdapter()
+            // The shared shape carries the provider's own name, so a failure says which vendor
+            // refused rather than naming the protocol it speaks.
+            RouterProviderKind.of(provider) != null -> OpenAiCompatibleAdapter(provider.trim().lowercase())
+            provider.trim().lowercase() in customProviders -> OpenAiCompatibleAdapter(provider.trim().lowercase())
             else -> null
         }
     }

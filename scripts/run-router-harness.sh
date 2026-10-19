@@ -27,8 +27,8 @@ HARNESS="$REPO_ROOT/tools/router-harness"
 # RouterKeys is excluded on purpose: it needs an Android Context and an encrypted SharedPreferences.
 # Everything else the router needs is plain Kotlin.
 PURE_ROUTER=(
-  AnthropicRequest CircuitBreaker KeyStore OpenAiCompatibleAdapter
-  ProviderAdapters RouterConfigTable RouterEngine RouterModels RouterServer
+  AnthropicAdapter AnthropicRequest CircuitBreaker KeyStore OpenAiCompatibleAdapter
+  ProviderAdapters ProviderErrorFrame RouterConfigTable RouterEngine RouterModels RouterServer
 )
 
 log() { printf '  %s\n' "$*"; }
