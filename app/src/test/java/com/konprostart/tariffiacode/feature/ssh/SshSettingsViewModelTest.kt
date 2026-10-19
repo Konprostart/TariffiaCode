@@ -49,7 +49,10 @@ class SshSettingsViewModelTest {
         var credentials: Map<String, String> = emptyMap()
     }
 
-    private fun viewModel(backend: Backend): SshSettingsViewModel {
+    private fun viewModel(
+        backend: Backend,
+        onSelectForVps: (SshProfile) -> Unit = {},
+    ): SshSettingsViewModel {
         val credentialStore = SshCredentialStore(load = { backend.credentials }, save = { backend.credentials = it })
         val profileStore =
             SshProfileStore(
@@ -71,8 +74,19 @@ class SshSettingsViewModelTest {
                     selection = SshHeldSessionStore({ null }, {}),
                     scope = CoroutineScope(UnconfinedTestDispatcher()),
                 ),
+            onSelectForVps = onSelectForVps,
         )
     }
+
+    private fun storedProfile(id: String = "vps-1") =
+        SshProfile(
+            id = id,
+            name = "VPS",
+            host = "example.com",
+            username = "root",
+            authType = SshAuthType.PASSWORD,
+            credentialRef = "ref",
+        )
 
     private object NoopClient : SshConnectionClient {
         override suspend fun connect(
@@ -125,6 +139,33 @@ class SshSettingsViewModelTest {
             capturedAuth = auth
             return failure
         }
+    }
+
+    @Test
+    fun `connect also selects the profile for the VPS runtime`() {
+        // Regression: a Connected screen here and "Select an SSH connection for the VPS first" on
+        // the tunnel used to be two disconnected truths, because the SSH screen never told the
+        // VPS runtime which stored connection the user just chose.
+        val backend = Backend()
+        val profile = storedProfile()
+        backend.profiles = listOf(profile)
+        val selected = mutableListOf<SshProfile>()
+        val vm = viewModel(backend, onSelectForVps = { selected += it })
+
+        vm.connect(profile.id)
+
+        assertEquals(listOf(profile), selected)
+    }
+
+    @Test
+    fun `connect for an unknown profile selects nothing for the VPS`() {
+        val backend = Backend()
+        val selected = mutableListOf<SshProfile>()
+        val vm = viewModel(backend, onSelectForVps = { selected += it })
+
+        vm.connect("does-not-exist")
+
+        assertTrue("nothing may be selected for a profile that is not there", selected.isEmpty())
     }
 
     @Test

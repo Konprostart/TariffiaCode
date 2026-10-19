@@ -411,6 +411,47 @@ class VpsTunnelControllerTest {
         }
 
     @Test
+    fun `a connection chosen while the tunnel waits for one opens it right away`() =
+        runTest {
+            // The user can turn the tunnel on before choosing a connection, which leaves it Failed
+            // on "Select an SSH connection for the VPS first". The selection that follows must be
+            // the event that starts it, not the next foreground return.
+            var selected: SshProfile? = null
+            val forward = FakeForward()
+            val opener = Opener { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", forward) }
+            val controller =
+                VpsTunnelController(
+                    opener = opener::open,
+                    profileProvider = { selected },
+                    store = VpsTunnelStore(loadEnabled = { true }, saveEnabled = {}),
+                    scope = this,
+                )
+
+            controller.start()
+            testScheduler.advanceUntilIdle()
+            assertEquals(VpsTunnelState.Failed("Select an SSH connection for the VPS first"), controller.state.value)
+
+            selected = profile
+            controller.onProfileSelected()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(VpsTunnelState.Open("http://127.0.0.1:11434/"), controller.state.value)
+        }
+
+    @Test
+    fun `choosing a connection leaves an unasked-for tunnel closed`() =
+        runTest {
+            val opener = Opener { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", FakeForward()) }
+            val controller = controller(this, opener)
+
+            controller.onProfileSelected()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals("an unasked-for tunnel stays closed", 0, opener.calls)
+            assertEquals(VpsTunnelState.Stopped, controller.state.value)
+        }
+
+    @Test
     fun `the failure text comes from the caller rather than from the controller`() =
         runTest {
             val opener = Opener { VpsPortForwardOutcome.Connected("http://127.0.0.1:11434/", FakeForward()) }

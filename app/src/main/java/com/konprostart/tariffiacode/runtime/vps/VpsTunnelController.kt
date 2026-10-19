@@ -160,6 +160,19 @@ class VpsTunnelController(
         if (store.isEnabled()) start()
     }
 
+    /**
+     * Called when a connection becomes the selected one for the VPS.
+     *
+     * Turning the tunnel on before a profile is chosen is a normal order of events across the
+     * settings screens, and it leaves the controller Failed on "Select an SSH connection for the
+     * VPS first" the moment the user then chooses one. Calling this after a selection re-runs
+     * [start] for a tunnel the user asked for, which closes that gap; [start] is idempotent, so an
+     * already-open tunnel is untouched.
+     */
+    fun onProfileSelected() {
+        if (store.isEnabled()) start()
+    }
+
     /** Persist the key the user confirmed, then try again with it. Returns the profile that was updated. */
     fun trustPendingHostKey(): SshProfile? {
         val pending = _pendingHostKey.value ?: return null

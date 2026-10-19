@@ -102,6 +102,14 @@ class SshSettingsViewModel(
     private val profiles: SshProfileStore,
     private val credentials: SshCredentialStore,
     private val sessions: SshSessionHolder,
+    /**
+     * Called with the profile a Connect press is for.
+     *
+     * This screen is where a saved connection is chosen, but the VPS runtime and its tunnel take
+     * their profile from the Remote Projects screen only - so without this, a Connected screen here
+     * and "Select an SSH connection for the VPS first" there stay two disconnected truths.
+     */
+    private val onSelectForVps: (SshProfile) -> Unit = {},
 ) : ViewModel() {
     private val _state = MutableStateFlow(SshSettingsUiState(profiles = profiles.profiles()))
     val state: StateFlow<SshSettingsUiState> = _state.asStateFlow()
@@ -241,6 +249,10 @@ class SshSettingsViewModel(
         // A new attempt starts from a clean banner: the previous failure text belongs to the
         // previous attempt, not to whatever this one reports.
         _state.update { it.copy(message = null) }
+        // Selecting before the handshake, not after it: pressing Connect is the user's statement
+        // of which connection they mean, and the VPS runtime/tunnel can start using it while this
+        // screen is still connecting. An unknown id selects nothing - the holder reports it.
+        profiles.profile(id)?.let(onSelectForVps)
         sessions.connect(id)
     }
 
